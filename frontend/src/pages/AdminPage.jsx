@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { getAllVideos, addVideo, updateVideo, deleteVideo } from '../services/videoApi';
 import Header from '../components/common/Header';
+import Modal from '../components/common/Modal';
+import ToastContainer from '../components/common/Toast';
 
 const AdminPage = () => {
   const [videos, setVideos] = useState([]);
@@ -26,6 +28,37 @@ const AdminPage = () => {
 
   // 영상 정보 프리뷰 상태
   const [videoPreview, setVideoPreview] = useState(null);
+
+  // 모달 상태 (confirm용)
+  const [modal, setModal] = useState({
+    isOpen: false,
+    message: '',
+    onConfirm: null
+  });
+
+  // 토스트 상태
+  const [toasts, setToasts] = useState([]);
+
+  const showToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
+
+  const showConfirm = (message, onConfirm) => {
+    setModal({
+      isOpen: true,
+      message,
+      onConfirm
+    });
+  };
+
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   useEffect(() => {
     loadVideos();
@@ -63,6 +96,8 @@ const AdminPage = () => {
 
     try {
       const videoInfo = await fetchVideoInfoByUrl(formData.youtubeUrl);
+      console.log('Fetched video info:', videoInfo);
+      console.log('Duration in seconds:', videoInfo.durationInSeconds);
 
       setFormData(prev => ({
         ...prev,
@@ -105,10 +140,10 @@ const AdminPage = () => {
 
       if (editingVideo) {
         await updateVideo(editingVideo.id, videoData);
-        alert('영상이 수정되었습니다!');
+        showToast('영상이 수정되었습니다!', 'success');
       } else {
         await addVideo(videoData);
-        alert('영상이 등록되었습니다!');
+        showToast('영상이 등록되었습니다!', 'success');
       }
 
       // Reset form
@@ -128,7 +163,7 @@ const AdminPage = () => {
       loadVideos();
     } catch (error) {
       console.error('Error saving video:', error);
-      alert('저장 실패: ' + error.message);
+      showToast(error.message, 'error');
     }
   };
 
@@ -154,17 +189,17 @@ const AdminPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (videoId) => {
-    if (!confirm('정말 이 영상을 삭제하시겠습니까?')) return;
-
-    try {
-      await deleteVideo(videoId);
-      alert('영상이 삭제되었습니다!');
-      loadVideos();
-    } catch (error) {
-      console.error('Error deleting video:', error);
-      alert('삭제 실패: ' + error.message);
-    }
+  const handleDelete = (videoId) => {
+    showConfirm('정말 이 영상을 삭제하시겠습니까?', async () => {
+      try {
+        await deleteVideo(videoId);
+        showToast('영상이 삭제되었습니다!', 'success');
+        loadVideos();
+      } catch (error) {
+        console.error('Error deleting video:', error);
+        showToast(error.message, 'error');
+      }
+    });
   };
 
   const handleCancel = () => {
@@ -186,6 +221,14 @@ const AdminPage = () => {
 
   return (
     <div className="relative flex min-h-screen w-full bg-background font-body text-text-primary">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={closeModal}
+        onConfirm={modal.onConfirm}
+        message={modal.message}
+        type="confirm"
+      />
       <div className="flex flex-col w-full">
         <Header isAdmin={true} />
 

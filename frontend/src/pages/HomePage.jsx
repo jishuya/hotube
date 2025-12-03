@@ -17,6 +17,8 @@ const HomePage = () => {
     try {
       setLoading(true);
       const fetchedVideos = await getAllVideos();
+      console.log('Fetched videos:', fetchedVideos);
+      console.log('First video durationSeconds:', fetchedVideos[0]?.durationSeconds);
       setVideos(fetchedVideos);
     } catch (error) {
       console.error('Error loading videos:', error);
