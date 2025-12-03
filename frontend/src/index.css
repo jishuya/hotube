@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Color System ===== */
+:root {
+  /* Primary - Orange */
+  --color-primary: 244 140 37; /* #f48c25 */
+
+  /* Background */
+  --color-background: 248 247 245; /* #f8f7f5 */
+
+  /* Surface (cards, modals) */
+  --color-surface: 255 255 255; /* #ffffff */
+
+  /* Text */
+  --color-text-primary: 24 20 17; /* #181411 */
+  --color-text-secondary: 138 117 96; /* #8a7560 */
+
+  /* Border */
+  --color-border: 226 221 215; /* #e2ddd7 */
+}
+
+/* Dark Mode */
+.dark {
+  /* Primary - 다크모드에서도 동일 */
+  --color-primary: 244 140 37; /* #f48c25 */
+
+  /* Background */
+  --color-background: 34 25 16; /* #221910 */
+
+  /* Surface (cards, modals, inputs) */
+  --color-surface: 57 48 40; /* #393028 */
+
+  /* Text */
+  --color-text-primary: 255 255 255; /* white */
+  --color-text-secondary: 186 171 156; /* #baab9c */
+
+  /* Border */
+  --color-border: 84 71 59; /* #54473b */
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+  'FILL' 0,
+  'wght' 400,
+  'GRAD' 0,
+  'opsz' 24
+}
+
+.material-symbols-outlined.fill-icon {
+  font-variation-settings:
+  'FILL' 1,
+  'wght' 400,
+  'GRAD' 0,
+  'opsz' 24
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}

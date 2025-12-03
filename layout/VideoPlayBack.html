@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Family Memories - Video Playback</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill-icon {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f48c25",
+                        "background-light": "#f8f7f5",
+                        "background-dark": "#221910",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light font-display text-zinc-900">
+<div class="relative flex min-h-screen w-full flex-col">
+<header class="sticky top-0 z-10 flex h-16 w-full items-center justify-between whitespace-nowrap border-b border-zinc-200 bg-background-light/80 px-4 md:px-8 backdrop-blur-sm">
+<div class="flex items-center gap-4 text-primary">
+<span class="material-symbols-outlined text-3xl">movie_filter</span>
+<h2 class="text-xl font-bold leading-tight tracking-[-0.015em] text-zinc-900">Family Memories</h2>
+</div>
+<div class="flex flex-1 justify-end items-center gap-4">
+<label class="hidden md:flex relative w-full max-w-sm">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">search</span>
+<input class="form-input flex w-full rounded-full border border-zinc-300 bg-zinc-100 focus:border-primary focus:ring-primary h-10 placeholder:text-zinc-500 pl-10 pr-4 text-base font-normal text-zinc-900" placeholder="Search memories" value=""/>
+</label>
+<button class="flex items-center justify-center rounded-full h-10 w-10 bg-zinc-200 text-zinc-800">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</header>
+<div class="w-full max-w-screen-2xl mx-auto p-4 lg:p-8">
+<div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+<div class="lg:col-span-2 xl:col-span-3">
+<div class="relative flex items-center justify-center bg-zinc-900 bg-cover bg-center aspect-video rounded-xl overflow-hidden shadow-lg">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="A sunny beach scene with a family playing near the water" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDaxAbA8tMSxSD97u8hqI90PPFo295AKhVMCsqEcQxMJdnINK72ZTSbtGVQUr4xsWHXP8tythLfhtYVB4uRhWWlK5D6-Ty6PqrCXUZXjJXEXw3cNtFQStHDSRwJ0ttJIO4J-949Sxw6fn9Xui75PaP_SCV2mHQbTp_RAHmN_pcli9qZbN9a0e9b5yOOTFdWPTzC2mCYJgmJDRD2UwW9FBDkauqryVn4cWFa0y8lMzWyHoV-GiPsnkyXN7_Cf5C2Y_tvKSaFEXS75ow"/>
+<div class="absolute inset-0 bg-black/20"></div>
+<button class="relative flex shrink-0 items-center justify-center rounded-full size-16 bg-black/50 text-white backdrop-blur-sm hover:bg-primary transition-colors">
+<span class="material-symbols-outlined fill-icon text-4xl">play_arrow</span>
+</button>
+<div class="absolute inset-x-0 bottom-0 px-4 py-3">
+<div class="flex flex-col gap-1">
+<div class="relative flex h-4 items-center justify-center group">
+<div class="absolute bg-white/20 h-1 w-full rounded-full"></div>
+<div class="absolute bg-white/60 h-1 left-0 rounded-full w-[16%]"></div>
+<div class="absolute bg-primary h-1 left-0 rounded-full w-[15%]"></div>
+<div class="absolute left-[15%]">
+<div class="size-4 rounded-full bg-primary border-2 border-white group-hover:scale-110 transition-transform"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<p class="text-white text-xs font-medium leading-normal tracking-[0.015em]">0:37</p>
+<p class="text-white text-xs font-medium leading-normal tracking-[0.015em]">2:23</p>
+</div>
+</div>
+</div>
+</div>
+<h1 class="text-zinc-900 tracking-tight text-2xl md:text-3xl font-bold leading-tight pt-6 pb-2">Summer Vacation at the Beach 2023</h1>
+<p class="text-zinc-500 text-sm font-normal leading-normal pb-4">Filmed in June 2023</p>
+<div class="border-y border-zinc-200 py-4">
+<p class="text-zinc-800 text-base font-normal leading-relaxed">
+                            A wonderful week spent with the whole family at Jeju Island. We built sandcastles, swam in the ocean, and had a big barbecue on the last night. So many precious memories!
+                        </p>
+<div class="flex flex-wrap gap-2 pt-4">
+<a class="cursor-pointer rounded-lg bg-primary/20 px-3 py-1 text-sm font-medium text-primary hover:bg-primary/30" href="#">#바닷가</a>
+<a class="cursor-pointer rounded-lg bg-primary/20 px-3 py-1 text-sm font-medium text-primary hover:bg-primary/30" href="#">#가족여행</a>
+<a class="cursor-pointer rounded-lg bg-primary/20 px-3 py-1 text-sm font-medium text-primary hover:bg-primary/30" href="#">#Jeju Island</a>
+</div>
+</div>
+</div>
+<aside class="lg:col-span-1 xl:col-span-1">
+<div class="lg:sticky lg:top-24">
+<h3 class="text-xl font-bold text-zinc-900 mb-4 px-4 py-2 lg:px-0 lg:py-0">Up Next</h3>
+<div class="flex flex-col gap-4">
+<a class="flex gap-4 group cursor-pointer" href="#">
+<div class="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A family celebrating around a Christmas tree with presents" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAu8Rpj9VrWlZDquHipObFjw9YTlBTBVhV592gz_eIRQWzJFH-im4nc1tkZrCNAuK8LoMQdxEkVdt7-kTK-_gZ2bwgUpckg80sJXBeyy9wT4CLMDjS1P-7oPr90TjSQx5byesiHnm-ZYXhpmDqPWoQ8A-Qd_1xIyt0jpEc6KwV2yxaeyxSkPotOvcc9n1z_9RcDPafnNVSnTlc5oAcdsfMiFkysdctNhYXijyG1X5Z70jBZZI19ip1oA9COKkS3iX88YNc9AqrZGXmS"/>
+<span class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-sm">4:12</span>
+</div>
+<div class="flex-1">
+<h4 class="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">Christmas Morning 2022</h4>
+<p class="text-sm text-zinc-500 mt-1">Grandma's House</p>
+<p class="text-xs text-zinc-400 mt-1">1 year ago</p>
+</div>
+</a>
+<a class="flex gap-4 group cursor-pointer" href="#">
+<div class="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A child and an adult hiking in a lush green forest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5c6zRaPT_FRe247f4CQlPyoUSDUYjUGFKszTiiR0Ku3IRjPV7LYPwwUm3J8je6FU3TcVET2cwwPfM2_2NATt9JViiWQZvR8O5tL4qxqCVGjSQCIXQGIK4ppcPCqyjkfCV3qKLyx2nrit50OxDRwbAr-X44LoU9GejRn2OK6hUxbQrDDpu0A3zV-I99loecOly7ky5SHPw6zCk_ulWmcd9qPTuY7eMIVQWQKilO86lfLn9Ho8nq1NZqQAuUE61FaRJtIOQR5HLagVu"/>
+<span class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-sm">8:56</span>
+</div>
+<div class="flex-1">
+<h4 class="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">Hiking Adventure in the Mountains</h4>
+<p class="text-sm text-zinc-500 mt-1">Family Trip</p>
+<p class="text-xs text-zinc-400 mt-1">2 years ago</p>
+</div>
+</a>
+<a class="flex gap-4 group cursor-pointer" href="#">
+<div class="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="People gathered around a table for a birthday celebration with a cake" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnRORH7fxncK0VuHHUodHjmz-GeEXN3B2WbP1c-7uWRXyu0Y-Li8jvPqLOT3B_jeaqpehZMomaZqOLbb64bfFJeflhOORTiPsXEB3K2Ypp5qdfOs0i5QI6FUiMZaJRvbKuYaTwM171CN_xoAiSnnqpgLH6V-YWgzdY0SC4jH69s0_9Eb5ZCitXU00-Uo2eGqS67BS-ziooP2OjDxavKHROLkxrW17cU1Xs6V4zqTLPBFJQscu8ohg5A631npeuzq5hJO8TnfkdUdI1"/>
+<span class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-sm">15:03</span>
+</div>
+<div class="flex-1">
+<h4 class="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">Grandma's 70th Birthday Party</h4>
+<p class="text-sm text-zinc-500 mt-1">Family Gathering</p>
+<p class="text-xs text-zinc-400 mt-1">3 months ago</p>
+</div>
+</a>
+<a class="flex gap-4 group cursor-pointer" href="#">
+<div class="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Children playing in a backyard swimming pool" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCujsCa4FYp97-XEXp9StBSJKNtlNHrSaofabPr2ZGlOvBQAtqRPK7BU3T-245vWTFXLc-k9RshIuh1yrKGwhd3D3H4ZZcSIrrit_q7_pwVeHAlkuznROSKMK3pxl2Ag0_radIgByAdqZNqcfsV7QxYkprjrsMRuPHxyJgZDJY_fpWVhKId6jmpEFtm8e02kCbIbYYAxz4Jfxp2YO1efn34EQTPBQvurUN_XWwn_Q0Ld9OqLPZD-MZDZQgmX1BvsBbRWufjQgykSKrs"/>
+<span class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-sm">5:45</span>
+</div>
+<div class="flex-1">
+<h4 class="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">First Pool Day of Summer</h4>
+<p class="text-sm text-zinc-500 mt-1">Home Video</p>
+<p class="text-xs text-zinc-400 mt-1">2 months ago</p>
+</div>
+</a>
+<a class="flex gap-4 group cursor-pointer" href="#">
+<div class="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A family sitting around a campfire at night" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDaxAbA8tMSxSD97u8hqI90PPFo295AKhVMCsqEcQxMJdnINK72ZTSbtGVQUr4xsWHXP8tythLfhtYVB4uRhWWlK5D6-Ty6PqrCXUZXjJXEXw3cNtFQStHDSRwJ0ttJIO4J-949Sxw6fn9Xui75PaP_SCV2mHQbTp_RAHmN_pcli9qZbN9a0e9b5yOOTFdWPTzC2mCYJgmJDRD2UwW9FBDkauqryVn4cWFa0y8lMzWyHoV-GiPsnkyXN7_Cf5C2Y_tvKSaFEXS75ow"/>
+<span class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-sm">11:20</span>
+</div>
+<div class="flex-1">
+<h4 class="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">Campfire Stories and S'mores</h4>
+<p class="text-sm text-zinc-500 mt-1">Camping Trip</p>
+<p class="text-xs text-zinc-400 mt-1">6 months ago</p>
+</div>
+</a>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</div>
+</body></html>
