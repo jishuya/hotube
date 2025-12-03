@@ -22,10 +22,9 @@ const VideoPage = () => {
       const currentVideo = allVideos.find(v => v.id === videoId);
       setVideo(currentVideo);
 
-      // 추천 영상 (현재 영상 제외한 최신 5개)
+      // 추천 영상 (같은 연도, 같은 타입, 현재 영상 제외)
       const recommended = allVideos
-        .filter(v => v.id !== videoId)
-        .slice(0, 5);
+        .filter(v => v.id !== videoId && v.year === currentVideo?.year && v.type === currentVideo?.type);
       setRecommendedVideos(recommended);
     } catch (error) {
       console.error('Error loading video:', error);
@@ -85,7 +84,9 @@ const VideoPage = () => {
           {/* Main Video Section */}
           <div className="lg:col-span-2 xl:col-span-3">
             {/* YouTube Video Player */}
-            <div className="relative flex items-center justify-center bg-zinc-900 aspect-video rounded-xl overflow-hidden shadow-lg">
+            <div className={`relative flex items-center justify-center bg-zinc-900 rounded-xl overflow-hidden shadow-lg ${
+              video.type === 'shorts' ? 'aspect-[9/16] max-w-sm mx-auto' : 'aspect-video'
+            }`}>
               <iframe
                 width="100%"
                 height="100%"
@@ -127,37 +128,67 @@ const VideoPage = () => {
 
           {/* Recommended Videos Sidebar */}
           <aside className="lg:col-span-1 xl:col-span-1">
-            <div className="lg:sticky lg:top-24">
-              <h3 className="text-xl font-bold text-zinc-900 mb-4 px-4 py-2 lg:px-0 lg:py-0">
+            <div className="lg:sticky lg:top-24 flex flex-col gap-4 max-h-[calc(100vh-8rem)]">
+              <h3 className="text-lg font-bold text-zinc-900 px-4 lg:px-0">
                 Up Next
               </h3>
-              <div className="flex flex-col gap-4">
-                {recommendedVideos.map((recVideo) => {
-                  return (
-                    <Link
-                      key={recVideo.id}
-                      to={`/video/${recVideo.id}`}
-                      className="flex gap-4 group cursor-pointer"
-                    >
-                      <div className="w-2/5 sm:w-1/3 lg:w-2/5 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
-                        <img
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          src={recVideo.thumbnailUrl}
-                          alt={recVideo.title}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight">
+
+              {recommendedVideos.length > 0 ? (
+                video?.type === 'shorts' ? (
+                  // Shorts 그리드
+                  <div className="grid grid-cols-2 gap-3 overflow-y-auto pr-2 scrollbar-thin">
+                    {recommendedVideos.map((recVideo) => (
+                      <Link
+                        key={recVideo.id}
+                        to={`/video/${recVideo.id}`}
+                        className="group cursor-pointer"
+                      >
+                        <div className="aspect-[9/16] relative rounded-lg overflow-hidden shadow-md group-hover:shadow-lg transition-shadow">
+                          <img
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            src={recVideo.thumbnailUrl}
+                            alt={recVideo.title}
+                          />
+                        </div>
+                        <h4 className="font-medium text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight text-sm mt-2">
                           {recVideo.title}
                         </h4>
-                        <p className="text-sm text-zinc-500 mt-1">
-                          {recVideo.uploadedAt && new Date(recVideo.uploadedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  // Videos 리스트
+                  <div className="flex flex-col gap-3 overflow-y-auto pr-2">
+                    {recommendedVideos.map((recVideo) => (
+                      <Link
+                        key={recVideo.id}
+                        to={`/video/${recVideo.id}`}
+                        className="flex gap-3 group cursor-pointer"
+                      >
+                        <div className="w-40 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+                          <img
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            src={recVideo.thumbnailUrl}
+                            alt={recVideo.title}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight text-sm">
+                            {recVideo.title}
+                          </h4>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            {recVideo.uploadedAt && new Date(recVideo.uploadedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <p className="text-zinc-500 text-sm px-4 lg:px-0">
+                  이 연도의 다른 영상이 없습니다.
+                </p>
+              )}
             </div>
           </aside>
         </div>

@@ -174,12 +174,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--color-border));
+  background: rgb(var(--color-primary) / 0.4);
   border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--color-text-secondary));
+  background: rgb(var(--color-primary) / 0.7);
 }
 
 /* Focus Visible */
