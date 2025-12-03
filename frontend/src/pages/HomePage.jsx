@@ -58,7 +58,7 @@ const HomePage = () => {
                       : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
                   } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
                 >
-                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Family Shorts</p>
+                  <p className="text-base font-bold leading-normal tracking-[0.015em]">All Shorts</p>
                 </button>
                 <button
                   onClick={() => setActiveTab('year')}
@@ -93,7 +93,7 @@ const HomePage = () => {
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-2xl">movie</span>
-                      <h3 className="text-xl font-bold">Family Shorts</h3>
+                      <h3 className="text-xl font-bold">Shorts</h3>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                       {shorts.map((video) => (

@@ -373,7 +373,7 @@ const AdminPage = () => {
                 <header className="flex flex-wrap justify-between items-center gap-3 mb-6">
                   <div>
                     <h1 className="font-display text-text-primary text-3xl font-bold leading-tight">
-                      관리자 대시보드
+                      Admin DashBoard
                     </h1>
                     <p className="text-text-secondary mt-1">
                       가족 영상 라이브러리를 관리하세요.
