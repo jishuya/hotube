@@ -1,13 +1,27 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Icon } from '@iconify/react';
 import { getAllVideos } from '../services/videoApi';
 import { extractVideoId } from '../services/youtubeService';
 
 const VideoPage = () => {
   const { videoId } = useParams();
+  const navigate = useNavigate();
   const [video, setVideo] = useState(null);
   const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const playerRef = useRef(null);
+  const [autoPlay, setAutoPlay] = useState(true);
+
+  // YouTube IFrame API 로드
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
 
   useEffect(() => {
     loadVideoData();
@@ -33,6 +47,57 @@ const VideoPage = () => {
     }
   };
 
+  // 다음 영상으로 자동 재생
+  const playNextVideo = useCallback(() => {
+    if (autoPlay && recommendedVideos.length > 0) {
+      navigate(`/video/${recommendedVideos[0].id}`);
+    }
+  }, [autoPlay, recommendedVideos, navigate]);
+
+  // YouTube Video ID 추출
+  const youtubeVideoId = video ? extractVideoId(video.youtubeUrl) : null;
+
+  // YouTube Player 초기화
+  useEffect(() => {
+    if (!youtubeVideoId || loading || !video) return;
+
+    const initPlayer = () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+      }
+
+      playerRef.current = new window.YT.Player('youtube-player', {
+        videoId: youtubeVideoId,
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+        },
+        events: {
+          onStateChange: (event) => {
+            // 영상이 끝났을 때 (state === 0)
+            if (event.data === window.YT.PlayerState.ENDED) {
+              playNextVideo();
+            }
+          },
+        },
+      });
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
+    } else {
+      window.onYouTubeIframeAPIReady = initPlayer;
+    }
+
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, [youtubeVideoId, loading, video, playNextVideo]);
+
+  // 로딩 중
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -41,6 +106,7 @@ const VideoPage = () => {
     );
   }
 
+  // 비디오 없음
   if (!video) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -52,8 +118,6 @@ const VideoPage = () => {
     );
   }
 
-  const youtubeVideoId = extractVideoId(video.youtubeUrl);
-
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background-light">
       <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-background-light/80 px-4 md:px-8 backdrop-blur-sm">
@@ -64,18 +128,12 @@ const VideoPage = () => {
           </Link>
         </div>
         <div className="flex flex-1 justify-end items-center gap-4">
-          <label className="hidden md:flex relative w-full max-w-sm">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
-              search
-            </span>
-            <input
-              className="form-input flex w-full rounded-full border border-zinc-300 bg-zinc-100 focus:border-primary focus:ring-primary h-10 placeholder:text-zinc-500 pl-10 pr-4 text-base font-normal text-zinc-900"
-              placeholder="Search memories"
-            />
-          </label>
-          <button className="flex items-center justify-center rounded-full h-10 w-10 bg-zinc-200 text-zinc-800">
-            <span className="material-symbols-outlined">person</span>
-          </button>
+          <Link
+            to="/admin"
+            className="flex items-center justify-center rounded-full size-10 bg-primary/10 dark:bg-primary/20 text-[#181411] dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors"
+          >
+            <Icon icon="lucide:settings" className="text-xl" />
+          </Link>
         </div>
       </header>
 
@@ -87,15 +145,7 @@ const VideoPage = () => {
             <div className={`relative flex items-center justify-center bg-zinc-900 rounded-xl overflow-hidden shadow-lg ${
               video.type === 'shorts' ? 'aspect-[9/16] max-w-sm mx-auto' : 'aspect-video'
             }`}>
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1`}
-                title={video.title}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
+              <div id="youtube-player" className="w-full h-full"></div>
             </div>
 
             {/* Video Info */}
@@ -129,9 +179,27 @@ const VideoPage = () => {
           {/* Recommended Videos Sidebar */}
           <aside className="lg:col-span-1 xl:col-span-1">
             <div className="lg:sticky lg:top-24 flex flex-col gap-4 max-h-[calc(100vh-8rem)]">
-              <h3 className="text-lg font-bold text-zinc-900 px-4 lg:px-0">
-                Up Next
-              </h3>
+              <div className="flex items-center justify-between px-4 lg:px-0">
+                <h3 className="text-lg font-bold text-zinc-900">
+                  Up Next
+                </h3>
+                {/* 자동 재생 토글 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-zinc-600">자동 재생</span>
+                  <button
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      autoPlay ? 'bg-primary' : 'bg-zinc-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoPlay ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
 
               {recommendedVideos.length > 0 ? (
                 video?.type === 'shorts' ? (
