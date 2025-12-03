@@ -16,11 +16,11 @@ const VideoCard = ({ video, isShort = false }) => {
         <p className="text-[#181411] dark:text-gray-100 text-base font-semibold leading-normal group-hover:text-primary transition-colors">
           {video.title}
         </p>
-        <p className="text-[#8a7560] dark:text-gray-400 text-sm font-normal leading-normal">
+        <p className="text-[#8a7560] dark:text-gray-400 text-base font-normal leading-normal">
           {video.uploadedAt && `Uploaded ${new Date(video.uploadedAt).toLocaleDateString()}`}
         </p>
         {video.tags && video.tags.length > 0 && (
-          <p className="text-primary text-sm font-medium leading-normal">
+          <p className="text-primary text-base font-medium leading-normal">
             {video.tags.map(tag => `#${tag}`).join(' ')}
           </p>
         )}

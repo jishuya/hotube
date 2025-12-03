@@ -58,12 +58,14 @@ const VideoPage = () => {
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background-light">
       <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-background-light/80 px-4 md:px-8 backdrop-blur-sm">
-        <Link to="/" className="flex items-center gap-4 text-primary">
-          <span className="material-symbols-outlined text-3xl">movie_filter</span>
-          <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-zinc-900">
-            Family Memories
-          </h2>
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="flex items-center justify-center rounded-full bg-primary text-white w-8 h-8">
+              <span className="material-symbols-outlined text-lg fill-icon">play_arrow</span>
+            </div>
+            <h1 className="text-xl font-bold text-[#181411] dark:text-gray-100">HoTube</h1>
+          </Link>
+        </div>
         <div className="flex flex-1 justify-end items-center gap-4">
           <label className="hidden md:flex relative w-full max-w-sm">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">

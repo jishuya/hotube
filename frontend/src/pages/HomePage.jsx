@@ -46,7 +46,7 @@ const HomePage = () => {
                       : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
                   } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
                 >
-                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">All Videos</p>
+                  <p className="text-base font-bold leading-normal tracking-[0.015em]">All Videos</p>
                 </button>
                 <button
                   onClick={() => setActiveTab('shorts')}
@@ -56,7 +56,7 @@ const HomePage = () => {
                       : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
                   } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
                 >
-                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">Family Shorts</p>
+                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Family Shorts</p>
                 </button>
                 <button
                   onClick={() => setActiveTab('year')}
@@ -66,14 +66,14 @@ const HomePage = () => {
                       : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
                   } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
                 >
-                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">Filter by Year</p>
+                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Filter by Year</p>
                 </button>
               </div>
             </div>
 
             {loading ? (
               <div className="flex justify-center items-center py-20">
-                <p className="text-[#8a7560] dark:text-gray-400">Loading videos...</p>
+                <p className="text-[#8a7560] dark:text-gray-400 text-base">Loading videos...</p>
               </div>
             ) : (
               <div className="flex flex-col gap-8 py-6">
@@ -105,7 +105,7 @@ const HomePage = () => {
                 {videos.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <span className="material-symbols-outlined text-6xl text-primary/30">video_library</span>
-                    <p className="text-[#8a7560] dark:text-gray-400 text-lg">No videos yet</p>
+                    <p className="text-[#8a7560] dark:text-gray-400 text-xl">No videos yet</p>
                     <Link
                       to="/admin"
                       className="px-6 py-2 bg-primary text-white rounded-full font-semibold hover:bg-primary/90 transition-colors"

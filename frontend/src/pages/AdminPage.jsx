@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { getAllVideos, addVideo, updateVideo, deleteVideo } from '../services/videoApi';
+import Header from '../components/common/Header';
 
 const AdminPage = () => {
   const [videos, setVideos] = useState([]);
@@ -183,25 +183,7 @@ const AdminPage = () => {
   return (
     <div className="relative flex min-h-screen w-full bg-background font-body text-text-primary">
       <div className="flex flex-col w-full">
-        {/* Header */}
-        <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="flex items-center justify-center rounded-full bg-primary text-white w-8 h-8">
-                <span className="material-symbols-outlined text-lg fill-icon">play_arrow</span>
-              </div>
-              <h1 className="text-xl font-bold text-text-primary font-display">Our Family Tube</h1>
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="flex cursor-pointer items-center justify-center overflow-hidden rounded-full h-9 px-4 bg-primary text-white text-sm font-medium leading-normal tracking-wide hover:bg-primary/90 transition-colors"
-            >
-              <span className="truncate">홈으로</span>
-            </Link>
-          </div>
-        </header>
+        <Header isAdmin={true} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
