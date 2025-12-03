@@ -6,9 +6,7 @@ const Header = ({ isAdmin = false }) => {
     <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-primary/10 dark:border-b-primary/20 px-4 sm:px-10 py-3 sticky top-0 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm z-10">
       <div className="flex items-center gap-4">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex items-center justify-center rounded-full bg-primary text-white w-8 h-8">
-            <span className="material-symbols-outlined text-lg fill-icon">play_arrow</span>
-          </div>
+          <img src="/logo.svg" alt="HoTube" className="w-8 h-8" />
           <h1 className="text-xl font-bold text-[#181411] dark:text-gray-100">HoTube</h1>
         </Link>
       </div>

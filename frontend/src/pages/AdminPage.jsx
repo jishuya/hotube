@@ -72,7 +72,11 @@ const AdminPage = () => {
         type: videoInfo.type,
         year: videoInfo.year,
         videoId: videoInfo.videoId,
-        uploadedAt: videoInfo.uploadedAt
+        uploadedAt: videoInfo.uploadedAt,
+        durationSeconds: videoInfo.durationInSeconds,
+        viewCount: videoInfo.viewCount,
+        likeCount: videoInfo.likeCount,
+        channelTitle: videoInfo.channelTitle
       }));
 
       setVideoPreview(videoInfo);

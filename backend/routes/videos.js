@@ -13,7 +13,6 @@ router.get('/', async (req, res) => {
     // 프론트엔드에서 사용하는 camelCase로 변환
     const videos = result.rows.map(row => ({
       id: row.id,
-      videoId: row.video_id,
       title: row.title,
       description: row.description,
       youtubeUrl: row.youtube_url,
@@ -50,7 +49,6 @@ router.get('/:id', async (req, res) => {
     const row = result.rows[0];
     const video = {
       id: row.id,
-      videoId: row.video_id,
       title: row.title,
       description: row.description,
       youtubeUrl: row.youtube_url,
@@ -93,15 +91,18 @@ router.post('/', async (req, res) => {
       channelTitle
     } = req.body;
 
+    // videoId를 id로 사용 (YouTube video ID)
+    const id = videoId;
+
     const result = await pool.query(
       `INSERT INTO videos (
-        video_id, title, description, youtube_url, thumbnail_url,
+        id, title, description, youtube_url, thumbnail_url,
         type, year, tags, uploaded_at, duration_seconds,
         view_count, like_count, channel_title
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *`,
       [
-        videoId,
+        id,
         title,
         description,
         youtubeUrl,
@@ -120,7 +121,6 @@ router.post('/', async (req, res) => {
     const row = result.rows[0];
     const video = {
       id: row.id,
-      videoId: row.video_id,
       title: row.title,
       description: row.description,
       youtubeUrl: row.youtube_url,
@@ -179,7 +179,6 @@ router.put('/:id', async (req, res) => {
     const row = result.rows[0];
     const video = {
       id: row.id,
-      videoId: row.video_id,
       title: row.title,
       description: row.description,
       youtubeUrl: row.youtube_url,
