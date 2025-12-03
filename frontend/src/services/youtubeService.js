@@ -41,8 +41,10 @@ const parseDuration = (duration) => {
 
 /**
  * YouTube API로 영상 정보 가져오기
+ * @param {string} videoId - YouTube 비디오 ID
+ * @param {boolean} isFromShortsUrl - URL이 /shorts/ 형식인지 여부
  */
-export const fetchVideoInfo = async (videoId) => {
+export const fetchVideoInfo = async (videoId, isFromShortsUrl = false) => {
   if (!YOUTUBE_API_KEY) {
     throw new Error('YouTube API 키가 설정되지 않았습니다. .env 파일에 VITE_YOUTUBE_API_KEY를 추가해주세요.');
   }
@@ -68,8 +70,8 @@ export const fetchVideoInfo = async (videoId) => {
   // 영상 길이 (초)
   const durationInSeconds = parseDuration(contentDetails.duration);
 
-  // 60초 이하면 shorts로 판단
-  const type = durationInSeconds <= 60 ? 'shorts' : 'video';
+  // Shorts 조건: 2분(120초) 이하이면서 URL이 /shorts/ 형식
+  const type = durationInSeconds <= 120 && isFromShortsUrl ? 'shorts' : 'video';
 
   // 업로드 연도 추출
   const publishedAt = new Date(snippet.publishedAt);
@@ -111,5 +113,8 @@ export const fetchVideoInfoByUrl = async (youtubeUrl) => {
     throw new Error('유효하지 않은 YouTube URL입니다.');
   }
 
-  return await fetchVideoInfo(videoId);
+  // URL이 /shorts/ 형식인지 확인
+  const isFromShortsUrl = /youtube\.com\/shorts\//.test(youtubeUrl);
+
+  return await fetchVideoInfo(videoId, isFromShortsUrl);
 };
