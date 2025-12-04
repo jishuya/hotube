@@ -370,15 +370,10 @@ const AdminPage = () => {
 
               {/* Video List */}
               <section className="lg:col-span-2">
-                <header className="flex flex-wrap justify-between items-center gap-3 mb-6">
-                  <div>
-                    <h1 className="font-display text-text-primary text-3xl font-bold leading-tight">
-                      Admin DashBoard
-                    </h1>
-                    <p className="text-text-secondary mt-1">
-                      가족 영상 라이브러리를 관리하세요.
-                    </p>
-                  </div>
+                <header className="flex items-center justify-between mb-4">
+                  <h1 className="font-display text-text-primary text-xl sm:text-2xl font-bold">
+                    영상 목록 <span className="text-slate-400 font-normal text-base">({videos.length})</span>
+                  </h1>
                 </header>
 
                 <div className="bg-surface rounded-xl shadow-sm overflow-hidden">
@@ -394,76 +389,108 @@ const AdminPage = () => {
                       <p className="text-slate-500">아직 영상이 없습니다. 첫 번째 영상을 등록해보세요!</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="border-b border-border bg-slate-50">
-                          <tr>
-                            <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                              썸네일
-                            </th>
-                            <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                              제목
-                            </th>
-                            <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 hidden md:table-cell">
-                              타입
-                            </th>
-                            <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 hidden lg:table-cell">
-                              연도
-                            </th>
-                            <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                              관리
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {videos.map((video) => (
-                            <tr key={video.id} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-4 align-top">
-                                <div
-                                  className="bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-32 h-auto"
-                                  style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}
-                                ></div>
-                              </td>
-                              <td className="p-4 align-top max-w-xs">
-                                <p className="font-semibold text-text-primary">{video.title}</p>
-                                <dl className="mt-2 text-xs text-slate-500">
-                                  <div className="md:hidden">
-                                    <dt className="inline font-semibold">타입: </dt>
-                                    <dd className="inline">{video.type}</dd>
-                                  </div>
-                                  <div className="lg:hidden">
-                                    <dt className="inline font-semibold">연도: </dt>
-                                    <dd className="inline">{video.year}</dd>
-                                  </div>
-                                </dl>
-                              </td>
-                              <td className="p-4 align-top hidden md:table-cell text-slate-600">
-                                {video.type === 'shorts' ? 'Shorts' : 'Video'}
-                              </td>
-                              <td className="p-4 align-top hidden lg:table-cell text-slate-600">
-                                {video.year}
-                              </td>
-                              <td className="p-4 align-top">
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleEdit(video)}
-                                    className="text-slate-500 hover:text-primary transition-colors"
-                                  >
-                                    <span className="material-symbols-outlined">edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(video.id)}
-                                    className="text-slate-500 hover:text-red-500 transition-colors"
-                                  >
-                                    <span className="material-symbols-outlined">delete</span>
-                                  </button>
-                                </div>
-                              </td>
+                    <>
+                      {/* 모바일: 카드 레이아웃 */}
+                      <div className="md:hidden divide-y divide-border">
+                        {videos.map((video) => (
+                          <div key={video.id} className="p-4 flex gap-3">
+                            <div
+                              className="bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-24 shrink-0"
+                              style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-text-primary text-sm line-clamp-2">{video.title}</p>
+                              <div className="flex gap-2 mt-1">
+                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                                  {video.type === 'shorts' ? 'Shorts' : 'Video'}
+                                </span>
+                                <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
+                                  {video.year}
+                                </span>
+                              </div>
+                              <div className="flex gap-3 mt-2">
+                                <button
+                                  onClick={() => handleEdit(video)}
+                                  className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1"
+                                >
+                                  <span className="material-symbols-outlined text-base">edit</span>
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(video.id)}
+                                  className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                                >
+                                  <span className="material-symbols-outlined text-base">delete</span>
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 데스크탑: 테이블 레이아웃 */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead className="border-b border-border bg-slate-50">
+                            <tr>
+                              <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                썸네일
+                              </th>
+                              <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                제목
+                              </th>
+                              <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                타입
+                              </th>
+                              <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                연도
+                              </th>
+                              <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                관리
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {videos.map((video) => (
+                              <tr key={video.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-4">
+                                  <div
+                                    className="bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-28"
+                                    style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}
+                                  />
+                                </td>
+                                <td className="p-4 max-w-xs">
+                                  <p className="font-semibold text-text-primary line-clamp-2">{video.title}</p>
+                                </td>
+                                <td className="p-4 text-slate-600">
+                                  {video.type === 'shorts' ? 'Shorts' : 'Video'}
+                                </td>
+                                <td className="p-4 text-slate-600">
+                                  {video.year}
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleEdit(video)}
+                                      className="text-slate-500 hover:text-primary transition-colors"
+                                    >
+                                      <span className="material-symbols-outlined">edit</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(video.id)}
+                                      className="text-slate-500 hover:text-red-500 transition-colors"
+                                    >
+                                      <span className="material-symbols-outlined">delete</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </div>
               </section>

@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Header from '../components/common/Header';
 import VideoCard from '../components/common/VideoCard';
 import { getAllVideos } from '../services/videoApi';
 
 const HomePage = () => {
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get('q') || '';
+
   const [videos, setVideos] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all, shorts, timeline
   const [loading, setLoading] = useState(true);
@@ -35,8 +38,20 @@ const HomePage = () => {
     }
   };
 
-  const regularVideos = videos.filter(v => v.type === 'video');
-  const shorts = videos.filter(v => v.type === 'shorts');
+  // 검색 필터링
+  const filteredVideos = useMemo(() => {
+    if (!searchQuery.trim()) return videos;
+
+    const query = searchQuery.toLowerCase();
+    return videos.filter(video =>
+      video.title?.toLowerCase().includes(query) ||
+      video.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+      video.year?.toString().includes(query)
+    );
+  }, [videos, searchQuery]);
+
+  const regularVideos = filteredVideos.filter(v => v.type === 'video');
+  const shorts = filteredVideos.filter(v => v.type === 'shorts');
 
   // 일반영상 + 쇼츠 인터리브 레이아웃 생성
   // 롱폼 2줄(8개) + 쇼츠 1줄 반복
@@ -132,6 +147,28 @@ const HomePage = () => {
 
         <main className="px-4 sm:px-10 py-5">
           <div className="layout-content-container flex flex-col max-w-screen-xl mx-auto flex-1">
+            {/* 검색 결과 표시 */}
+            {searchQuery && (
+              <div className="flex items-center justify-between py-4 px-2 mb-2 bg-primary/5 dark:bg-primary/10 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Icon icon="mdi:magnify" className="text-primary text-xl" />
+                  <span className="text-[#181411] dark:text-gray-200">
+                    "<span className="font-semibold text-primary">{searchQuery}</span>" 검색 결과
+                  </span>
+                  <span className="text-[#8a7560] dark:text-gray-400">
+                    ({filteredVideos.length}개)
+                  </span>
+                </div>
+                <Link
+                  to="/"
+                  className="flex items-center gap-1 text-sm text-[#8a7560] hover:text-primary transition-colors"
+                >
+                  <Icon icon="mdi:close" className="text-lg" />
+                  초기화
+                </Link>
+              </div>
+            )}
+
             {/* Tabs */}
             <div className="pb-3">
               <div className="flex border-b border-primary/10 dark:border-primary/20 sm:px-4 gap-4 sm:gap-8 overflow-x-auto">
@@ -280,8 +317,21 @@ const HomePage = () => {
                   </div>
                 )}
 
+                {/* 검색 결과 없음 */}
+                {searchQuery && filteredVideos.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <Icon icon="mdi:magnify-close" className="text-6xl text-primary/30" />
+                    <p className="text-[#181411] dark:text-gray-200 text-xl">
+                      "<span className="font-semibold text-primary">{searchQuery}</span>"에 대한 검색 결과가 없습니다
+                    </p>
+                    <p className="text-[#8a7560] dark:text-gray-400 text-base">
+                      다른 검색어를 시도해보세요
+                    </p>
+                  </div>
+                )}
+
                 {/* Empty State */}
-                {videos.length === 0 && (
+                {!searchQuery && videos.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <Icon icon="mdi:video-outline" className="text-6xl text-primary/30" />
                     <p className="text-[#8a7560] dark:text-gray-400 text-xl">No videos yet</p>
