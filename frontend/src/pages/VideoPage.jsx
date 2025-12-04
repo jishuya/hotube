@@ -10,7 +10,6 @@ const VideoPage = () => {
   const [video, setVideo] = useState(null);
   const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const playerRef = useRef(null);
   const [autoPlay, setAutoPlay] = useState(true);
 
   // YouTube IFrame API 로드
@@ -36,9 +35,16 @@ const VideoPage = () => {
       const currentVideo = allVideos.find(v => v.id === videoId);
       setVideo(currentVideo);
 
-      // 추천 영상 (같은 연도, 같은 타입, 현재 영상 제외)
-      const recommended = allVideos
-        .filter(v => v.id !== videoId && v.year === currentVideo?.year && v.type === currentVideo?.type);
+      // 추천 영상 (같은 연도, 같은 타입)
+      // 현재 영상 이후의 영상들 + 현재 영상 이전의 영상들 순서로 정렬
+      const sameYearAndType = allVideos
+        .filter(v => v.year === currentVideo?.year && v.type === currentVideo?.type);
+
+      const currentIndex = sameYearAndType.findIndex(v => v.id === videoId);
+      const afterCurrent = sameYearAndType.slice(currentIndex + 1);
+      const beforeCurrent = sameYearAndType.slice(0, currentIndex);
+      const recommended = [...afterCurrent, ...beforeCurrent];
+
       setRecommendedVideos(recommended);
     } catch (error) {
       console.error('Error loading video:', error);
@@ -57,16 +63,35 @@ const VideoPage = () => {
   // YouTube Video ID 추출
   const youtubeVideoId = video ? extractVideoId(video.youtubeUrl) : null;
 
-  // YouTube Player 초기화
+  // 화면 크기 감지
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const playerRef = useRef(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // YouTube Player 초기화 (하나의 플레이어만)
   useEffect(() => {
     if (!youtubeVideoId || loading || !video) return;
 
+    const playerId = isMobile ? 'youtube-player-mobile' : 'youtube-player-desktop';
+
     const initPlayer = () => {
+      // 기존 플레이어 정리
       if (playerRef.current) {
         playerRef.current.destroy();
+        playerRef.current = null;
       }
 
-      playerRef.current = new window.YT.Player('youtube-player', {
+      const playerElement = document.getElementById(playerId);
+      if (!playerElement) return;
+
+      playerRef.current = new window.YT.Player(playerId, {
         videoId: youtubeVideoId,
         playerVars: {
           autoplay: 1,
@@ -74,7 +99,6 @@ const VideoPage = () => {
         },
         events: {
           onStateChange: (event) => {
-            // 영상이 끝났을 때 (state === 0)
             if (event.data === window.YT.PlayerState.ENDED) {
               playNextVideo();
             }
@@ -95,7 +119,7 @@ const VideoPage = () => {
         playerRef.current = null;
       }
     };
-  }, [youtubeVideoId, loading, video, playNextVideo]);
+  }, [youtubeVideoId, loading, video, playNextVideo, isMobile]);
 
   // 로딩 중
   if (loading) {
@@ -120,7 +144,8 @@ const VideoPage = () => {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background-light">
-      <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-background-light/80 px-4 md:px-8 backdrop-blur-sm">
+      {/* 헤더 */}
+      <header className="flex sticky top-0 z-10 h-14 lg:h-16 w-full items-center justify-between border-b border-zinc-200 bg-background-light/80 px-4 md:px-8 backdrop-blur-sm">
         <div className="flex items-center gap-4">
           <Link to="/" className="flex items-center gap-2">
             <img src="/logo.svg" alt="HoTube" className="w-8 h-8" />
@@ -137,15 +162,190 @@ const VideoPage = () => {
         </div>
       </header>
 
-      <div className="w-full max-w-screen-2xl mx-auto p-4 lg:p-8">
+      {/* 모바일 레이아웃 */}
+      <div className="lg:hidden flex flex-col">
+        {video.type === 'shorts' ? (
+          /* 숏츠 - 롱폼과 비슷한 레이아웃 */
+          <>
+            {/* 플레이어 영역 */}
+            <div className="bg-primary/5 py-3 px-3">
+              <div className="w-full max-w-[280px] mx-auto aspect-[9/16] bg-zinc-900 overflow-hidden">
+                <div id="youtube-player-mobile" className="w-full h-full"></div>
+              </div>
+            </div>
+
+            {/* 영상 정보 영역 */}
+            <div className="bg-primary/15 px-3 py-3 border-b border-primary/20">
+              {/* 뒤로가기 + 제목 */}
+              <div className="flex items-start gap-2">
+                <Link to="/" className="shrink-0 mt-0.5">
+                  <Icon icon="mdi:arrow-left" className="text-xl text-zinc-500" />
+                </Link>
+                <h1 className="text-zinc-900 text-base font-semibold leading-snug line-clamp-2 flex-1">
+                  {video.title}
+                </h1>
+              </div>
+
+              {/* 날짜 + 태그 */}
+              <div className="flex items-center gap-2 mt-1 ml-7">
+                <span className="text-xs text-zinc-500">
+                  {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
+                </span>
+                {video.tags && video.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {video.tags.slice(0, 3).map((tag, index) => (
+                      <span
+                        key={index}
+                        className="text-xs text-primary"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 관련 영상 영역 */}
+            {recommendedVideos.length > 0 && (
+              <div className="px-3 py-4">
+                {/* 자동 재생 토글 */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-zinc-700">자동 재생</span>
+                  <button
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      autoPlay ? 'bg-primary' : 'bg-zinc-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        autoPlay ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {/* 숏츠 그리드 - 3열 */}
+                <div className="grid grid-cols-3 gap-2">
+                  {recommendedVideos.map((recVideo) => (
+                    <Link
+                      key={recVideo.id}
+                      to={`/video/${recVideo.id}`}
+                      className="group"
+                    >
+                      <div className="aspect-[9/16] rounded-lg overflow-hidden">
+                        <img
+                          className="w-full h-full object-cover group-active:scale-95 transition-transform"
+                          src={recVideo.thumbnailUrl}
+                          alt={recVideo.title}
+                        />
+                      </div>
+                      <p className="text-xs font-medium text-zinc-900 line-clamp-2 mt-1.5 leading-tight">
+                        {recVideo.title}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* 롱폼 레이아웃 */
+          <>
+            {/* 플레이어 영역 */}
+            <div className="bg-primary/5 p-3">
+              <div className="w-full aspect-video bg-zinc-900 overflow-hidden">
+                <div id="youtube-player-mobile" className="w-full h-full"></div>
+              </div>
+            </div>
+
+            {/* 영상 정보 영역 */}
+            <div className="bg-primary/15 px-3 py-3 border-b border-primary/20">
+              {/* 뒤로가기 + 제목 */}
+              <div className="flex items-start gap-2">
+                <Link to="/" className="shrink-0 mt-0.5">
+                  <Icon icon="mdi:arrow-left" className="text-xl text-zinc-500" />
+                </Link>
+                <h1 className="text-zinc-900 text-base font-semibold leading-snug line-clamp-2 flex-1">
+                  {video.title}
+                </h1>
+              </div>
+
+              {/* 날짜 + 태그 */}
+              <div className="flex items-center gap-2 mt-1 ml-7">
+                <span className="text-xs text-zinc-500">
+                  {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
+                </span>
+                {video.tags && video.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {video.tags.slice(0, 3).map((tag, index) => (
+                      <span
+                        key={index}
+                        className="text-xs text-primary"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 관련 영상 영역 */}
+            {recommendedVideos.length > 0 && (
+              <div className="px-3 py-4">
+                {/* 자동 재생 토글 */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-zinc-700">자동 재생</span>
+                  <button
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      autoPlay ? 'bg-primary' : 'bg-zinc-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        autoPlay ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {recommendedVideos.map((recVideo) => (
+                    <Link
+                      key={recVideo.id}
+                      to={`/video/${recVideo.id}`}
+                      className="group"
+                    >
+                      <div className="aspect-video rounded-lg overflow-hidden">
+                        <img
+                          className="w-full h-full object-cover group-active:scale-95 transition-transform"
+                          src={recVideo.thumbnailUrl}
+                          alt={recVideo.title}
+                        />
+                      </div>
+                      <p className="text-xs font-medium text-zinc-900 line-clamp-2 mt-1.5 leading-tight">
+                        {recVideo.title}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 데스크탑 레이아웃 */}
+      <div className="hidden lg:block w-full max-w-screen-2xl mx-auto p-4 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           {/* Main Video Section */}
           <div className="lg:col-span-2 xl:col-span-3">
             {/* YouTube Video Player */}
             <div className={`relative flex items-center justify-center bg-zinc-900 rounded-xl overflow-hidden shadow-lg ${
-              video.type === 'shorts' ? 'aspect-[9/16] max-w-sm mx-auto' : 'aspect-video'
+              video.type === 'shorts' ? 'aspect-[9/16] max-w-[340px] mx-auto' : 'aspect-video'
             }`}>
-              <div id="youtube-player" className="w-full h-full"></div>
+              <div id="youtube-player-desktop" className="w-full h-full"></div>
             </div>
 
             {/* Video Info */}
