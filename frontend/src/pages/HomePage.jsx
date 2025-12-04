@@ -38,6 +38,43 @@ const HomePage = () => {
   const regularVideos = videos.filter(v => v.type === 'video');
   const shorts = videos.filter(v => v.type === 'shorts');
 
+  // 일반영상 + 쇼츠 인터리브 레이아웃 생성
+  // 롱폼 2줄(8개) + 쇼츠 1줄 반복
+  // 숏츠 1줄에 들어가는 개수 계산: 롱폼 너비 대비 숏츠 너비 = 9/16
+  // 4열 기준 롱폼이 4개면, 같은 공간에 숏츠는 약 7개 (4 / (9/16) ≈ 7.1)
+  const interleavedSections = useMemo(() => {
+    const sections = [];
+    const videosPerSection = 8; // 4 columns x 2 rows
+    const shortsPerRow = 7; // 숏츠 1줄에 약 7개
+
+    let videoIndex = 0;
+    let shortsIndex = 0;
+
+    while (videoIndex < regularVideos.length || shortsIndex < shorts.length) {
+      // 롱폼 섹션 추가 (2줄 = 8개, 부족하면 있는만큼)
+      if (videoIndex < regularVideos.length) {
+        const count = Math.min(videosPerSection, regularVideos.length - videoIndex);
+        sections.push({
+          type: 'videos',
+          items: regularVideos.slice(videoIndex, videoIndex + count)
+        });
+        videoIndex += count;
+      }
+
+      // 쇼츠 섹션 추가 (1줄, 부족하면 있는만큼)
+      if (shortsIndex < shorts.length) {
+        const count = Math.min(shortsPerRow, shorts.length - shortsIndex);
+        sections.push({
+          type: 'shorts',
+          items: shorts.slice(shortsIndex, shortsIndex + count)
+        });
+        shortsIndex += count;
+      }
+    }
+
+    return sections;
+  }, [regularVideos, shorts]);
+
   // 타임라인 데이터: 연도 > 월별로 그룹핑
   const timelineData = useMemo(() => {
     const grouped = {};
@@ -137,29 +174,45 @@ const HomePage = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-8 py-6">
-                {/* Regular Videos Grid */}
-                {activeTab === 'all' && regularVideos.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
-                    {regularVideos.map((video) => (
-                      <VideoCard key={video.id} video={video} />
+                {/* All Videos - 인터리브 레이아웃 (일반영상 3줄 + 쇼츠 1줄 반복) */}
+                {activeTab === 'all' && interleavedSections.length > 0 && (
+                  <>
+                    {interleavedSections.map((section, index) => (
+                      <div key={`section-${index}`}>
+                        {section.type === 'videos' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
+                            {section.items.map((video) => (
+                              <VideoCard key={video.id} video={video} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-center gap-2">
+                              <Icon icon="mdi:movie-outline" className="text-primary text-2xl" />
+                              <h3 className="text-xl font-bold">Shorts</h3>
+                            </div>
+                            <div className="flex flex-wrap gap-4 justify-start">
+                              {section.items.map((video) => (
+                                <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
+                                  <VideoCard video={video} isShort={true} />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </div>
+                  </>
                 )}
 
-                {/* Shorts Section */}
-                {(activeTab === 'all' || activeTab === 'shorts') && shorts.length > 0 && (
-                  <div className="flex flex-col gap-4">
-                    {activeTab === 'all' && (
-                      <div className="flex items-center gap-2">
-                        <Icon icon="mdi:movie-outline" className="text-primary text-2xl" />
-                        <h3 className="text-xl font-bold">Shorts</h3>
+                {/* Shorts Only 탭 */}
+                {activeTab === 'shorts' && shorts.length > 0 && (
+                  <div className="flex flex-wrap gap-4 justify-start">
+                    {shorts.map((video) => (
+                      <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
+                        <VideoCard video={video} isShort={true} />
                       </div>
-                    )}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                      {shorts.map((video) => (
-                        <VideoCard key={video.id} video={video} isShort={true} />
-                      ))}
-                    </div>
+                    ))}
                   </div>
                 )}
 
@@ -209,9 +262,11 @@ const HomePage = () => {
                                   )}
                                   {/* Shorts */}
                                   {monthVideos.filter(v => v.type === 'shorts').length > 0 && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                    <div className="flex flex-wrap gap-4 justify-start">
                                       {monthVideos.filter(v => v.type === 'shorts').map((video) => (
-                                        <VideoCard key={video.id} video={video} isShort={true} />
+                                        <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
+                                          <VideoCard video={video} isShort={true} />
+                                        </div>
                                       ))}
                                     </div>
                                   )}
