@@ -6,11 +6,32 @@ import VideoCard from '../components/common/VideoCard';
 import { getAllVideos } from '../services/videoApi';
 
 const HomePage = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const searchQuery = searchParams.get('q') || '';
+  const tabParam = searchParams.get('tab') || 'all';
 
   const [videos, setVideos] = useState([]);
-  const [activeTab, setActiveTab] = useState('all'); // all, shorts, timeline
+  const [activeTab, setActiveTab] = useState(tabParam); // all, longform, shorts, timeline
+
+  // URL 파라미터로 탭 상태 동기화
+  useEffect(() => {
+    const validTabs = ['all', 'longform', 'shorts', 'timeline'];
+    if (validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  // 탭 변경 시 URL 파라미터 업데이트
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    const newParams = new URLSearchParams(searchParams);
+    if (tab === 'all') {
+      newParams.delete('tab');
+    } else {
+      newParams.set('tab', tab);
+    }
+    setSearchParams(newParams, { replace: true });
+  };
   const [loading, setLoading] = useState(true);
   const [expandedYears, setExpandedYears] = useState({});
 
@@ -54,41 +75,55 @@ const HomePage = () => {
   const shorts = filteredVideos.filter(v => v.type === 'shorts');
 
   // 일반영상 + 쇼츠 인터리브 레이아웃 생성
-  // 롱폼 2줄(8개) + 쇼츠 1줄 반복
-  // 숏츠 1줄에 들어가는 개수 계산: 롱폼 너비 대비 숏츠 너비 = 9/16
-  // 4열 기준 롱폼이 4개면, 같은 공간에 숏츠는 약 7개 (4 / (9/16) ≈ 7.1)
+  // 쇼츠 1줄 + 롱폼 2~3줄 반복
+  // 최신순 정렬
   const interleavedSections = useMemo(() => {
     const sections = [];
-    const videosPerSection = 8; // 4 columns x 2 rows
+    const longformPerSection = 8; // 4 columns x 2 rows (2~3줄)
     const shortsPerRow = 7; // 숏츠 1줄에 약 7개
 
-    let videoIndex = 0;
+    // 최신순 정렬
+    const sortedLongform = [...regularVideos].sort((a, b) =>
+      new Date(b.uploadedAt) - new Date(a.uploadedAt)
+    );
+    const sortedShorts = [...shorts].sort((a, b) =>
+      new Date(b.uploadedAt) - new Date(a.uploadedAt)
+    );
+
+    let longformIndex = 0;
     let shortsIndex = 0;
 
-    while (videoIndex < regularVideos.length || shortsIndex < shorts.length) {
-      // 롱폼 섹션 추가 (2줄 = 8개, 부족하면 있는만큼)
-      if (videoIndex < regularVideos.length) {
-        const count = Math.min(videosPerSection, regularVideos.length - videoIndex);
-        sections.push({
-          type: 'videos',
-          items: regularVideos.slice(videoIndex, videoIndex + count)
-        });
-        videoIndex += count;
-      }
-
-      // 쇼츠 섹션 추가 (1줄, 부족하면 있는만큼)
-      if (shortsIndex < shorts.length) {
-        const count = Math.min(shortsPerRow, shorts.length - shortsIndex);
+    while (longformIndex < sortedLongform.length || shortsIndex < sortedShorts.length) {
+      // 쇼츠 섹션 먼저 추가 (1줄, 부족하면 있는만큼)
+      if (shortsIndex < sortedShorts.length) {
+        const count = Math.min(shortsPerRow, sortedShorts.length - shortsIndex);
         sections.push({
           type: 'shorts',
-          items: shorts.slice(shortsIndex, shortsIndex + count)
+          items: sortedShorts.slice(shortsIndex, shortsIndex + count)
         });
         shortsIndex += count;
+      }
+
+      // 롱폼 섹션 추가 (2~3줄 = 8~12개, 부족하면 있는만큼)
+      if (longformIndex < sortedLongform.length) {
+        const count = Math.min(longformPerSection, sortedLongform.length - longformIndex);
+        sections.push({
+          type: 'videos',
+          items: sortedLongform.slice(longformIndex, longformIndex + count)
+        });
+        longformIndex += count;
       }
     }
 
     return sections;
   }, [regularVideos, shorts]);
+
+  // Long-form 영상만 최신순 정렬
+  const sortedLongformVideos = useMemo(() => {
+    return [...regularVideos].sort((a, b) =>
+      new Date(b.uploadedAt) - new Date(a.uploadedAt)
+    );
+  }, [regularVideos]);
 
   // 타임라인 데이터: 연도 > 월별로 그룹핑
   const timelineData = useMemo(() => {
@@ -173,7 +208,7 @@ const HomePage = () => {
             <div className="pb-3">
               <div className="flex border-b border-primary/10 dark:border-primary/20 sm:px-4 gap-4 sm:gap-8 overflow-x-auto">
                 <button
-                  onClick={() => setActiveTab('all')}
+                  onClick={() => handleTabChange('all')}
                   className={`flex flex-col items-center justify-center border-b-[3px] ${
                     activeTab === 'all'
                       ? 'border-b-primary text-primary'
@@ -183,7 +218,17 @@ const HomePage = () => {
                   <p className="text-base font-bold leading-normal tracking-[0.015em]">All Videos</p>
                 </button>
                 <button
-                  onClick={() => setActiveTab('shorts')}
+                  onClick={() => handleTabChange('longform')}
+                  className={`flex flex-col items-center justify-center border-b-[3px] ${
+                    activeTab === 'longform'
+                      ? 'border-b-primary text-primary'
+                      : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
+                  } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
+                >
+                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Long-form</p>
+                </button>
+                <button
+                  onClick={() => handleTabChange('shorts')}
                   className={`flex flex-col items-center justify-center border-b-[3px] ${
                     activeTab === 'shorts'
                       ? 'border-b-primary text-primary'
@@ -193,7 +238,7 @@ const HomePage = () => {
                   <p className="text-base font-bold leading-normal tracking-[0.015em]">Shorts</p>
                 </button>
                 <button
-                  onClick={() => setActiveTab('timeline')}
+                  onClick={() => handleTabChange('timeline')}
                   className={`flex flex-col items-center justify-center border-b-[3px] ${
                     activeTab === 'timeline'
                       ? 'border-b-primary text-primary'
@@ -240,6 +285,15 @@ const HomePage = () => {
                       </div>
                     ))}
                   </>
+                )}
+
+                {/* Long-form Only 탭 */}
+                {activeTab === 'longform' && sortedLongformVideos.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
+                    {sortedLongformVideos.map((video) => (
+                      <VideoCard key={video.id} video={video} />
+                    ))}
+                  </div>
                 )}
 
                 {/* Shorts Only 탭 */}
