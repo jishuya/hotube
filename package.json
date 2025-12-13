@@ -3,14 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "frontend": "cd frontend && npm run dev",
-    "backend": "cd backend && npm run dev",
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "install:all": "cd frontend && npm install && cd ../backend && npm install",
-    "db:init": "cd backend && npm run db:init"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "install:all": "cd frontend && npm install && cd ../functions && npm install"
   },
   "dependencies": {
     "firebase-admin": "^13.6.0"
