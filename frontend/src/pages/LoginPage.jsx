@@ -1,0 +1,132 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '@iconify/react';
+import { useAuth } from '../contexts/AuthContext';
+import { loginUser } from '../services/authApi';
+
+const LoginPage = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const [formData, setFormData] = useState({
+    userId: '',
+    password: '',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const user = await loginUser(formData);
+      login(user);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Header */}
+      <header className="flex h-14 w-full items-center border-b border-zinc-200 bg-background-light px-4 sm:px-10">
+        <Link to="/login" className="flex items-center gap-2">
+          <img src="/logo.svg" alt="HoTube" className="w-8 h-8" />
+          <h1 className="text-xl font-bold text-[#181411]">HoTube</h1>
+        </Link>
+      </header>
+
+      {/* Login Form */}
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <div className="text-center mb-8">
+              <Icon icon="mdi:account-circle" className="text-6xl text-primary mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-zinc-900">로그인</h2>
+              <p className="text-zinc-500 mt-2">가족 영상을 함께 감상하세요</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* 아이디 */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  아이디
+                </label>
+                <input
+                  type="text"
+                  name="userId"
+                  value={formData.userId}
+                  onChange={handleChange}
+                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+                  placeholder="아이디를 입력하세요"
+                  required
+                />
+              </div>
+
+              {/* 비밀번호 */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                  비밀번호
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+                  placeholder="비밀번호를 입력하세요"
+                  required
+                />
+              </div>
+
+              {/* 에러 메시지 */}
+              {error && (
+                <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 p-3 rounded-lg">
+                  <Icon icon="mdi:alert-circle" className="text-lg shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* 로그인 버튼 */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Icon icon="mdi:loading" className="text-xl animate-spin" />
+                    로그인 중...
+                  </>
+                ) : (
+                  '로그인'
+                )}
+              </button>
+            </form>
+
+            {/* 회원가입 링크 */}
+            <p className="text-center text-zinc-500 mt-6">
+              계정이 없으신가요?{' '}
+              <Link to="/register" className="text-primary font-medium hover:underline">
+                회원가입
+              </Link>
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default LoginPage;

@@ -3,14 +3,19 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { getAllVideos } from '../services/videoApi';
 import { extractVideoId } from '../services/youtubeService';
+import { toggleLike, markVideoWatched } from '../services/authApi';
+import { useAuth } from '../contexts/AuthContext';
+import CommentSection from '../components/video/CommentSection';
 
 const VideoPage = () => {
   const { videoId } = useParams();
   const navigate = useNavigate();
+  const { user, isLiked, toggleLikeLocal, markWatchedLocal } = useAuth();
   const [video, setVideo] = useState(null);
   const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [autoPlay, setAutoPlay] = useState(true);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   // YouTube IFrame API 로드
   useEffect(() => {
@@ -26,6 +31,15 @@ const VideoPage = () => {
     loadVideoData();
   }, [videoId]);
 
+  // 시청 기록 추가
+  useEffect(() => {
+    if (video && user) {
+      markVideoWatched(user.id, videoId).then(() => {
+        markWatchedLocal(videoId);
+      }).catch(err => console.error('시청 기록 추가 실패:', err));
+    }
+  }, [video, user, videoId, markWatchedLocal]);
+
   const loadVideoData = async () => {
     try {
       setLoading(true);
@@ -36,7 +50,6 @@ const VideoPage = () => {
       setVideo(currentVideo);
 
       // 추천 영상 (같은 연도, 같은 타입)
-      // 현재 영상 이후의 영상들 + 현재 영상 이전의 영상들 순서로 정렬
       const sameYearAndType = allVideos
         .filter(v => v.year === currentVideo?.year && v.type === currentVideo?.type);
 
@@ -50,6 +63,21 @@ const VideoPage = () => {
       console.error('Error loading video:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 좋아요 토글
+  const handleToggleLike = async () => {
+    if (!user || likeLoading) return;
+
+    try {
+      setLikeLoading(true);
+      await toggleLike(user.id, videoId);
+      toggleLikeLocal(videoId);
+    } catch (error) {
+      console.error('좋아요 처리 실패:', error);
+    } finally {
+      setLikeLoading(false);
     }
   };
 
@@ -75,14 +103,13 @@ const VideoPage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // YouTube Player 초기화 (하나의 플레이어만)
+  // YouTube Player 초기화
   useEffect(() => {
     if (!youtubeVideoId || loading || !video) return;
 
     const playerId = isMobile ? 'youtube-player-mobile' : 'youtube-player-desktop';
 
     const initPlayer = () => {
-      // 기존 플레이어 정리
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
@@ -121,7 +148,27 @@ const VideoPage = () => {
     };
   }, [youtubeVideoId, loading, video, playNextVideo, isMobile]);
 
-  // 로딩 중
+  // 좋아요 버튼 컴포넌트
+  const LikeButton = ({ className = '' }) => (
+    <button
+      onClick={handleToggleLike}
+      disabled={likeLoading}
+      className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
+        isLiked(videoId)
+          ? 'bg-red-500 text-white'
+          : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600'
+      } ${likeLoading ? 'opacity-50' : ''} ${className}`}
+    >
+      <Icon
+        icon={isLiked(videoId) ? 'mdi:heart' : 'mdi:heart-outline'}
+        className="text-xl"
+      />
+      <span className="font-medium">
+        {isLiked(videoId) ? '좋아요 취소' : '좋아요'}
+      </span>
+    </button>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -130,7 +177,6 @@ const VideoPage = () => {
     );
   }
 
-  // 비디오 없음
   if (!video) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -154,10 +200,10 @@ const VideoPage = () => {
         </div>
         <div className="flex flex-1 justify-end items-center gap-4">
           <Link
-            to="/admin"
+            to="/"
             className="flex items-center justify-center rounded-full size-10 bg-primary/10 dark:bg-primary/20 text-[#181411] dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors"
           >
-            <Icon icon="lucide:settings" className="text-xl" />
+            <Icon icon="lucide:home" className="text-xl" />
           </Link>
         </div>
       </header>
@@ -165,7 +211,6 @@ const VideoPage = () => {
       {/* 모바일 레이아웃 */}
       <div className="lg:hidden flex flex-col">
         {video.type === 'shorts' ? (
-          /* 숏츠 - 롱폼과 비슷한 레이아웃 */
           <>
             {/* 플레이어 영역 */}
             <div className="bg-primary/5 py-3 px-3">
@@ -176,7 +221,6 @@ const VideoPage = () => {
 
             {/* 영상 정보 영역 */}
             <div className="bg-primary/15 px-3 py-3 border-b border-primary/20">
-              {/* 뒤로가기 + 제목 */}
               <div className="flex items-start gap-2">
                 <Link to="/" className="shrink-0 mt-0.5">
                   <Icon icon="mdi:arrow-left" className="text-xl text-zinc-500" />
@@ -186,30 +230,33 @@ const VideoPage = () => {
                 </h1>
               </div>
 
-              {/* 날짜 + 태그 */}
-              <div className="flex items-center gap-2 mt-1 ml-7">
-                <span className="text-xs text-zinc-500">
-                  {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
-                </span>
-                {video.tags && video.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {video.tags.slice(0, 3).map((tag, index) => (
-                      <span
-                        key={index}
-                        className="text-xs text-primary"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="flex items-center justify-between mt-2 ml-7">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">
+                    {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
+                  </span>
+                  {video.tags && video.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {video.tags.slice(0, 2).map((tag, index) => (
+                        <span key={index} className="text-xs text-primary">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <LikeButton className="text-sm py-1.5 px-3" />
               </div>
+            </div>
+
+            {/* 댓글 섹션 */}
+            <div className="px-3 py-4">
+              <CommentSection videoId={videoId} />
             </div>
 
             {/* 관련 영상 영역 */}
             {recommendedVideos.length > 0 && (
-              <div className="px-3 py-4">
-                {/* 자동 재생 토글 */}
+              <div className="px-3 py-4 border-t border-zinc-200">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-zinc-700">자동 재생</span>
                   <button
@@ -225,14 +272,9 @@ const VideoPage = () => {
                     />
                   </button>
                 </div>
-                {/* 숏츠 그리드 - 3열 */}
                 <div className="grid grid-cols-3 gap-2">
                   {recommendedVideos.map((recVideo) => (
-                    <Link
-                      key={recVideo.id}
-                      to={`/video/${recVideo.id}`}
-                      className="group"
-                    >
+                    <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group">
                       <div className="aspect-[9/16] rounded-lg overflow-hidden">
                         <img
                           className="w-full h-full object-cover group-active:scale-95 transition-transform"
@@ -250,7 +292,6 @@ const VideoPage = () => {
             )}
           </>
         ) : (
-          /* 롱폼 레이아웃 */
           <>
             {/* 플레이어 영역 */}
             <div className="bg-primary/5 p-3">
@@ -261,7 +302,6 @@ const VideoPage = () => {
 
             {/* 영상 정보 영역 */}
             <div className="bg-primary/15 px-3 py-3 border-b border-primary/20">
-              {/* 뒤로가기 + 제목 */}
               <div className="flex items-start gap-2">
                 <Link to="/" className="shrink-0 mt-0.5">
                   <Icon icon="mdi:arrow-left" className="text-xl text-zinc-500" />
@@ -271,30 +311,33 @@ const VideoPage = () => {
                 </h1>
               </div>
 
-              {/* 날짜 + 태그 */}
-              <div className="flex items-center gap-2 mt-1 ml-7">
-                <span className="text-xs text-zinc-500">
-                  {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
-                </span>
-                {video.tags && video.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {video.tags.slice(0, 3).map((tag, index) => (
-                      <span
-                        key={index}
-                        className="text-xs text-primary"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="flex items-center justify-between mt-2 ml-7">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">
+                    {video.uploadedAt && new Date(video.uploadedAt).toLocaleDateString()}
+                  </span>
+                  {video.tags && video.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {video.tags.slice(0, 2).map((tag, index) => (
+                        <span key={index} className="text-xs text-primary">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <LikeButton className="text-sm py-1.5 px-3" />
               </div>
+            </div>
+
+            {/* 댓글 섹션 */}
+            <div className="px-3 py-4">
+              <CommentSection videoId={videoId} />
             </div>
 
             {/* 관련 영상 영역 */}
             {recommendedVideos.length > 0 && (
-              <div className="px-3 py-4">
-                {/* 자동 재생 토글 */}
+              <div className="px-3 py-4 border-t border-zinc-200">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-zinc-700">자동 재생</span>
                   <button
@@ -312,11 +355,7 @@ const VideoPage = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {recommendedVideos.map((recVideo) => (
-                    <Link
-                      key={recVideo.id}
-                      to={`/video/${recVideo.id}`}
-                      className="group"
-                    >
+                    <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group">
                       <div className="aspect-video rounded-lg overflow-hidden">
                         <img
                           className="w-full h-full object-cover group-active:scale-95 transition-transform"
@@ -349,9 +388,12 @@ const VideoPage = () => {
             </div>
 
             {/* Video Info */}
-            <h1 className="text-zinc-900 tracking-tight text-2xl md:text-3xl font-bold leading-tight pt-6 pb-2">
-              {video.title}
-            </h1>
+            <div className="flex items-start justify-between gap-4 pt-6 pb-2">
+              <h1 className="text-zinc-900 tracking-tight text-2xl md:text-3xl font-bold leading-tight flex-1">
+                {video.title}
+              </h1>
+              <LikeButton />
+            </div>
             <p className="text-zinc-500 text-sm font-normal leading-normal pb-4">
               {video.uploadedAt && `Filmed in ${new Date(video.uploadedAt).toLocaleDateString()}`}
             </p>
@@ -374,16 +416,18 @@ const VideoPage = () => {
                 </div>
               )}
             </div>
+
+            {/* 댓글 섹션 */}
+            <div className="mt-6">
+              <CommentSection videoId={videoId} />
+            </div>
           </div>
 
           {/* Recommended Videos Sidebar */}
           <aside className="lg:col-span-1 xl:col-span-1">
             <div className="lg:sticky lg:top-24 flex flex-col gap-4 max-h-[calc(100vh-8rem)]">
               <div className="flex items-center justify-between px-4 lg:px-0">
-                <h3 className="text-lg font-bold text-zinc-900">
-                  Up Next
-                </h3>
-                {/* 자동 재생 토글 */}
+                <h3 className="text-lg font-bold text-zinc-900">Up Next</h3>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-zinc-600">자동 재생</span>
                   <button
@@ -403,14 +447,9 @@ const VideoPage = () => {
 
               {recommendedVideos.length > 0 ? (
                 video?.type === 'shorts' ? (
-                  // Shorts 그리드
                   <div className="grid grid-cols-2 gap-3 overflow-y-auto pr-2 scrollbar-thin">
                     {recommendedVideos.map((recVideo) => (
-                      <Link
-                        key={recVideo.id}
-                        to={`/video/${recVideo.id}`}
-                        className="group cursor-pointer"
-                      >
+                      <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group cursor-pointer">
                         <div className="aspect-[9/16] relative rounded-lg overflow-hidden shadow-md group-hover:shadow-lg transition-shadow">
                           <img
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -425,14 +464,9 @@ const VideoPage = () => {
                     ))}
                   </div>
                 ) : (
-                  // Videos 리스트
                   <div className="flex flex-col gap-3 overflow-y-auto pr-2">
                     {recommendedVideos.map((recVideo) => (
-                      <Link
-                        key={recVideo.id}
-                        to={`/video/${recVideo.id}`}
-                        className="flex gap-3 group cursor-pointer"
-                      >
+                      <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="flex gap-3 group cursor-pointer">
                         <div className="w-40 aspect-video relative rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
                           <img
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
