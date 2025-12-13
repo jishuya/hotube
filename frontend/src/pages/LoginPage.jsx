@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../contexts/AuthContext';
 import { loginUser } from '../services/authApi';
+
+const REMEMBER_ID_KEY = 'hotube_remember_id';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -12,8 +14,18 @@ const LoginPage = () => {
     userId: '',
     password: '',
   });
+  const [rememberUserId, setRememberUserId] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // 저장된 아이디 불러오기
+  useEffect(() => {
+    const savedUserId = localStorage.getItem(REMEMBER_ID_KEY);
+    if (savedUserId) {
+      setFormData(prev => ({ ...prev, userId: savedUserId }));
+      setRememberUserId(true);
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -28,6 +40,14 @@ const LoginPage = () => {
 
     try {
       const user = await loginUser(formData);
+
+      // 아이디 기억하기 처리
+      if (rememberUserId) {
+        localStorage.setItem(REMEMBER_ID_KEY, formData.userId);
+      } else {
+        localStorage.removeItem(REMEMBER_ID_KEY);
+      }
+
       login(user);
       navigate('/');
     } catch (err) {
@@ -88,6 +108,23 @@ const LoginPage = () => {
                   placeholder="비밀번호를 입력하세요"
                   required
                 />
+              </div>
+
+              {/* 아이디 기억하기 */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="rememberUserId"
+                  checked={rememberUserId}
+                  onChange={(e) => setRememberUserId(e.target.checked)}
+                  className="w-4 h-4 text-primary border-zinc-300 rounded focus:ring-primary/50 cursor-pointer"
+                />
+                <label
+                  htmlFor="rememberUserId"
+                  className="ml-2 text-sm text-zinc-600 cursor-pointer select-none"
+                >
+                  아이디 기억하기
+                </label>
               </div>
 
               {/* 에러 메시지 */}
