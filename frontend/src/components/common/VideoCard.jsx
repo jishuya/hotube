@@ -18,7 +18,7 @@ const formatDuration = (seconds) => {
 
 const VideoCard = ({ video, isShort = false }) => {
   const { isWatched, isLiked } = useAuth();
-  const watched = isWatched(video.id);
+  const isNew = !isWatched(video.id);
   const liked = isLiked(video.id);
 
   return (
@@ -34,7 +34,7 @@ const VideoCard = ({ video, isShort = false }) => {
           {formatDuration(video.durationSeconds)}
         </span>
         {/* NEW 배지 - 안본 영상 */}
-        {!watched && (
+        {isNew && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
             <Icon icon="mdi:new-box" className="text-sm" />
             NEW
@@ -48,9 +48,7 @@ const VideoCard = ({ video, isShort = false }) => {
         )}
       </div>
       <div className="flex flex-col gap-1">
-        <p className={`text-base font-semibold leading-normal group-hover:text-primary transition-colors ${
-          watched ? 'text-zinc-400 dark:text-zinc-500' : 'text-[#181411] dark:text-gray-100'
-        }`}>
+        <p className="text-base font-semibold leading-normal group-hover:text-primary transition-colors text-[#181411] dark:text-gray-100">
           {video.title}
         </p>
         <p className="text-[#8a7560] dark:text-gray-400 text-base font-normal leading-normal">

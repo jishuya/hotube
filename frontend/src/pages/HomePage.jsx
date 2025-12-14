@@ -34,6 +34,7 @@ const HomePage = () => {
   };
   const [loading, setLoading] = useState(true);
   const [expandedYears, setExpandedYears] = useState({});
+  const [expandedMonths, setExpandedMonths] = useState({});
 
   useEffect(() => {
     loadVideos();
@@ -45,13 +46,21 @@ const HomePage = () => {
       const fetchedVideos = await getAllVideos();
       setVideos(fetchedVideos);
 
-      // 타임라인 뷰에서 모든 연도를 기본으로 펼침
+      // 타임라인 뷰에서 모든 연도와 월을 기본으로 펼침
       const years = [...new Set(fetchedVideos.map(v => v.year))];
-      const initialExpanded = {};
+      const initialExpandedYears = {};
+      const initialExpandedMonths = {};
       years.forEach(year => {
-        initialExpanded[year] = true;
+        initialExpandedYears[year] = true;
+        // 각 연도의 월도 펼침
+        const yearVideos = fetchedVideos.filter(v => v.year === year);
+        const months = [...new Set(yearVideos.map(v => new Date(v.uploadedAt).getMonth() + 1))];
+        months.forEach(month => {
+          initialExpandedMonths[`${year}-${month}`] = true;
+        });
       });
-      setExpandedYears(initialExpanded);
+      setExpandedYears(initialExpandedYears);
+      setExpandedMonths(initialExpandedMonths);
     } catch (error) {
       console.error('Error loading videos:', error);
     } finally {
@@ -167,6 +176,14 @@ const HomePage = () => {
     setExpandedYears(prev => ({
       ...prev,
       [year]: !prev[year]
+    }));
+  };
+
+  const toggleMonth = (year, month) => {
+    const key = `${year}-${month}`;
+    setExpandedMonths(prev => ({
+      ...prev,
+      [key]: !prev[key]
     }));
   };
 
@@ -334,34 +351,43 @@ const HomePage = () => {
                         {expandedYears[year] && (
                           <div className="p-4 sm:p-6 flex flex-col gap-6">
                             {months.map(({ month, videos: monthVideos }) => (
-                              <div key={month} className="flex flex-col gap-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-1 h-6 bg-primary rounded-full" />
+                              <div key={month} className="flex flex-col">
+                                <button
+                                  onClick={() => toggleMonth(year, month)}
+                                  className="flex items-center gap-2 py-2 hover:bg-primary/5 dark:hover:bg-primary/10 rounded-lg px-2 -ml-2 transition-colors"
+                                >
+                                  <Icon
+                                    icon={expandedMonths[`${year}-${month}`] ? 'mdi:chevron-down' : 'mdi:chevron-right'}
+                                    className="text-xl text-[#8a7560]"
+                                  />
+                                  <div className="w-1 h-5 bg-primary rounded-full" />
                                   <h4 className="text-lg font-semibold">{getMonthName(month)}</h4>
                                   <span className="text-sm text-[#8a7560] dark:text-gray-400">
                                     ({monthVideos.length}개)
                                   </span>
-                                </div>
-                                <div className="flex flex-col gap-4 pl-3">
-                                  {/* Regular Videos */}
-                                  {monthVideos.filter(v => v.type === 'video').length > 0 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                      {monthVideos.filter(v => v.type === 'video').map((video) => (
-                                        <VideoCard key={video.id} video={video} />
-                                      ))}
-                                    </div>
-                                  )}
-                                  {/* Shorts */}
-                                  {monthVideos.filter(v => v.type === 'shorts').length > 0 && (
-                                    <div className="flex flex-wrap gap-4 justify-start">
-                                      {monthVideos.filter(v => v.type === 'shorts').map((video) => (
-                                        <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
-                                          <VideoCard video={video} isShort={true} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
+                                </button>
+                                {expandedMonths[`${year}-${month}`] && (
+                                  <div className="flex flex-col gap-4 pl-6 mt-2">
+                                    {/* Regular Videos */}
+                                    {monthVideos.filter(v => v.type === 'video').length > 0 && (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {monthVideos.filter(v => v.type === 'video').map((video) => (
+                                          <VideoCard key={video.id} video={video} />
+                                        ))}
+                                      </div>
+                                    )}
+                                    {/* Shorts */}
+                                    {monthVideos.filter(v => v.type === 'shorts').length > 0 && (
+                                      <div className="flex flex-wrap gap-4 justify-start">
+                                        {monthVideos.filter(v => v.type === 'shorts').map((video) => (
+                                          <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
+                                            <VideoCard video={video} isShort={true} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

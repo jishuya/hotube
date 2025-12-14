@@ -23,29 +23,6 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// 관리자 전용 라우트
-const AdminRoute = ({ children }) => {
-  const { isLoggedIn, isAdmin, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-zinc-500">로딩 중...</p>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
-};
-
 function AppRoutes() {
   return (
     <Routes>
@@ -70,9 +47,9 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <AdminRoute>
+          <ProtectedRoute>
             <AdminPage />
-          </AdminRoute>
+          </ProtectedRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />

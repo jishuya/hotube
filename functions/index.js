@@ -557,6 +557,52 @@ exports.getComments = onRequest((req, res) => {
   });
 });
 
+// 댓글 수정
+exports.updateComment = onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== "PUT") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    try {
+      const id = req.path.split("/").pop();
+      const { userId, content } = req.body;
+
+      if (!content || !content.trim()) {
+        return res.status(400).json({ error: "댓글 내용을 입력해주세요" });
+      }
+
+      const doc = await db.collection("comments").doc(id).get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: "댓글을 찾을 수 없습니다" });
+      }
+
+      const commentData = doc.data();
+
+      // 본인 댓글인지 확인
+      if (commentData.userId !== userId) {
+        return res.status(403).json({ error: "수정 권한이 없습니다" });
+      }
+
+      const now = new Date().toISOString();
+      await db.collection("comments").doc(id).update({
+        content: content.trim(),
+        updatedAt: now,
+      });
+
+      res.json({
+        id,
+        ...commentData,
+        content: content.trim(),
+        updatedAt: now,
+      });
+    } catch (error) {
+      console.error("댓글 수정 오류:", error);
+      res.status(500).json({ error: "댓글 수정 실패" });
+    }
+  });
+});
+
 // 댓글 삭제
 exports.deleteComment = onRequest((req, res) => {
   cors(req, res, async () => {

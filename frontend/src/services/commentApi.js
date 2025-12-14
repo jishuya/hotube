@@ -2,6 +2,7 @@
 const FUNCTIONS_URL = {
   createComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/createComment',
   getComments: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/getComments',
+  updateComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/updateComment',
   deleteComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/deleteComment',
 };
 
@@ -34,6 +35,25 @@ export const getComments = async (videoId, category, role) => {
   }
 
   return response.json();
+};
+
+// 댓글 수정
+export const updateComment = async (commentId, userId, content) => {
+  const response = await fetch(`${FUNCTIONS_URL.updateComment}/${commentId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, content }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || '댓글 수정에 실패했습니다');
+  }
+
+  return data;
 };
 
 // 댓글 삭제

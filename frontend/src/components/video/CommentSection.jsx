@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getComments, createComment, deleteComment } from '../../services/commentApi';
+import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
 
 const CommentSection = ({ videoId }) => {
   const { user } = useAuth();
@@ -9,6 +9,8 @@ const CommentSection = ({ videoId }) => {
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editContent, setEditContent] = useState('');
 
   const isAdminOrSubAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
@@ -54,6 +56,29 @@ const CommentSection = ({ videoId }) => {
       setComments(prev => prev.filter(c => c.id !== commentId));
     } catch (error) {
       console.error('댓글 삭제 실패:', error);
+    }
+  };
+
+  const handleEdit = (comment) => {
+    setEditingId(comment.id);
+    setEditContent(comment.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditContent('');
+  };
+
+  const handleSaveEdit = async (commentId) => {
+    if (!editContent.trim()) return;
+
+    try {
+      const updated = await updateComment(commentId, user.id, editContent.trim());
+      setComments(prev => prev.map(c => c.id === commentId ? { ...c, content: updated.content, updatedAt: updated.updatedAt } : c));
+      setEditingId(null);
+      setEditContent('');
+    } catch (error) {
+      console.error('댓글 수정 실패:', error);
     }
   };
 
@@ -151,19 +176,54 @@ const CommentSection = ({ videoId }) => {
                   </span>
                   <span className="text-zinc-400 dark:text-zinc-500">
                     · {formatDate(comment.createdAt)}
+                    {comment.updatedAt && comment.updatedAt !== comment.createdAt && ' (수정됨)'}
                   </span>
-                  {(comment.userId === user?.id || user?.role === 'admin') && (
+                  {comment.userId === user?.id && editingId !== comment.id && (
+                    <button
+                      onClick={() => handleEdit(comment)}
+                      className="text-zinc-400 hover:text-primary transition-colors ml-auto"
+                    >
+                      <Icon icon="mdi:pencil-outline" />
+                    </button>
+                  )}
+                  {(comment.userId === user?.id || user?.role === 'admin') && editingId !== comment.id && (
                     <button
                       onClick={() => handleDelete(comment.id)}
-                      className="text-zinc-400 hover:text-red-500 transition-colors ml-auto"
+                      className={`text-zinc-400 hover:text-red-500 transition-colors ${comment.userId !== user?.id ? 'ml-auto' : ''}`}
                     >
                       <Icon icon="mdi:delete-outline" />
                     </button>
                   )}
                 </div>
-                <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 whitespace-pre-wrap break-words">
-                  {comment.content}
-                </p>
+                {editingId === comment.id ? (
+                  <div className="mt-1">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                    />
+                    <div className="flex gap-2 mt-1">
+                      <button
+                        onClick={() => handleSaveEdit(comment.id)}
+                        disabled={!editContent.trim()}
+                        className="text-xs px-2 py-1 bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        저장
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="text-xs px-2 py-1 bg-zinc-200 dark:bg-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-300 dark:hover:bg-zinc-500"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 whitespace-pre-wrap break-words">
+                    {comment.content}
+                  </p>
+                )}
               </div>
             </div>
           ))}
