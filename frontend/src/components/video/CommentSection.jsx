@@ -81,104 +81,89 @@ const CommentSection = ({ videoId }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-800 rounded-xl p-4 sm:p-6">
+    <div className="bg-white dark:bg-zinc-800 rounded-xl p-3 sm:p-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-          <Icon icon="mdi:comment-multiple" className="text-primary" />
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+          <Icon icon="mdi:comment-multiple" className="text-primary text-lg" />
           댓글
           <span className="text-sm font-normal text-zinc-500">
             ({comments.length})
           </span>
         </h3>
-        <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
           {isAdminOrSubAdmin ? '모든 댓글' : `${getCategoryLabel(user?.category)} 전용`}
         </span>
       </div>
 
       {/* 댓글 입력 */}
-      <form onSubmit={handleSubmit} className="mb-6">
-        <div className="flex gap-3">
-          <div className="shrink-0">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-              <Icon icon="mdi:account" className="text-xl text-primary" />
-            </div>
-          </div>
+      <form onSubmit={handleSubmit} className="mb-3">
+        <div className="flex gap-2">
           <div className="flex-1">
             <textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="댓글을 입력하세요..."
-              className="w-full min-h-[80px] p-3 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+              rows={2}
+              className="w-full p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             />
-            <div className="flex justify-end mt-2">
-              <button
-                type="submit"
-                disabled={!newComment.trim() || submitting}
-                className="px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Icon icon="mdi:loading" className="animate-spin" />
-                    작성 중...
-                  </>
-                ) : (
-                  <>
-                    <Icon icon="mdi:send" />
-                    작성
-                  </>
-                )}
-              </button>
-            </div>
           </div>
+          <button
+            type="submit"
+            disabled={!newComment.trim() || submitting}
+            className="shrink-0 px-3 h-10 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            {submitting ? (
+              <Icon icon="mdi:loading" className="animate-spin text-lg" />
+            ) : (
+              <Icon icon="mdi:send" className="text-lg" />
+            )}
+          </button>
         </div>
       </form>
 
       {/* 댓글 목록 */}
       {loading ? (
-        <div className="flex justify-center py-8">
-          <Icon icon="mdi:loading" className="text-3xl text-primary animate-spin" />
+        <div className="flex justify-center py-4">
+          <Icon icon="mdi:loading" className="text-2xl text-primary animate-spin" />
         </div>
       ) : comments.length === 0 ? (
-        <div className="text-center py-8 text-zinc-500">
-          <Icon icon="mdi:comment-off-outline" className="text-4xl mb-2 mx-auto opacity-50" />
-          <p>아직 댓글이 없습니다</p>
-          <p className="text-sm">첫 번째 댓글을 남겨보세요!</p>
+        <div className="text-center py-2 text-zinc-500">
+          <Icon icon="mdi:comment-off-outline" className="hidden sm:block text-3xl mb-1 mx-auto opacity-50" />
+          <p className="text-sm">아직 댓글이 없습니다</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
           {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-3">
+            <div key={comment.id} className="flex gap-2">
               <div className="shrink-0">
-                <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-600 flex items-center justify-center">
-                  <Icon icon="mdi:account" className="text-xl text-zinc-500 dark:text-zinc-400" />
+                <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-600 flex items-center justify-center">
+                  <Icon icon="mdi:account" className="text-sm text-zinc-500 dark:text-zinc-400" />
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap text-xs">
                   <span className="font-semibold text-zinc-900 dark:text-white">
                     {comment.userName}
                   </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="text-zinc-500 dark:text-zinc-400">
                     {comment.userTitle}
                   </span>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                  <span className="text-zinc-400 dark:text-zinc-500">
                     · {formatDate(comment.createdAt)}
                   </span>
+                  {(comment.userId === user?.id || user?.role === 'admin') && (
+                    <button
+                      onClick={() => handleDelete(comment.id)}
+                      className="text-zinc-400 hover:text-red-500 transition-colors ml-auto"
+                    >
+                      <Icon icon="mdi:delete-outline" />
+                    </button>
+                  )}
                 </div>
-                <p className="text-zinc-700 dark:text-zinc-300 mt-1 whitespace-pre-wrap break-words">
+                <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 whitespace-pre-wrap break-words">
                   {comment.content}
                 </p>
-                {/* 삭제 버튼 (본인 댓글 또는 관리자만) */}
-                {(comment.userId === user?.id || user?.role === 'admin') && (
-                  <button
-                    onClick={() => handleDelete(comment.id)}
-                    className="mt-2 text-xs text-zinc-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <Icon icon="mdi:delete-outline" />
-                    삭제
-                  </button>
-                )}
               </div>
             </div>
           ))}
