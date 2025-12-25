@@ -228,10 +228,10 @@ exports.registerUser = onRequest((req, res) => {
         return res.status(400).json({ error: "유효하지 않은 카테고리입니다" });
       }
 
-      // 비밀번호 검증: 8자 이상, 영문+숫자+특수문자 포함
-      const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+      // 비밀번호 검증: 5자 이상, 특수문자 1개 포함
+      const passwordRegex = /^(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{5,}$/;
       if (!passwordRegex.test(password)) {
-        return res.status(400).json({ error: "비밀번호는 8자 이상, 영문+숫자+특수문자를 포함해야 합니다" });
+        return res.status(400).json({ error: "비밀번호는 5자 이상, 특수문자를 1개 이상 포함해야 합니다" });
       }
 
       // 아이디 중복 체크
@@ -386,6 +386,57 @@ exports.updateUser = onRequest((req, res) => {
     } catch (error) {
       console.error("사용자 정보 수정 오류:", error);
       res.status(500).json({ error: "사용자 정보 수정 실패" });
+    }
+  });
+});
+
+// 비밀번호 변경
+exports.changePassword = onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== "PUT") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    try {
+      const id = req.path.split("/").pop();
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "현재 비밀번호와 새 비밀번호를 입력해주세요" });
+      }
+
+      // 비밀번호 검증: 5자 이상, 특수문자 1개 포함
+      const passwordRegex = /^(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{5,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({ error: "비밀번호는 5자 이상, 특수문자를 1개 이상 포함해야 합니다" });
+      }
+
+      const userRef = db.collection("users").doc(id);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
+      }
+
+      const userData = userDoc.data();
+
+      // 현재 비밀번호 확인
+      const isValidPassword = await bcrypt.compare(currentPassword, userData.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "현재 비밀번호가 일치하지 않습니다" });
+      }
+
+      // 새 비밀번호 해시
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      await userRef.update({
+        password: hashedPassword,
+      });
+
+      res.json({ message: "비밀번호가 변경되었습니다" });
+    } catch (error) {
+      console.error("비밀번호 변경 오류:", error);
+      res.status(500).json({ error: "비밀번호 변경 실패" });
     }
   });
 });

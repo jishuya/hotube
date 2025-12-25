@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../contexts/AuthContext';
-import { loginUser } from '../services/authApi';
+import { loginUser, USERS } from '../services/authApi';
 
 const REMEMBER_ID_KEY = 'hotube_remember_id';
 
@@ -17,6 +17,8 @@ const LoginPage = () => {
   const [rememberUserId, setRememberUserId] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // 저장된 아이디 불러오기
   useEffect(() => {
@@ -26,6 +28,25 @@ const LoginPage = () => {
       setRememberUserId(true);
     }
   }, []);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedUser = USERS.find(u => u.userId === formData.userId);
+
+  const handleSelectUser = (userId) => {
+    setFormData(prev => ({ ...prev, userId }));
+    setIsDropdownOpen(false);
+    setError('');
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -78,18 +99,54 @@ const LoginPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* 아이디 */}
-              <div>
+              {/* 아이디 (호칭 선택) - 커스텀 드롭다운 */}
+              <div className="relative" ref={dropdownRef}>
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   아이디
                 </label>
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className={`w-full h-11 px-4 rounded-lg border bg-white text-left flex items-center justify-between transition-colors ${
+                    isDropdownOpen
+                      ? 'border-primary ring-2 ring-primary/50'
+                      : 'border-zinc-300 hover:border-zinc-400'
+                  }`}
+                >
+                  <span className={selectedUser ? 'text-zinc-900' : 'text-zinc-400'}>
+                    {selectedUser ? selectedUser.label : '호칭을 선택하세요'}
+                  </span>
+                  <Icon
+                    icon={isDropdownOpen ? "mdi:chevron-up" : "mdi:chevron-down"}
+                    className="text-xl text-zinc-400"
+                  />
+                </button>
+
+                {/* 드롭다운 목록 */}
+                {isDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {USERS.map(user => (
+                      <button
+                        key={user.userId}
+                        type="button"
+                        onClick={() => handleSelectUser(user.userId)}
+                        className={`w-full px-4 py-2.5 text-left transition-colors ${
+                          formData.userId === user.userId
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-zinc-700 hover:bg-primary/5 hover:text-primary'
+                        }`}
+                      >
+                        {user.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* hidden input for form validation */}
                 <input
-                  type="text"
+                  type="hidden"
                   name="userId"
                   value={formData.userId}
-                  onChange={handleChange}
-                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
-                  placeholder="아이디를 입력하세요"
                   required
                 />
               </div>
@@ -152,13 +209,13 @@ const LoginPage = () => {
               </button>
             </form>
 
-            {/* 회원가입 링크 */}
-            <p className="text-center text-zinc-500 mt-6">
+            {/* 회원가입 링크 - 주석처리 */}
+            {/* <p className="text-center text-zinc-500 mt-6">
               계정이 없으신가요?{' '}
               <Link to="/register" className="text-primary font-medium hover:underline">
                 회원가입
               </Link>
-            </p>
+            </p> */}
           </div>
         </div>
       </main>
