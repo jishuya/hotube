@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
+import Modal from '../common/Modal';
 
 const CommentSection = ({ videoId }) => {
   const { user } = useAuth();
@@ -11,6 +12,7 @@ const CommentSection = ({ videoId }) => {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editContent, setEditContent] = useState('');
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, commentId: null });
 
   const isAdminOrSubAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
@@ -48,12 +50,14 @@ const CommentSection = ({ videoId }) => {
     }
   };
 
-  const handleDelete = async (commentId) => {
-    if (!confirm('댓글을 삭제하시겠습니까?')) return;
+  const handleDeleteClick = (commentId) => {
+    setDeleteModal({ isOpen: true, commentId });
+  };
 
+  const handleDeleteConfirm = async () => {
     try {
-      await deleteComment(commentId, user.id);
-      setComments(prev => prev.filter(c => c.id !== commentId));
+      await deleteComment(deleteModal.commentId, user.id);
+      setComments(prev => prev.filter(c => c.id !== deleteModal.commentId));
     } catch (error) {
       console.error('댓글 삭제 실패:', error);
     }
@@ -176,7 +180,6 @@ const CommentSection = ({ videoId }) => {
                   </span>
                   <span className="text-zinc-400 dark:text-zinc-500">
                     · {formatDate(comment.createdAt)}
-                    {comment.updatedAt && comment.updatedAt !== comment.createdAt && ' (수정됨)'}
                   </span>
                   {comment.userId === user?.id && editingId !== comment.id && (
                     <button
@@ -188,7 +191,7 @@ const CommentSection = ({ videoId }) => {
                   )}
                   {(comment.userId === user?.id || user?.role === 'admin') && editingId !== comment.id && (
                     <button
-                      onClick={() => handleDelete(comment.id)}
+                      onClick={() => handleDeleteClick(comment.id)}
                       className={`text-zinc-400 hover:text-red-500 transition-colors ${comment.userId !== user?.id ? 'ml-auto' : ''}`}
                     >
                       <Icon icon="mdi:delete-outline" />
@@ -229,6 +232,17 @@ const CommentSection = ({ videoId }) => {
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, commentId: null })}
+        onConfirm={handleDeleteConfirm}
+        title="댓글 삭제"
+        message="댓글을 삭제하시겠습니까?"
+        type="confirm"
+        confirmText="삭제"
+        cancelText="취소"
+      />
     </div>
   );
 };
