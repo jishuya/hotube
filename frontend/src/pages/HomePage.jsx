@@ -46,18 +46,13 @@ const HomePage = () => {
       const fetchedVideos = await getAllVideos();
       setVideos(fetchedVideos);
 
-      // 타임라인 뷰에서 모든 연도와 월을 기본으로 펼침
+      // 타임라인 뷰에서 연도는 열려있고, 월은 닫혀있게 설정
       const years = [...new Set(fetchedVideos.map(v => v.year))];
       const initialExpandedYears = {};
       const initialExpandedMonths = {};
       years.forEach(year => {
         initialExpandedYears[year] = true;
-        // 각 연도의 월도 펼침
-        const yearVideos = fetchedVideos.filter(v => v.year === year);
-        const months = [...new Set(yearVideos.map(v => new Date(v.uploadedAt).getMonth() + 1))];
-        months.forEach(month => {
-          initialExpandedMonths[`${year}-${month}`] = true;
-        });
+        // 월은 기본적으로 닫혀있음 (초기화하지 않음)
       });
       setExpandedYears(initialExpandedYears);
       setExpandedMonths(initialExpandedMonths);
@@ -83,13 +78,42 @@ const HomePage = () => {
   const regularVideos = filteredVideos.filter(v => v.type === 'video');
   const shorts = filteredVideos.filter(v => v.type === 'shorts');
 
+  // 화면 크기에 따른 longform 및 shorts 개수 계산
+  const [longformPerSection, setLongformPerSection] = useState(8);
+  const [shortsPerRow, setShortsPerRow] = useState(7);
+
+  useEffect(() => {
+    const updateCountPerScreen = () => {
+      const width = window.innerWidth;
+      if (width >= 1024) {
+        // lg: 4 columns -> Long-form 8개 = 2줄, Shorts 7개 = 1줄
+        setLongformPerSection(8);
+        setShortsPerRow(7);
+      } else if (width >= 768) {
+        // md: 3 columns -> Long-form 3개 = 1줄, Shorts 5개 = 1줄
+        setLongformPerSection(3);
+        setShortsPerRow(5);
+      } else if (width >= 640) {
+        // sm: 2 columns -> Long-form 2개 = 1줄, Shorts 4개 = 1줄
+        setLongformPerSection(2);
+        setShortsPerRow(4);
+      } else {
+        // mobile: 1 column -> Long-form 1개 = 1줄, Shorts 2개 = 1줄
+        setLongformPerSection(1);
+        setShortsPerRow(2);
+      }
+    };
+
+    updateCountPerScreen();
+    window.addEventListener('resize', updateCountPerScreen);
+    return () => window.removeEventListener('resize', updateCountPerScreen);
+  }, []);
+
   // 일반영상 + 쇼츠 인터리브 레이아웃 생성
-  // 쇼츠 1줄 + 롱폼 2~3줄 반복
+  // 쇼츠 1줄 + 롱폼 반복 (PC: 2줄, 태블릿/모바일: 1줄)
   // 최신순 정렬
   const interleavedSections = useMemo(() => {
     const sections = [];
-    const longformPerSection = 8; // 4 columns x 2 rows (2~3줄)
-    const shortsPerRow = 7; // 숏츠 1줄에 약 7개
 
     // 최신순 정렬
     const sortedLongform = [...regularVideos].sort((a, b) =>
@@ -113,7 +137,7 @@ const HomePage = () => {
         shortsIndex += count;
       }
 
-      // 롱폼 섹션 추가 (2~3줄 = 8~12개, 부족하면 있는만큼)
+      // 롱폼 섹션 추가 (PC: 8개=2줄, 태블릿/모바일: 8개=자동 줄바꿈)
       if (longformIndex < sortedLongform.length) {
         const count = Math.min(longformPerSection, sortedLongform.length - longformIndex);
         sections.push({
@@ -125,7 +149,7 @@ const HomePage = () => {
     }
 
     return sections;
-  }, [regularVideos, shorts]);
+  }, [regularVideos, shorts, longformPerSection, shortsPerRow]);
 
   // Long-form 영상만 최신순 정렬
   const sortedLongformVideos = useMemo(() => {
