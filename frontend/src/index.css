@@ -171,6 +171,15 @@ body {
   color: rgb(var(--color-text-primary));
 }
 
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

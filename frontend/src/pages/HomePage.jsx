@@ -245,48 +245,48 @@ const HomePage = () => {
               </div>
             )}
 
-            {/* Tabs */}
-            <div className="pb-3">
-              <div className="flex border-b border-primary/10 dark:border-primary/20 sm:px-4 gap-4 sm:gap-8 overflow-x-auto">
+            {/* Tabs - Pill Style */}
+            <div className="py-3">
+              <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 scrollbar-hide">
                 <button
                   onClick={() => handleTabChange('all')}
-                  className={`flex flex-col items-center justify-center border-b-[3px] ${
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'all'
-                      ? 'border-b-primary text-primary'
-                      : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
-                  } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-primary/10 dark:bg-primary/20 text-[#8a7560] dark:text-gray-400 hover:bg-primary/20 dark:hover:bg-primary/30'
+                  }`}
                 >
-                  <p className="text-base font-bold leading-normal tracking-[0.015em]">All Videos</p>
+                  All Videos
                 </button>
                 <button
                   onClick={() => handleTabChange('longform')}
-                  className={`flex flex-col items-center justify-center border-b-[3px] ${
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'longform'
-                      ? 'border-b-primary text-primary'
-                      : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
-                  } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-primary/10 dark:bg-primary/20 text-[#8a7560] dark:text-gray-400 hover:bg-primary/20 dark:hover:bg-primary/30'
+                  }`}
                 >
-                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Long-form</p>
+                  Long-form
                 </button>
                 <button
                   onClick={() => handleTabChange('shorts')}
-                  className={`flex flex-col items-center justify-center border-b-[3px] ${
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'shorts'
-                      ? 'border-b-primary text-primary'
-                      : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
-                  } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-primary/10 dark:bg-primary/20 text-[#8a7560] dark:text-gray-400 hover:bg-primary/20 dark:hover:bg-primary/30'
+                  }`}
                 >
-                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Shorts</p>
+                  Shorts
                 </button>
                 <button
                   onClick={() => handleTabChange('timeline')}
-                  className={`flex flex-col items-center justify-center border-b-[3px] ${
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'timeline'
-                      ? 'border-b-primary text-primary'
-                      : 'border-b-transparent text-[#8a7560] dark:text-gray-400 hover:text-primary/80'
-                  } pb-[13px] pt-4 whitespace-nowrap transition-colors`}
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-primary/10 dark:bg-primary/20 text-[#8a7560] dark:text-gray-400 hover:bg-primary/20 dark:hover:bg-primary/30'
+                  }`}
                 >
-                  <p className="text-base font-bold leading-normal tracking-[0.015em]">Timeline</p>
+                  Timeline
                 </button>
               </div>
             </div>
