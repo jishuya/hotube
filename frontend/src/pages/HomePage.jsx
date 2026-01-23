@@ -310,10 +310,10 @@ const HomePage = () => {
                           </div>
                         ) : (
                           <div className="flex flex-col gap-4">
-                            <div className="flex items-center gap-2">
+                            {/* <div className="flex items-center gap-2">
                               <Icon icon="mdi:movie-outline" className="text-primary text-2xl" />
                               <h3 className="text-xl font-bold">Shorts</h3>
-                            </div>
+                            </div> */}
                             <div className="flex flex-wrap gap-4 justify-start">
                               {section.items.map((video) => (
                                 <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
