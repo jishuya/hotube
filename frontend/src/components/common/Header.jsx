@@ -43,7 +43,7 @@ const Header = ({ isAdmin = false }) => {
 
   return (
     <>
-      <div className="sticky top-0 z-10 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm border-b border-solid border-b-primary/10 dark:border-b-primary/20">
+      <div className="sticky top-0 z-10 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm">
         <header className="flex items-center justify-between whitespace-nowrap px-4 sm:px-10 py-3">
           <div className="flex items-center gap-4 shrink-0">
             <Link to="/" className="flex items-center gap-2">
@@ -151,7 +151,7 @@ const Header = ({ isAdmin = false }) => {
 
       {/* 모바일 검색바 (640px 미만에서만 표시) */}
       {!isAdmin && (
-        <div className="sm:hidden px-4 pb-3">
+        <div className="sm:hidden px-4">
           <form onSubmit={handleSearch} className="flex w-full h-10">
             <div className="flex w-full flex-1 items-stretch rounded-full h-full relative">
               <input
