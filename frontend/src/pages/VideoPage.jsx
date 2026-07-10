@@ -210,7 +210,7 @@ const VideoPage = () => {
 
       {/* 모바일 레이아웃 */}
       <div className="lg:hidden flex flex-col">
-        {video.type === 'shorts' ? (
+        {video.type === 'short' ? (
           <>
             {/* 플레이어 영역 */}
             <div className="bg-primary/5 py-3 px-3">
@@ -382,7 +382,7 @@ const VideoPage = () => {
           <div className="lg:col-span-2 xl:col-span-3">
             {/* YouTube Video Player */}
             <div className={`relative flex items-center justify-center bg-zinc-900 rounded-xl overflow-hidden shadow-lg ${
-              video.type === 'shorts' ? 'aspect-[9/16] max-w-[340px] mx-auto' : 'aspect-video'
+              video.type === 'short' ? 'aspect-[9/16] max-w-[340px] mx-auto' : 'aspect-video'
             }`}>
               <div id="youtube-player-desktop" className="w-full h-full"></div>
             </div>
@@ -446,7 +446,7 @@ const VideoPage = () => {
               </div>
 
               {recommendedVideos.length > 0 ? (
-                video?.type === 'shorts' ? (
+                video?.type === 'short' ? (
                   <div className="grid grid-cols-2 gap-3 overflow-y-auto pr-2 scrollbar-thin">
                     {recommendedVideos.map((recVideo) => (
                       <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group cursor-pointer">

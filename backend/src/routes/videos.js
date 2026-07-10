@@ -20,7 +20,12 @@ const sendRouteError = (res, fallbackMessage, error) => {
 
 router.get("/getVideos", async (req, res) => {
   try {
-    const videos = await listMedia();
+    const contentType = req.query.contentType || null;
+    if (contentType && !["long", "short"].includes(contentType)) {
+      return res.status(400).json({ error: "contentType은 long 또는 short여야 합니다" });
+    }
+
+    const videos = await listMedia(contentType);
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
     console.error("비디오 조회 오류:", error);

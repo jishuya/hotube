@@ -18,7 +18,7 @@ const normalizeTags = (tags) => {
   return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))];
 };
 
-const toContentType = (type) => (type === "shorts" ? "shorts" : "long");
+const toContentType = (type) => (type === "short" ? "short" : "long");
 
 const fetchMediaById = async (client, id) => {
   const result = await client.query(`
@@ -30,12 +30,16 @@ const fetchMediaById = async (client, id) => {
   return result.rows[0] || null;
 };
 
-const listMedia = async () => {
+const listMedia = async (contentType = null) => {
+  const whereClause = contentType ? "WHERE m.content_type = $1" : "";
+  const params = contentType ? [contentType] : [];
+
   const result = await pgDb.query(`
     ${MEDIA_WITH_TAGS_SELECT}
+    ${whereClause}
     GROUP BY m.id
     ORDER BY m.created_at DESC
-  `);
+  `, params);
 
   return result.rows;
 };

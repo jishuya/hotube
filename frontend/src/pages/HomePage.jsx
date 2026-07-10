@@ -11,11 +11,11 @@ const HomePage = () => {
   const tabParam = searchParams.get('tab') || 'all';
 
   const [videos, setVideos] = useState([]);
-  const [activeTab, setActiveTab] = useState(tabParam); // all, longform, shorts, timeline
+  const [activeTab, setActiveTab] = useState(tabParam); // all, longform, short, timeline
 
   // URL 파라미터로 탭 상태 동기화
   useEffect(() => {
-    const validTabs = ['all', 'longform', 'shorts', 'timeline'];
+    const validTabs = ['all', 'longform', 'short', 'timeline'];
     if (validTabs.includes(tabParam)) {
       setActiveTab(tabParam);
     }
@@ -37,13 +37,19 @@ const HomePage = () => {
   const [expandedMonths, setExpandedMonths] = useState({});
 
   useEffect(() => {
-    loadVideos();
-  }, []);
+    const contentType = activeTab === 'longform'
+      ? 'long'
+      : activeTab === 'short'
+        ? 'short'
+        : null;
 
-  const loadVideos = async () => {
+    loadVideos(contentType);
+  }, [activeTab]);
+
+  const loadVideos = async (contentType = null) => {
     try {
       setLoading(true);
-      const fetchedVideos = await getAllVideos();
+      const fetchedVideos = await getAllVideos(contentType);
       setVideos(fetchedVideos);
 
       // 타임라인 뷰에서 연도는 열려있고, 월은 닫혀있게 설정
@@ -76,7 +82,7 @@ const HomePage = () => {
   }, [videos, searchQuery]);
 
   const regularVideos = filteredVideos.filter(v => v.type === 'long');
-  const shorts = filteredVideos.filter(v => v.type === 'shorts');
+  const shorts = filteredVideos.filter(v => v.type === 'short');
 
   // 화면 크기에 따른 longform 및 shorts 개수 계산
   const [longformPerSection, setLongformPerSection] = useState(8);
@@ -131,7 +137,7 @@ const HomePage = () => {
       if (shortsIndex < sortedShorts.length) {
         const count = Math.min(shortsPerRow, sortedShorts.length - shortsIndex);
         sections.push({
-          type: 'shorts',
+          type: 'short',
           items: sortedShorts.slice(shortsIndex, shortsIndex + count)
         });
         shortsIndex += count;
@@ -269,14 +275,14 @@ const HomePage = () => {
                   Long-form
                 </button>
                 <button
-                  onClick={() => handleTabChange('shorts')}
+                  onClick={() => handleTabChange('short')}
                   className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
-                    activeTab === 'shorts'
+                    activeTab === 'short'
                       ? 'bg-primary text-white shadow-md'
                       : 'bg-primary/10 dark:bg-primary/20 text-[#8a7560] dark:text-gray-400 hover:bg-primary/20 dark:hover:bg-primary/30'
                   }`}
                 >
-                  Shorts
+                  Short
                 </button>
                 <button
                   onClick={() => handleTabChange('timeline')}
@@ -312,7 +318,7 @@ const HomePage = () => {
                           <div className="flex flex-col gap-4">
                             {/* <div className="flex items-center gap-2">
                               <Icon icon="mdi:movie-outline" className="text-primary text-2xl" />
-                              <h3 className="text-xl font-bold">Shorts</h3>
+                              <h3 className="text-xl font-bold">Short</h3>
                             </div> */}
                             <div className="flex flex-wrap gap-4 justify-start">
                               {section.items.map((video) => (
@@ -337,8 +343,8 @@ const HomePage = () => {
                   </div>
                 )}
 
-                {/* Shorts Only 탭 */}
-                {activeTab === 'shorts' && shorts.length > 0 && (
+                {/* Short Only 탭 */}
+                {activeTab === 'short' && shorts.length > 0 && (
                   <div className="flex flex-wrap gap-4 justify-start">
                     {shorts.map((video) => (
                       <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
@@ -401,9 +407,9 @@ const HomePage = () => {
                                       </div>
                                     )}
                                     {/* Shorts */}
-                                    {monthVideos.filter(v => v.type === 'shorts').length > 0 && (
+                                    {monthVideos.filter(v => v.type === 'short').length > 0 && (
                                       <div className="flex flex-wrap gap-4 justify-start">
-                                        {monthVideos.filter(v => v.type === 'shorts').map((video) => (
+                                        {monthVideos.filter(v => v.type === 'short').map((video) => (
                                           <div key={video.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(25%-0.75rem)] md:w-[calc(20%-0.8rem)] lg:w-[calc((100%-6rem)/7)]">
                                             <VideoCard video={video} isShort={true} />
                                           </div>

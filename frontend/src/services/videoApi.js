@@ -9,8 +9,9 @@ const FUNCTIONS_URL = {
 };
 
 // 모든 비디오 조회
-export const getAllVideos = async () => {
-  const response = await fetch(FUNCTIONS_URL.getVideos);
+export const getAllVideos = async (contentType = null) => {
+  const query = contentType ? `?contentType=${encodeURIComponent(contentType)}` : '';
+  const response = await fetch(`${FUNCTIONS_URL.getVideos}${query}`);
 
   if (!response.ok) {
     throw new Error('비디오 목록을 가져오는데 실패했습니다');

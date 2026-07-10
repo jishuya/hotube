@@ -28,8 +28,8 @@ const normalizeTags = (tags) => {
 };
 
 const toContentType = (type) => {
-  if (type === "shorts") {
-    return "shorts";
+  if (type === "short") {
+    return "short";
   }
 
   return "long";
@@ -128,11 +128,19 @@ exports.health = onRequest((req, res) => {
 exports.getVideos = onRequest((req, res) => {
   cors(req, res, async () => {
     try {
+      const contentType = req.query.contentType || null;
+      if (contentType && !["long", "short"].includes(contentType)) {
+        return res.status(400).json({ error: "contentType은 long 또는 short여야 합니다" });
+      }
+
+      const whereClause = contentType ? "WHERE m.content_type = $1" : "";
+      const params = contentType ? [contentType] : [];
       const result = await pgDb.query(`
         ${MEDIA_WITH_TAGS_SELECT}
+        ${whereClause}
         GROUP BY m.id
         ORDER BY m.created_at DESC
-      `);
+      `, params);
       const videos = result.rows.map(mapMediaRowToVideo);
       res.json(videos);
     } catch (error) {
