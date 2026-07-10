@@ -18,6 +18,53 @@ const MEDIA_WITH_TAGS_SELECT = `
   LEFT JOIN tags t ON t.id = mt.tag_id
 `;
 
+const normalizeTags = (tags) => {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
+  return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))];
+};
+
+const toContentType = (type) => {
+  if (type === "shorts") {
+    return "shorts";
+  }
+
+  return "long";
+};
+
+const fetchMediaById = async (client, id) => {
+  const result = await client.query(`
+    ${MEDIA_WITH_TAGS_SELECT}
+    WHERE m.id = $1
+    GROUP BY m.id
+  `, [id]);
+
+  return result.rows[0] || null;
+};
+
+const replaceMediaTags = async (client, mediaId, tags) => {
+  const normalizedTags = normalizeTags(tags);
+
+  await client.query("DELETE FROM media_tags WHERE media_id = $1", [mediaId]);
+
+  for (const tag of normalizedTags) {
+    const tagResult = await client.query(`
+      INSERT INTO tags (name)
+      VALUES ($1)
+      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id
+    `, [tag]);
+
+    await client.query(`
+      INSERT INTO media_tags (media_id, tag_id)
+      VALUES ($1, $2)
+      ON CONFLICT (media_id, tag_id) DO NOTHING
+    `, [mediaId, tagResult.rows[0].id]);
+  }
+};
+
 // 유효한 호칭 목록
 const VALID_TITLES = [
   "아빠", "엄마", "수호",
@@ -93,6 +140,8 @@ exports.createVideo = onRequest((req, res) => {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
+    let client;
+
     try {
       const {
         videoId,
@@ -112,36 +161,77 @@ exports.createVideo = onRequest((req, res) => {
 
       const id = videoId;
 
-      // 중복 체크
-      const existing = await db.collection("videos").doc(id).get();
-      if (existing.exists) {
+      if (!id || !title || !youtubeUrl || !thumbnailUrl) {
+        return res.status(400).json({ error: "필수 영상 정보가 누락되었습니다" });
+      }
+
+      client = await pgDb.getClient();
+      await client.query("BEGIN");
+
+      const existing = await client.query("SELECT id FROM media WHERE id = $1", [id]);
+      if (existing.rows.length > 0) {
+        await client.query("ROLLBACK");
         return res.status(400).json({ error: "이미 등록된 영상입니다" });
       }
 
       const now = new Date().toISOString();
-      const videoData = {
+      await client.query(`
+        INSERT INTO media (
+          id,
+          title,
+          description,
+          content_type,
+          media_type,
+          youtube_url,
+          file_path,
+          thumbnail_url,
+          thumbnail_path,
+          year,
+          uploaded_at,
+          duration_seconds,
+          view_count,
+          like_count,
+          channel_title,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1, $2, $3, $4, 'youtube', $5, NULL, $6, NULL,
+          $7, $8, $9, $10, $11, $12, $13, $14
+        )
+      `, [
+        id,
         title,
-        description,
+        description || "",
+        toContentType(type),
         youtubeUrl,
         thumbnailUrl,
-        type: type || "video",
-        year,
-        tags: tags || [],
-        uploadedAt,
-        durationSeconds,
-        viewCount: viewCount || 0,
-        likeCount: likeCount || 0,
-        channelTitle,
-        createdAt: now,
-        updatedAt: now,
-      };
+        year || null,
+        uploadedAt || null,
+        durationSeconds || null,
+        viewCount || 0,
+        likeCount || 0,
+        channelTitle || null,
+        now,
+        now,
+      ]);
 
-      await db.collection("videos").doc(id).set(videoData);
+      await replaceMediaTags(client, id, tags);
 
-      res.status(201).json({ id, ...videoData });
+      const createdVideo = await fetchMediaById(client, id);
+      await client.query("COMMIT");
+
+      res.status(201).json(mapMediaRowToVideo(createdVideo));
     } catch (error) {
+      if (client) {
+        await client.query("ROLLBACK").catch(() => {});
+      }
       console.error("비디오 등록 오류:", error);
       res.status(500).json({ error: "비디오 등록 실패" });
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   });
 });
@@ -152,6 +242,8 @@ exports.updateVideo = onRequest((req, res) => {
     if (req.method !== "PUT") {
       return res.status(405).json({ error: "Method not allowed" });
     }
+
+    let client;
 
     try {
       const id = req.path.split("/").pop();
@@ -164,31 +256,75 @@ exports.updateVideo = onRequest((req, res) => {
         year,
         tags,
         uploadedAt,
+        durationSeconds,
+        viewCount,
+        likeCount,
+        channelTitle,
       } = req.body;
 
-      const doc = await db.collection("videos").doc(id).get();
-      if (!doc.exists) {
+      if (!id) {
+        return res.status(400).json({ error: "비디오 id가 필요합니다" });
+      }
+
+      client = await pgDb.getClient();
+      await client.query("BEGIN");
+
+      const existing = await client.query("SELECT id FROM media WHERE id = $1 FOR UPDATE", [id]);
+      if (existing.rows.length === 0) {
+        await client.query("ROLLBACK");
         return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
       }
 
-      const updateData = {
-        title,
-        description,
-        youtubeUrl,
-        thumbnailUrl,
-        type,
-        year,
-        tags: tags || [],
-        uploadedAt,
-        updatedAt: new Date().toISOString(),
-      };
+      await client.query(`
+        UPDATE media
+        SET
+          title = COALESCE($2, title),
+          description = COALESCE($3, description),
+          content_type = COALESCE($4, content_type),
+          youtube_url = COALESCE($5, youtube_url),
+          thumbnail_url = COALESCE($6, thumbnail_url),
+          year = COALESCE($7, year),
+          uploaded_at = COALESCE($8, uploaded_at),
+          duration_seconds = COALESCE($9, duration_seconds),
+          view_count = COALESCE($10, view_count),
+          like_count = COALESCE($11, like_count),
+          channel_title = COALESCE($12, channel_title),
+          updated_at = $13
+        WHERE id = $1
+      `, [
+        id,
+        title ?? null,
+        description ?? null,
+        type ? toContentType(type) : null,
+        youtubeUrl ?? null,
+        thumbnailUrl ?? null,
+        year ?? null,
+        uploadedAt ?? null,
+        durationSeconds ?? null,
+        viewCount ?? null,
+        likeCount ?? null,
+        channelTitle ?? null,
+        new Date().toISOString(),
+      ]);
 
-      await db.collection("videos").doc(id).update(updateData);
+      if (Array.isArray(tags)) {
+        await replaceMediaTags(client, id, tags);
+      }
 
-      res.json({ id, ...updateData });
+      const updatedVideo = await fetchMediaById(client, id);
+      await client.query("COMMIT");
+
+      res.json(mapMediaRowToVideo(updatedVideo));
     } catch (error) {
+      if (client) {
+        await client.query("ROLLBACK").catch(() => {});
+      }
       console.error("비디오 수정 오류:", error);
       res.status(500).json({ error: "비디오 수정 실패" });
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   });
 });
@@ -200,20 +336,37 @@ exports.deleteVideo = onRequest((req, res) => {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
+    let client;
+
     try {
       const id = req.path.split("/").pop();
 
-      const doc = await db.collection("videos").doc(id).get();
-      if (!doc.exists) {
+      if (!id) {
+        return res.status(400).json({ error: "비디오 id가 필요합니다" });
+      }
+
+      client = await pgDb.getClient();
+      await client.query("BEGIN");
+
+      const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id", [id]);
+      if (deleted.rows.length === 0) {
+        await client.query("ROLLBACK");
         return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
       }
 
-      await db.collection("videos").doc(id).delete();
+      await client.query("COMMIT");
 
       res.json({ message: "비디오가 삭제되었습니다", id });
     } catch (error) {
+      if (client) {
+        await client.query("ROLLBACK").catch(() => {});
+      }
       console.error("비디오 삭제 오류:", error);
       res.status(500).json({ error: "비디오 삭제 실패" });
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   });
 });

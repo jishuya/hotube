@@ -20,7 +20,7 @@ const AdminPage = () => {
     title: '',
     description: '',
     thumbnailUrl: '',
-    type: 'video',
+    type: 'long',
     year: new Date().getFullYear(),
     videoId: '',
     uploadedAt: new Date().toISOString().split('T')[0]
@@ -153,7 +153,7 @@ const AdminPage = () => {
         title: '',
         description: '',
         thumbnailUrl: '',
-        type: 'video',
+        type: 'long',
         year: new Date().getFullYear(),
         videoId: '',
         uploadedAt: new Date().toISOString().split('T')[0]
@@ -212,7 +212,7 @@ const AdminPage = () => {
       title: '',
       description: '',
       thumbnailUrl: '',
-      type: 'video',
+      type: 'long',
       year: new Date().getFullYear(),
       videoId: '',
       uploadedAt: new Date().toISOString().split('T')[0]
@@ -286,7 +286,7 @@ const AdminPage = () => {
                             </p>
                             <div className="flex gap-2 mt-1">
                               <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-                                {formData.type === 'shorts' ? 'Shorts' : 'Video'}
+                                {formData.type === 'shorts' ? 'Shorts' : 'Long'}
                               </span>
                               <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-600 rounded-full">
                                 {formData.year}년
@@ -324,7 +324,7 @@ const AdminPage = () => {
                             onChange={handleInputChange}
                             className="form-select flex w-full min-w-0 flex-1 overflow-hidden rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/80 border border-primary-200 bg-white h-10 px-3 text-sm font-normal leading-normal transition-colors"
                           >
-                            <option value="video">Video</option>
+                            <option value="long">Long</option>
                             <option value="shorts">Shorts</option>
                           </select>
                         </div>
@@ -402,7 +402,7 @@ const AdminPage = () => {
                               <p className="font-semibold text-text-primary text-sm line-clamp-2">{video.title}</p>
                               <div className="flex gap-2 mt-1">
                                 <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-                                  {video.type === 'shorts' ? 'Shorts' : 'Video'}
+                                  {video.type === 'shorts' ? 'Shorts' : 'Long'}
                                 </span>
                                 <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
                                   {video.year}
@@ -464,7 +464,7 @@ const AdminPage = () => {
                                   <p className="font-semibold text-text-primary line-clamp-2">{video.title}</p>
                                 </td>
                                 <td className="p-4 text-slate-600">
-                                  {video.type === 'shorts' ? 'Shorts' : 'Video'}
+                                  {video.type === 'shorts' ? 'Shorts' : 'Long'}
                                 </td>
                                 <td className="p-4 text-slate-600">
                                   {video.year}

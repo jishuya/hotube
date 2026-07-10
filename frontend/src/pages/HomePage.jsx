@@ -75,7 +75,7 @@ const HomePage = () => {
     );
   }, [videos, searchQuery]);
 
-  const regularVideos = filteredVideos.filter(v => v.type === 'video');
+  const regularVideos = filteredVideos.filter(v => v.type === 'long');
   const shorts = filteredVideos.filter(v => v.type === 'shorts');
 
   // 화면 크기에 따른 longform 및 shorts 개수 계산
@@ -393,9 +393,9 @@ const HomePage = () => {
                                 {expandedMonths[`${year}-${month}`] && (
                                   <div className="flex flex-col gap-4 pl-6 mt-2">
                                     {/* Regular Videos */}
-                                    {monthVideos.filter(v => v.type === 'video').length > 0 && (
+                                    {monthVideos.filter(v => v.type === 'long').length > 0 && (
                                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                        {monthVideos.filter(v => v.type === 'video').map((video) => (
+                                        {monthVideos.filter(v => v.type === 'long').map((video) => (
                                           <VideoCard key={video.id} video={video} />
                                         ))}
                                       </div>

@@ -34,14 +34,6 @@ const normalizeArray = (value) => {
   return [value];
 };
 
-const mapContentTypeToApiType = (contentType) => {
-  if (contentType === "long") {
-    return "video";
-  }
-
-  return contentType;
-};
-
 const mapMediaRowToMedia = (row) => ({
   id: row.id,
   title: row.title,
@@ -68,7 +60,7 @@ const mapMediaRowToVideo = (row) => ({
   description: row.description,
   youtubeUrl: row.youtube_url,
   thumbnailUrl: row.thumbnail_url,
-  type: mapContentTypeToApiType(row.content_type ?? row.type),
+  type: row.content_type ?? row.type,
   year: row.year,
   tags: normalizeArray(row.tags),
   uploadedAt: toDateString(row.uploaded_at),

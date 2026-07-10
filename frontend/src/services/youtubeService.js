@@ -71,7 +71,7 @@ export const fetchVideoInfo = async (videoId, isFromShortsUrl = false) => {
   const durationInSeconds = parseDuration(contentDetails.duration);
 
   // Shorts 조건: 2분(120초) 이하이면서 URL이 /shorts/ 형식
-  const type = durationInSeconds <= 120 && isFromShortsUrl ? 'shorts' : 'video';
+  const type = durationInSeconds <= 120 && isFromShortsUrl ? 'shorts' : 'long';
 
   // 업로드 연도 추출
   const publishedAt = new Date(snippet.publishedAt);
