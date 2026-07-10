@@ -1,10 +1,11 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { randomUUID } = require("crypto");
 const bcrypt = require("bcryptjs");
 const cors = require("cors")({ origin: true });
 const pgDb = require("./db");
-const { mapMediaRowToVideo } = require("./responseMappers");
+const { mapMediaRowToVideo, mapUserRowToUser } = require("./responseMappers");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -63,6 +64,36 @@ const replaceMediaTags = async (client, mediaId, tags) => {
       ON CONFLICT (media_id, tag_id) DO NOTHING
     `, [mediaId, tagResult.rows[0].id]);
   }
+};
+
+const USER_WITH_RELATIONS_SELECT = `
+  SELECT
+    u.*,
+    COALESCE(array_agg(DISTINCT ulm.media_id) FILTER (WHERE ulm.media_id IS NOT NULL), '{}') AS liked_videos,
+    COALESCE(array_agg(DISTINCT uwm.media_id) FILTER (WHERE uwm.media_id IS NOT NULL), '{}') AS watched_videos
+  FROM users u
+  LEFT JOIN user_liked_media ulm ON ulm.user_id = u.id
+  LEFT JOIN user_watched_media uwm ON uwm.user_id = u.id
+`;
+
+const fetchUserById = async (id) => {
+  const result = await pgDb.query(`
+    ${USER_WITH_RELATIONS_SELECT}
+    WHERE u.id = $1
+    GROUP BY u.id
+  `, [id]);
+
+  return result.rows[0] || null;
+};
+
+const fetchUserByLoginId = async (userId) => {
+  const result = await pgDb.query(`
+    ${USER_WITH_RELATIONS_SELECT}
+    WHERE u.user_id = $1
+    GROUP BY u.id
+  `, [userId]);
+
+  return result.rows[0] || null;
 };
 
 // 유효한 호칭 목록
@@ -407,12 +438,12 @@ exports.registerUser = onRequest((req, res) => {
         return res.status(400).json({ error: "비밀번호는 5자 이상, 특수문자를 1개 이상 포함해야 합니다" });
       }
 
-      // 아이디 중복 체크
-      const existingUser = await db.collection("users")
-        .where("userId", "==", userId)
-        .get();
+      const existingUser = await pgDb.query(
+        "SELECT id FROM users WHERE user_id = $1",
+        [userId],
+      );
 
-      if (!existingUser.empty) {
+      if (existingUser.rows.length > 0) {
         return res.status(400).json({ error: "이미 사용중인 아이디입니다" });
       }
 
@@ -427,24 +458,15 @@ exports.registerUser = onRequest((req, res) => {
       // 비밀번호 해시
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      const id = randomUUID();
       const now = new Date().toISOString();
-      const userData = {
-        userId,
-        name,
-        title,
-        category,
-        role,
-        password: hashedPassword,
-        watchedVideos: [],
-        likedVideos: [],
-        createdAt: now,
-      };
+      await pgDb.query(`
+        INSERT INTO users (id, user_id, name, title, category, role, password, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [id, userId, name, title, category, role, hashedPassword, now]);
 
-      const docRef = await db.collection("users").add(userData);
-
-      // 비밀번호 제외하고 반환
-      const { password: _, ...userWithoutPassword } = userData;
-      res.status(201).json({ id: docRef.id, ...userWithoutPassword });
+      const createdUser = await fetchUserById(id);
+      res.status(201).json(mapUserRowToUser(createdUser));
     } catch (error) {
       console.error("회원가입 오류:", error);
       res.status(500).json({ error: "회원가입 실패" });
@@ -466,17 +488,11 @@ exports.loginUser = onRequest((req, res) => {
         return res.status(400).json({ error: "아이디와 비밀번호를 입력해주세요" });
       }
 
-      // 사용자 찾기
-      const snapshot = await db.collection("users")
-        .where("userId", "==", userId)
-        .get();
+      const userData = await fetchUserByLoginId(userId);
 
-      if (snapshot.empty) {
+      if (!userData) {
         return res.status(401).json({ error: "아이디 또는 비밀번호가 일치하지 않습니다" });
       }
-
-      const userDoc = snapshot.docs[0];
-      const userData = userDoc.data();
 
       // 비밀번호 검증
       const isValidPassword = await bcrypt.compare(password, userData.password);
@@ -484,9 +500,7 @@ exports.loginUser = onRequest((req, res) => {
         return res.status(401).json({ error: "아이디 또는 비밀번호가 일치하지 않습니다" });
       }
 
-      // 비밀번호 제외하고 반환
-      const { password: _, ...userWithoutPassword } = userData;
-      res.json({ id: userDoc.id, ...userWithoutPassword });
+      res.json(mapUserRowToUser(userData));
     } catch (error) {
       console.error("로그인 오류:", error);
       res.status(500).json({ error: "로그인 실패" });
@@ -499,15 +513,13 @@ exports.getUser = onRequest((req, res) => {
   cors(req, res, async () => {
     try {
       const id = req.path.split("/").pop();
-      const doc = await db.collection("users").doc(id).get();
+      const userData = await fetchUserById(id);
 
-      if (!doc.exists) {
+      if (!userData) {
         return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
       }
 
-      const userData = doc.data();
-      const { password: _, ...userWithoutPassword } = userData;
-      res.json({ id: doc.id, ...userWithoutPassword });
+      res.json(mapUserRowToUser(userData));
     } catch (error) {
       console.error("사용자 조회 오류:", error);
       res.status(500).json({ error: "사용자 조회 실패" });
@@ -539,23 +551,19 @@ exports.updateUser = onRequest((req, res) => {
         return res.status(400).json({ error: "유효하지 않은 카테고리입니다" });
       }
 
-      const userRef = db.collection("users").doc(id);
-      const userDoc = await userRef.get();
-
-      if (!userDoc.exists) {
+      const existingUser = await pgDb.query("SELECT id FROM users WHERE id = $1", [id]);
+      if (existingUser.rows.length === 0) {
         return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
       }
 
-      await userRef.update({
-        name,
-        title,
-        category,
-      });
+      await pgDb.query(`
+        UPDATE users
+        SET name = $2, title = $3, category = $4
+        WHERE id = $1
+      `, [id, name, title, category]);
 
-      const updatedDoc = await userRef.get();
-      const userData = updatedDoc.data();
-      const { password: _, ...userWithoutPassword } = userData;
-      res.json({ id: updatedDoc.id, ...userWithoutPassword });
+      const updatedUser = await fetchUserById(id);
+      res.json(mapUserRowToUser(updatedUser));
     } catch (error) {
       console.error("사용자 정보 수정 오류:", error);
       res.status(500).json({ error: "사용자 정보 수정 실패" });
@@ -584,14 +592,11 @@ exports.changePassword = onRequest((req, res) => {
         return res.status(400).json({ error: "비밀번호는 5자 이상, 특수문자를 1개 이상 포함해야 합니다" });
       }
 
-      const userRef = db.collection("users").doc(id);
-      const userDoc = await userRef.get();
+      const userData = await fetchUserById(id);
 
-      if (!userDoc.exists) {
+      if (!userData) {
         return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
       }
-
-      const userData = userDoc.data();
 
       // 현재 비밀번호 확인
       const isValidPassword = await bcrypt.compare(currentPassword, userData.password);
@@ -602,9 +607,10 @@ exports.changePassword = onRequest((req, res) => {
       // 새 비밀번호 해시
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      await userRef.update({
-        password: hashedPassword,
-      });
+      await pgDb.query(
+        "UPDATE users SET password = $2 WHERE id = $1",
+        [id, hashedPassword],
+      );
 
       res.json({ message: "비밀번호가 변경되었습니다" });
     } catch (error) {
