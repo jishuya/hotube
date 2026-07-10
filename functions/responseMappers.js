@@ -63,9 +63,21 @@ const mapMediaRowToMedia = (row) => ({
 });
 
 const mapMediaRowToVideo = (row) => ({
-  ...mapMediaRowToMedia(row),
+  id: row.id,
+  title: row.title,
+  description: row.description,
+  youtubeUrl: row.youtube_url,
+  thumbnailUrl: row.thumbnail_url,
   type: mapContentTypeToApiType(row.content_type ?? row.type),
+  year: row.year,
   tags: normalizeArray(row.tags),
+  uploadedAt: toDateString(row.uploaded_at),
+  durationSeconds: row.duration_seconds,
+  viewCount: row.view_count,
+  likeCount: row.like_count,
+  channelTitle: row.channel_title,
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
 });
 
 const mapTagRowToTag = (row) => ({

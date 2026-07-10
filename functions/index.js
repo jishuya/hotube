@@ -3,9 +3,20 @@ const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const bcrypt = require("bcryptjs");
 const cors = require("cors")({ origin: true });
+const pgDb = require("./db");
+const { mapMediaRowToVideo } = require("./responseMappers");
 
 admin.initializeApp();
 const db = admin.firestore();
+
+const MEDIA_WITH_TAGS_SELECT = `
+  SELECT
+    m.*,
+    COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+  FROM media m
+  LEFT JOIN media_tags mt ON mt.media_id = m.id
+  LEFT JOIN tags t ON t.id = mt.tag_id
+`;
 
 // 유효한 호칭 목록
 const VALID_TITLES = [
@@ -34,11 +45,12 @@ exports.health = onRequest((req, res) => {
 exports.getVideos = onRequest((req, res) => {
   cors(req, res, async () => {
     try {
-      const snapshot = await db.collection("videos").orderBy("createdAt", "desc").get();
-      const videos = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const result = await pgDb.query(`
+        ${MEDIA_WITH_TAGS_SELECT}
+        GROUP BY m.id
+        ORDER BY m.created_at DESC
+      `);
+      const videos = result.rows.map(mapMediaRowToVideo);
       res.json(videos);
     } catch (error) {
       console.error("비디오 조회 오류:", error);
@@ -52,13 +64,21 @@ exports.getVideo = onRequest((req, res) => {
   cors(req, res, async () => {
     try {
       const id = req.path.split("/").pop();
-      const doc = await db.collection("videos").doc(id).get();
+      if (!id) {
+        return res.status(400).json({ error: "비디오 id가 필요합니다" });
+      }
 
-      if (!doc.exists) {
+      const result = await pgDb.query(`
+        ${MEDIA_WITH_TAGS_SELECT}
+        WHERE m.id = $1
+        GROUP BY m.id
+      `, [id]);
+
+      if (result.rows.length === 0) {
         return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
       }
 
-      res.json({ id: doc.id, ...doc.data() });
+      res.json(mapMediaRowToVideo(result.rows[0]));
     } catch (error) {
       console.error("비디오 조회 오류:", error);
       res.status(500).json({ error: "비디오 조회 실패" });
