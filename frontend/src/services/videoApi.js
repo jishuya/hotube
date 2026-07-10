@@ -1,10 +1,11 @@
-// Firebase Functions URLs
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 const FUNCTIONS_URL = {
-  getVideos: 'https://getvideos-2wvg2ln7bq-du.a.run.app',
-  getVideo: 'https://getvideo-2wvg2ln7bq-du.a.run.app',
-  createVideo: 'https://createvideo-2wvg2ln7bq-du.a.run.app',
-  updateVideo: 'https://updatevideo-2wvg2ln7bq-du.a.run.app',
-  deleteVideo: 'https://deletevideo-2wvg2ln7bq-du.a.run.app',
+  getVideos: `${API_BASE_URL}/getVideos`,
+  getVideo: `${API_BASE_URL}/getVideo`,
+  createVideo: `${API_BASE_URL}/createVideo`,
+  updateVideo: `${API_BASE_URL}/updateVideo`,
+  deleteVideo: `${API_BASE_URL}/deleteVideo`,
 };
 
 // 모든 비디오 조회

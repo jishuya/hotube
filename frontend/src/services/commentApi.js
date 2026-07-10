@@ -1,9 +1,10 @@
-// Firebase Functions URLs
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 const FUNCTIONS_URL = {
-  createComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/createComment',
-  getComments: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/getComments',
-  updateComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/updateComment',
-  deleteComment: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/deleteComment',
+  createComment: `${API_BASE_URL}/createComment`,
+  getComments: `${API_BASE_URL}/getComments`,
+  updateComment: `${API_BASE_URL}/updateComment`,
+  deleteComment: `${API_BASE_URL}/deleteComment`,
 };
 
 // 댓글 작성

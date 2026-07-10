@@ -1,12 +1,13 @@
-// Firebase Functions URLs
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 const FUNCTIONS_URL = {
-  register: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/registerUser',
-  login: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/loginUser',
-  getUser: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/getUser',
-  updateUser: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/updateUser',
-  changePassword: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/changePassword',
-  toggleLike: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/toggleLike',
-  markWatched: 'https://asia-northeast3-hotube-9e9dd.cloudfunctions.net/markVideoWatched',
+  register: `${API_BASE_URL}/registerUser`,
+  login: `${API_BASE_URL}/loginUser`,
+  getUser: `${API_BASE_URL}/getUser`,
+  updateUser: `${API_BASE_URL}/updateUser`,
+  changePassword: `${API_BASE_URL}/changePassword`,
+  toggleLike: `${API_BASE_URL}/toggleLike`,
+  markWatched: `${API_BASE_URL}/markVideoWatched`,
 };
 
 // 사용자 목록 (userId: 영문ID, label: 호칭)
