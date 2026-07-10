@@ -5,7 +5,7 @@ const { randomUUID } = require("crypto");
 const bcrypt = require("bcryptjs");
 const cors = require("cors")({ origin: true });
 const pgDb = require("./db");
-const { mapMediaRowToVideo, mapUserRowToUser } = require("./responseMappers");
+const { mapMediaRowToVideo, mapUserRowToUser, mapCommentRowToComment } = require("./responseMappers");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -93,6 +93,11 @@ const fetchUserByLoginId = async (userId) => {
     GROUP BY u.id
   `, [userId]);
 
+  return result.rows[0] || null;
+};
+
+const fetchCommentById = async (id) => {
+  const result = await pgDb.query("SELECT * FROM comments WHERE id = $1", [id]);
   return result.rows[0] || null;
 };
 
@@ -755,27 +760,49 @@ exports.createComment = onRequest((req, res) => {
         return res.status(400).json({ error: "모든 필드를 입력해주세요" });
       }
 
-      // 사용자 정보 가져오기
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (!userDoc.exists) {
+      const userResult = await pgDb.query(
+        "SELECT id, name, title, category FROM users WHERE id = $1",
+        [userId],
+      );
+      if (userResult.rows.length === 0) {
         return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
       }
 
-      const userData = userDoc.data();
+      const mediaResult = await pgDb.query("SELECT id FROM media WHERE id = $1", [videoId]);
+      if (mediaResult.rows.length === 0) {
+        return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
+      }
+
+      const userData = userResult.rows[0];
+      const id = randomUUID();
       const now = new Date().toISOString();
 
-      const commentData = {
+      const created = await pgDb.query(`
+        INSERT INTO comments (
+          id,
+          media_id,
+          user_id,
+          user_name,
+          user_title,
+          user_category,
+          content,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+        RETURNING *
+      `, [
+        id,
         videoId,
         userId,
-        userName: userData.name,
-        userTitle: userData.title,
-        userCategory: userData.category,
-        content,
-        createdAt: now,
-      };
+        userData.name,
+        userData.title,
+        userData.category,
+        content.trim(),
+        now,
+      ]);
 
-      const docRef = await db.collection("comments").add(commentData);
-      res.status(201).json({ id: docRef.id, ...commentData });
+      res.status(201).json(mapCommentRowToComment(created.rows[0]));
     } catch (error) {
       console.error("댓글 작성 오류:", error);
       res.status(500).json({ error: "댓글 작성 실패" });
@@ -795,32 +822,30 @@ exports.getComments = onRequest((req, res) => {
         return res.status(400).json({ error: "videoId가 필요합니다" });
       }
 
-      let snapshot;
+      let result;
 
       // 관리자/부관리자는 모든 댓글 조회 가능
       if (userRole === "admin" || userRole === "sub-admin") {
-        snapshot = await db.collection("comments")
-          .where("videoId", "==", videoId)
-          .orderBy("createdAt", "desc")
-          .get();
+        result = await pgDb.query(`
+          SELECT *
+          FROM comments
+          WHERE media_id = $1
+          ORDER BY created_at DESC
+        `, [videoId]);
       } else {
         // 일반 사용자는 같은 카테고리 댓글만 조회
         if (!userCategory) {
           return res.status(400).json({ error: "category가 필요합니다" });
         }
-        snapshot = await db.collection("comments")
-          .where("videoId", "==", videoId)
-          .where("userCategory", "==", userCategory)
-          .orderBy("createdAt", "desc")
-          .get();
+        result = await pgDb.query(`
+          SELECT *
+          FROM comments
+          WHERE media_id = $1 AND user_category = $2
+          ORDER BY created_at DESC
+        `, [videoId, userCategory]);
       }
 
-      const comments = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      res.json(comments);
+      res.json(result.rows.map(mapCommentRowToComment));
     } catch (error) {
       console.error("댓글 조회 오류:", error);
       res.status(500).json({ error: "댓글 조회 실패" });
@@ -843,30 +868,25 @@ exports.updateComment = onRequest((req, res) => {
         return res.status(400).json({ error: "댓글 내용을 입력해주세요" });
       }
 
-      const doc = await db.collection("comments").doc(id).get();
-      if (!doc.exists) {
+      const commentData = await fetchCommentById(id);
+      if (!commentData) {
         return res.status(404).json({ error: "댓글을 찾을 수 없습니다" });
       }
 
-      const commentData = doc.data();
-
       // 본인 댓글인지 확인
-      if (commentData.userId !== userId) {
+      if (commentData.user_id !== userId) {
         return res.status(403).json({ error: "수정 권한이 없습니다" });
       }
 
       const now = new Date().toISOString();
-      await db.collection("comments").doc(id).update({
-        content: content.trim(),
-        updatedAt: now,
-      });
+      const updated = await pgDb.query(`
+        UPDATE comments
+        SET content = $2, updated_at = $3
+        WHERE id = $1
+        RETURNING *
+      `, [id, content.trim(), now]);
 
-      res.json({
-        id,
-        ...commentData,
-        content: content.trim(),
-        updatedAt: now,
-      });
+      res.json(mapCommentRowToComment(updated.rows[0]));
     } catch (error) {
       console.error("댓글 수정 오류:", error);
       res.status(500).json({ error: "댓글 수정 실패" });
@@ -885,23 +905,21 @@ exports.deleteComment = onRequest((req, res) => {
       const id = req.path.split("/").pop();
       const userId = req.query.userId;
 
-      const doc = await db.collection("comments").doc(id).get();
-      if (!doc.exists) {
+      const commentData = await fetchCommentById(id);
+      if (!commentData) {
         return res.status(404).json({ error: "댓글을 찾을 수 없습니다" });
       }
 
-      const commentData = doc.data();
-
       // 본인 댓글인지 확인
-      if (commentData.userId !== userId) {
+      if (commentData.user_id !== userId) {
         // 관리자인지 확인
-        const userDoc = await db.collection("users").doc(userId).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userResult = await pgDb.query("SELECT role FROM users WHERE id = $1", [userId]);
+        if (userResult.rows.length === 0 || userResult.rows[0].role !== "admin") {
           return res.status(403).json({ error: "삭제 권한이 없습니다" });
         }
       }
 
-      await db.collection("comments").doc(id).delete();
+      await pgDb.query("DELETE FROM comments WHERE id = $1", [id]);
       res.json({ message: "댓글이 삭제되었습니다", id });
     } catch (error) {
       console.error("댓글 삭제 오류:", error);

@@ -116,8 +116,15 @@ const mapCommentRowToCommentRecord = (row) => ({
 });
 
 const mapCommentRowToComment = (row) => ({
-  ...mapCommentRowToCommentRecord(row),
+  id: row.id,
   videoId: row.media_id,
+  userId: row.user_id,
+  userName: row.user_name,
+  userTitle: row.user_title,
+  userCategory: row.user_category,
+  content: row.content,
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
 });
 
 const mapLikedMediaRowToLikedMedia = (row) => ({
