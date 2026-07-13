@@ -1,3 +1,8 @@
 export { default as HomePage } from './HomePage';
 export { default as VideoPage } from './VideoPage';
 export { default as AdminPage } from './AdminPage';
+export { default as CalendarPage } from './CalendarPage';
+export { default as AlbumPage } from './AlbumPage';
+export { default as UploadPage } from './UploadPage';
+export { default as MyAlbumPage } from './MyAlbumPage';
+export { default as MyPage } from './MyPage';
