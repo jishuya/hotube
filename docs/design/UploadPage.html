@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Hotube - Upload</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#6e3900",
+                        "on-secondary-fixed-variant": "#554431",
+                        "secondary-fixed": "#f9dec5",
+                        "tertiary-fixed": "#ffdcc3",
+                        "primary": "#914d00",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#e2d8d3",
+                        "surface-container-highest": "#eae1db",
+                        "on-surface": "#1f1b18",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f9efe9",
+                        "on-secondary-fixed": "#261909",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "on-primary-fixed": "#2f1500",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#dbc2b0",
+                        "on-surface-variant": "#554336",
+                        "on-tertiary-fixed": "#2f1500",
+                        "tertiary-fixed-dim": "#ffb77e",
+                        "secondary-fixed-dim": "#dbc2aa",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#f48c25",
+                        "surface-bright": "#fff8f5",
+                        "tertiary": "#914d00",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#ffb77d",
+                        "on-secondary-container": "#75614d",
+                        "tertiary-container": "#ec903f",
+                        "surface-container": "#f6ece6",
+                        "inverse-primary": "#ffb77d",
+                        "secondary": "#6e5b47",
+                        "primary-fixed": "#ffdcc3",
+                        "surface-tint": "#914d00",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#fff8f5",
+                        "on-background": "#1f1b18",
+                        "inverse-surface": "#342f2c",
+                        "on-tertiary-container": "#5e3000",
+                        "outline": "#887364",
+                        "background": "#fff8f5",
+                        "secondary-container": "#f9dec5",
+                        "on-primary-container": "#5e3000",
+                        "surface-container-high": "#f0e6e1",
+                        "surface-container-low": "#fcf2ec",
+                        "surface-variant": "#eae1db"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "lg": "24px",
+                        "xl": "40px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "max-width": "1280px",
+                        "margin-desktop": "64px",
+                        "gutter": "20px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            background-color: #F8F7F5; /* Brand Anchor: Warm Cream */
+            color: #1F1B18; /* Brand Anchor: Dark Brown */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .upload-card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(24, 20, 17, 0.08);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md antialiased min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-surface sticky top-0 z-50 flex justify-between items-center w-full px-margin-mobile py-md shadow-sm">
+<div class="flex items-center gap-3">
+<img alt="Hotube Logo" class="h-8 w-auto" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Zsivg_SXs6DTdCAnZk7ilhES-tHDroT8CAKVwt_Jt3f_rYxzxy1hYD2gElSXk3ke4bKSaIRcyZlGeJqN0SDnKR2N6w6oJcB6n_D2Glhu2_R3m7de_CcHzqmo2b1ZoS391faN0UIT_WkWN6Opokaj3ueoYE_yAV9_ldBOjoykiMrqWjm0zU_wMlcVZRauXs555Z3if2ptOvj1__6C22X3IILLW_zcoG3letaYr7cqWUbkXXVOh340KRrTKVFJ6VREeoPUvZIYGt98"/>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-surface">Hotube</h1>
+</div>
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-surface-container-low transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-on-surface-variant">search</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow max-w-max-width mx-auto w-full px-margin-mobile py-lg pb-32">
+<!-- Hero Section / Title -->
+<div class="mb-lg">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-xs">Share Your Moments</h2>
+<p class="text-on-surface-variant font-body-md">Create lasting memories for your family albums.</p>
+</div>
+<!-- Asymmetric Bento-style Upload Options -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Primary Action: Big Upload Video -->
+<div class="md:col-span-2 group">
+<div class="upload-card-hover bg-surface-container-lowest border border-outline-variant rounded-lg p-lg transition-all duration-300 relative overflow-hidden flex flex-col justify-center items-center h-64 cursor-pointer">
+<!-- Subtle pattern background -->
+<div class="absolute inset-0 opacity-5 pointer-events-none" style="background-image: radial-gradient(#F48C25 1px, transparent 1px); background-size: 16px 16px;"></div>
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-16 h-16 bg-primary-container rounded-full flex items-center justify-center mb-md shadow-lg group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface text-center">Upload Media</h3>
+<p class="text-on-surface-variant text-center mt-xs">Drag and drop or select photos and videos</p>
+</div>
+</div>
+</div>
+<!-- Side Card: Import from Cloud -->
+<div class="upload-card-hover bg-white border border-outline-variant rounded-lg p-md transition-all duration-300 flex items-center gap-md cursor-pointer">
+<div class="w-12 h-12 bg-secondary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container">cloud_upload</span>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface">Cloud Import</h4>
+<p class="text-xs text-on-surface-variant">Sync from Google Photos or iCloud</p>
+</div>
+</div>
+<!-- Side Card: Live Capture -->
+<div class="upload-card-hover bg-white border border-outline-variant rounded-lg p-md transition-all duration-300 flex items-center gap-md cursor-pointer">
+<div class="w-12 h-12 bg-tertiary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-tertiary-container">photo_camera</span>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface">Live Capture</h4>
+<p class="text-xs text-on-surface-variant">Open camera and record now</p>
+</div>
+</div>
+</div>
+<!-- Recent Drafts / Gallery Preview Section -->
+<div class="mt-xl">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-md text-headline-md text-on-surface">Recent Drafts</h3>
+<button class="text-primary font-label-md hover:underline">View All</button>
+</div>
+<div class="grid grid-cols-2 gap-sm">
+<!-- Draft Card 1 -->
+<div class="bg-white rounded-lg overflow-hidden border border-outline-variant shadow-sm upload-card-hover transition-all">
+<div class="aspect-square bg-surface-container relative">
+<img class="w-full h-full object-cover" data-alt="A warm, sun-drenched family picnic in a lush green park with a focus on a woven basket and colorful fruits. The lighting is soft and golden, characteristic of a late afternoon. The overall vibe is cozy, high-end family lifestyle photography with soft focus backgrounds." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwGQ4-ZFyONwVgUYk1oNn7sX3NrnEpBIqQM1SVidELT2Scbo6Mpt6Fx3YwpGhytOtdakeqUVg69dkdQjvjDla4obD1dJFRnWFWxzOUL9BdmqLG6wjRBJhj4_aM3CkB_-Dp7lT8LxXXbyyaAwoiph4JS2qecg2XtZSJTn2zCGpmAf0ryaYMpHdBVyAae_-QMyqrleBK2caBJglSWjFOvBIcY011LbGim_LvSrXa8pvmbVKJBkE8Ff_DRCfgB5dlA3DY50zQHEtrOxTH"/>
+<div class="absolute bottom-2 right-2 bg-black/40 px-2 py-1 rounded text-[10px] text-white backdrop-blur-sm">
+                            02:45
+                        </div>
+</div>
+<div class="p-3">
+<p class="font-label-md text-on-surface truncate">Sunday Picnic.mp4</p>
+<p class="text-[10px] text-on-surface-variant">Draft saved 2h ago</p>
+</div>
+</div>
+<!-- Draft Card 2 -->
+<div class="bg-white rounded-lg overflow-hidden border border-outline-variant shadow-sm upload-card-hover transition-all">
+<div class="aspect-square bg-surface-container relative">
+<img class="w-full h-full object-cover" data-alt="A close-up shot of a small child's hands playing with wooden toy blocks on a light cream-colored carpet. The lighting is natural and bright, streaming in from a large window. The aesthetic is clean, minimal, and domestic, featuring warm wooden tones and a soft, inviting atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAm539AJfQ0zusIdZW6QFQ5yctqaC4nxFUfLA5U3jbatcZRsFo-Y61a5iSvEtmNZreXwp7W0Hs2kJDBH1II2KdzI2VA6lXu1DdB5WF0CSRTKlMxyWPheuioY-RRE1Z5_m6Y4PBQnRF-Spj-Y_ftxaai5S9FTAuhoduUN3wAK2VOjbUHNPc7RtIsrGAjD0mhXa2Tl_ToKLSQm10FE5VqfgxRYz2-3ocjpOArZAxcRvZJl32-O-4HQZi_yxexee1OBJhPQd3WnRfulyus"/>
+<div class="absolute top-2 left-2 bg-primary-container/90 px-2 py-1 rounded text-[10px] text-white font-bold">
+                            PENDING
+                        </div>
+</div>
+<div class="p-3">
+<p class="font-label-md text-on-surface truncate">Baby Steps.mov</p>
+<p class="text-[10px] text-on-surface-variant">Uploading... 84%</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Tips / Info Panel -->
+<div class="mt-xl p-lg bg-surface-container-low rounded-lg flex items-start gap-md">
+<span class="material-symbols-outlined text-primary-container">lightbulb</span>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface">Pro Tip</h4>
+<p class="text-sm text-on-surface-variant mt-xs leading-relaxed">
+                    Upload videos in 4K for the best viewing experience on family TVs. We automatically optimize files for mobile sharing.
+                </p>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-sm pb-safe pt-xs bg-surface-container-lowest shadow-[0_-4px_10px_0_rgba(24,20,17,0.04)] rounded-t-lg">
+<!-- Calendar -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-label-sm text-label-sm mt-1">Calendar</span>
+</button>
+<!-- Album -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined">photo_library</span>
+<span class="font-label-sm text-label-sm mt-1">Album</span>
+</button>
+<!-- Upload (ACTIVE) -->
+<button class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl p-2 scale-95 transition-all duration-200 shadow-md">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<span class="font-label-sm text-label-sm mt-1">Upload</span>
+</button>
+<!-- My Album -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="font-label-sm text-label-sm mt-1">My Album</span>
+</button>
+<!-- My Page -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors duration-200">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm mt-1">My Page</span>
+</button>
+</nav>
+<script>
+        // Simple Micro-interactions for buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.classList.add('scale-95');
+            });
+            button.addEventListener('mouseup', () => {
+                button.classList.remove('scale-95');
+            });
+            button.addEventListener('mouseleave', () => {
+                button.classList.remove('scale-95');
+            });
+        });
+
+        // Hover lift effect logic (via CSS classes)
+        const uploadCards = document.querySelectorAll('.upload-card-hover');
+        uploadCards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.borderColor = 'var(--tw-color-primary-container)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.borderColor = '';
+            });
+        });
+    </script>
+</body></html>

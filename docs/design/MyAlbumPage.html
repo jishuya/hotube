@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hotube - My Album</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#6e3900",
+                    "on-secondary-fixed-variant": "#554431",
+                    "secondary-fixed": "#f9dec5",
+                    "tertiary-fixed": "#ffdcc3",
+                    "primary": "#914d00",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#e2d8d3",
+                    "surface-container-highest": "#eae1db",
+                    "on-surface": "#1f1b18",
+                    "on-tertiary": "#ffffff",
+                    "inverse-on-surface": "#f9efe9",
+                    "on-secondary-fixed": "#261909",
+                    "on-tertiary-fixed-variant": "#6e3900",
+                    "on-primary-fixed": "#2f1500",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#dbc2b0",
+                    "on-surface-variant": "#554336",
+                    "on-tertiary-fixed": "#2f1500",
+                    "tertiary-fixed-dim": "#ffb77e",
+                    "secondary-fixed-dim": "#dbc2aa",
+                    "on-error": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#f48c25",
+                    "surface-bright": "#fff8f5",
+                    "tertiary": "#914d00",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#ffb77d",
+                    "on-secondary-container": "#75614d",
+                    "tertiary-container": "#ec903f",
+                    "surface-container": "#f6ece6",
+                    "inverse-primary": "#ffb77d",
+                    "secondary": "#6e5b47",
+                    "primary-fixed": "#ffdcc3",
+                    "surface-tint": "#914d00",
+                    "on-primary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "surface": "#fff8f5",
+                    "on-background": "#1f1b18",
+                    "inverse-surface": "#342f2c",
+                    "on-tertiary-container": "#5e3000",
+                    "outline": "#887364",
+                    "background": "#fff8f5",
+                    "secondary-container": "#f9dec5",
+                    "on-primary-container": "#5e3000",
+                    "surface-container-high": "#f0e6e1",
+                    "surface-container-low": "#fcf2ec",
+                    "surface-variant": "#eae1db"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "lg": "24px",
+                    "xl": "40px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "unit": "4px",
+                    "max-width": "1280px",
+                    "margin-desktop": "64px",
+                    "gutter": "20px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "body-md": ["Plus Jakarta Sans"],
+                    "label-sm": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "label-md": ["Plus Jakarta Sans"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "500"}],
+                    "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #F8F7F5; /* Brand Anchor: Warm Cream */
+            color: #1f1b18;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .filled-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md pb-24">
+<!-- TopAppBar -->
+<header class="bg-surface sticky top-0 z-40 flex justify-between items-center w-full px-margin-mobile py-md shadow-sm">
+<div class="flex items-center gap-3">
+<img alt="Hotube Logo" class="w-10 h-10 rounded-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Zsivg_SXs6DTdCAnZk7ilhES-tHDroT8CAKVwt_Jt3f_rYxzxy1hYD2gElSXk3ke4bKSaIRcyZlGeJqN0SDnKR2N6w6oJcB6n_D2Glhu2_R3m7de_CcHzqmo2b1ZoS391faN0UIT_WkWN6Opokaj3ueoYE_yAV9_ldBOjoykiMrqWjm0zU_wMlcVZRauXs555Z3if2ptOvj1__6C22X3IILLW_zcoG3letaYr7cqWUbkXXVOh340KRrTKVFJ6VREeoPUvZIYGt98"/>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-surface">Hotube</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-primary" data-icon="search">search</span>
+</button>
+</header>
+<main class="max-w-max-width mx-auto">
+<!-- Section 1: Your Favorites -->
+<section class="mt-lg">
+<div class="px-margin-mobile flex justify-between items-center mb-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">Your Favorites</h2>
+<button class="text-primary font-label-md text-label-md">See all</button>
+</div>
+<div class="flex overflow-x-auto no-scrollbar gap-md px-margin-mobile pb-sm">
+<!-- Favorite Card 1 -->
+<div class="min-w-[160px] group">
+<div class="relative w-40 h-52 rounded-lg overflow-hidden bg-surface-container shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+<img class="w-full h-full object-cover" data-alt="A warm, candid family portrait captured in soft morning sunlight filtering through large windows. The scene exudes comfort and familial love, with a palette of soft oranges and creams. The lighting is gentle, emphasizing the organic textures of home life in a high-end, minimalist visual style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQtF4s6wUIK09slKIqhrYCYKwRum61qrxTavmYeOuzQQY5HpUIzIYq3rhX6ZucO1NdAjUDfLnXsfr7tS1lLKpm1MY5j3spCVHrJGQt0FCuTz6bKTSaS_EgTPHfiymySfD7clPgxbC5WnZbqyGhCe3eY2BZ7z1fn4TsWLNfFLUQYlTBw4asApNeKSx0j9yWpkaoq-hPxvM72DnK3R_FQDHhja4HdT5Yf0xUNamYqtIXrVjX-xUudFJ0XeEdyCB_8bM02tKPV0AtLOZL"/>
+<div class="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-1 rounded-full shadow-sm">
+<span class="material-symbols-outlined text-primary filled-icon text-[18px]" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</div>
+</div>
+<p class="mt-sm font-label-md text-label-md text-on-surface truncate">Summer Vacation</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">128 items</p>
+</div>
+<!-- Favorite Card 2 -->
+<div class="min-w-[160px] group">
+<div class="relative w-40 h-52 rounded-lg overflow-hidden bg-surface-container shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+<img class="w-full h-full object-cover" data-alt="Close-up artistic shot of a golden retriever playing in a vibrant garden at sunset. Warm orange light flares across the frame, highlighting the soft textures of the fur and lush green leaves. The mood is joyful and energetic, consistent with a modern, family-friendly digital aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVAAaM7Hq0FFOoIHUFhabkTRBSTDoUvfC8rDT7NZJplWv8RPhl7SzhDCyecBJNaXRRBtpy9htKiMsrRSL9cU2H4MhYoWl206Ds-TVGD6d8csKA7DbDQRl8H7fI1gCtH4Q1hk2qozaCgWUxuhcpEUFcBdcBteXKrP8KAs6vN0-LyOG1OK4J79veoQZYHuFlAfKgIGXo3_XMFDLX4Ef01GmnXPUoN_vxEC6RbMzSUJTrVXBpq1hL9fAVV2ZYxUlpdyh06g-xS0lFMmas"/>
+<div class="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-1 rounded-full shadow-sm">
+<span class="material-symbols-outlined text-primary filled-icon text-[18px]" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</div>
+</div>
+<p class="mt-sm font-label-md text-label-md text-on-surface truncate">Max at the Park</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">45 items</p>
+</div>
+<!-- Favorite Card 3 -->
+<div class="min-w-[160px] group">
+<div class="relative w-40 h-52 rounded-lg overflow-hidden bg-surface-container shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+<img class="w-full h-full object-cover" data-alt="A beautifully plated homemade breakfast featuring pancakes with honey dripping over them, set on a rustic wooden table with a warm, cream-colored ceramic mug. Bright, soft natural light creates a cozy morning vibe with high-quality whitespace around the subject." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbhUPd_EaPkxP_Zm_qUW2EGOgDgpFRjnZtlJiVd2vK-im31XeQkkiy_Xnnz6S19yACAO0H7NP9np21oUsq9UaclNEhYywgMNOv25DTXJJsM-1qv5LKk0ub3QeXoXDZDUxggUOI69fgY5oSAtbVCA5UOpRKgR7WWu7cqQBXHvD78J_Vksikv9OSmJT7Wj24Wa11A65NeLt2DuCk6ghY7QIdNI9e0HDtF3AizIkYNJ4Mjxedo36M1Ra6nhAZLpB_3ftWvBb8qwc-Z3Hu"/>
+<div class="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-1 rounded-full shadow-sm">
+<span class="material-symbols-outlined text-primary filled-icon text-[18px]" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</div>
+</div>
+<p class="mt-sm font-label-md text-label-md text-on-surface truncate">Sunday Brunch</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">22 items</p>
+</div>
+</div>
+</section>
+<!-- Section 2: My Albums -->
+<section class="mt-xl px-margin-mobile">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">My Albums</h2>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low text-primary">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="sort">sort</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid style layout for My Albums -->
+<div class="grid grid-cols-2 gap-md">
+<!-- Album 1: Large Feature -->
+<div class="col-span-2 bg-surface-container-lowest p-md rounded-lg shadow-sm group active:scale-[0.98] transition-all">
+<div class="flex gap-4">
+<div class="w-24 h-24 rounded-md overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Aerial view of a pristine beach with turquoise water and golden sand. The sunlight is bright and clear, emphasizing a high-end, clean aesthetic. The composition is minimalist and organic, fitting the reliable comfort of a modern family photo app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0-gIuTNddc1LpFRWxA2ZF-shByGhKBGMUXdtjroko-AntEA5MsbZuNIQE7jiSbgJrZw6vTXvI3KjqpwvU-f0vmyrn9sMKyamQ6bvPojsxjLrfc6DLYnUPlTmlg1WUrtQwuz5-mcjKe_yDo51u5VFlfM1iOzn8-1-eNp0bTtAgv3q0Rh4n4ULK3RdTWMDHcu5QRHTqc4TfQie8evM-1Pq7g5CdkzE1vkr20DufZPyTNt3FeQrH1OS_1PUsBwFxBsh3MjuAFJeGE6DC"/>
+</div>
+<div class="flex flex-col justify-center flex-grow">
+<h3 class="font-headline-md text-headline-md text-on-surface leading-tight">Europe 2023</h3>
+<p class="text-on-surface-variant font-body-md text-body-md mt-xs">Travel • 456 items</p>
+</div>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-outline" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Album 2 -->
+<div class="bg-surface-container-lowest p-sm rounded-lg shadow-sm active:scale-95 transition-transform">
+<div class="aspect-square w-full rounded-md overflow-hidden mb-sm bg-surface-variant">
+<img class="w-full h-full object-cover" data-alt="A festive living room scene with a Christmas tree illuminated by warm fairy lights. A family is blurred in the background, focusing on a single sparkling ornament in the foreground. Deep warm tones and orange highlights create a professional, cozy ambiance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBr-pu2jBva0SKnbQEc0vG8GqoSItN1EQyqtKR7iu8o109rlAV2VfYrfCYCN3C9mmLCMmJI2k70BvjahK65Fj0Fx85O4heedfJHiWp55Bid0n37USZzjDoSRmejVel5WJz7lBwTo-sFaOxR6OEriSybcWSZYHs6H3YDu0RWhVcAk4ieYouu-KC56RR2mr-h9pWZfKi_f3PWtY2ibZOyG6wXDmmwxF9qoeFIli3sYCtNaY3tVg_qZJ0q2kU6wRkXmPJPdVrIYl9OyN5d"/>
+</div>
+<div class="px-xs">
+<h4 class="font-label-md text-label-md text-on-surface truncate">Christmas 22</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">312 photos</p>
+</div>
+</div>
+<!-- Album 3 -->
+<div class="bg-surface-container-lowest p-sm rounded-lg shadow-sm active:scale-95 transition-transform">
+<div class="aspect-square w-full rounded-md overflow-hidden mb-sm bg-surface-variant">
+<img class="w-full h-full object-cover" data-alt="A clean, modern kitchen with fresh ingredients on a marble countertop. Bright daylight fills the room, casting soft shadows. The visual style is light-mode, minimalist, and focuses on high-quality daily life experiences." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARKR8TADrYCH3CoWM72MedXylq4XLT4mDb1yUWtnHLMLa-hDhM9fRmsUVmCzJTXWxnkexH-ONlpn4PqCERQV6njnm_sOAJA57soOc1PYlTtwdLB6QCA_xkNLtwdq0ns2OjHUq2bdEGnR4EwlkF20a9iRG_GodiuFmgfGFpQ16UchHVp03x30ULZfWNMggwXtsZ_cnUzL_hF2U_-GiLzvPa8T6M8AgFBNc2bdSFR7nLa5PKN8t8ljuVplZdiDqJx_Yn6hASh7FLccbu"/>
+</div>
+<div class="px-xs">
+<h4 class="font-label-md text-label-md text-on-surface truncate">Cooking Class</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">89 photos</p>
+</div>
+</div>
+<!-- Album 4 -->
+<div class="bg-surface-container-lowest p-sm rounded-lg shadow-sm active:scale-95 transition-transform">
+<div class="aspect-square w-full rounded-md overflow-hidden mb-sm bg-surface-variant">
+<img class="w-full h-full object-cover" data-alt="Atmospheric shot of a hiking trail leading into a misty pine forest. The lighting is diffused and cool, contrasting with the warm interface. The composition uses leading lines and natural forms to convey a sense of adventure and professional quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJpzqeVf8LFL_1ZKClk6-9QP5lq7r7Sxmyu5Uv3EYFkGxCXSWvgXAad11XaiwzzzxWT80P25ajzBphY7OMZVY1aSE0dpTgaUdZlwZNJ_KTKXL0VcxVaCdTnhmU0dtSWcrFVNkYOC3yRFbAwPK0AVZuzWzlSZmTTua1p2k88umvXOBVgwEb45EK5z7yLbrzj3mNRCo8dawEXayAUT7biEBd639XOe7Tcz6dZi-apORX71MqVKfOEJq8F1JzX_-NuqjtFSPJ6GYYzcP7"/>
+</div>
+<div class="px-xs">
+<h4 class="font-label-md text-label-md text-on-surface truncate">Weekend Hike</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">154 photos</p>
+</div>
+</div>
+<!-- Album 5 -->
+<div class="bg-surface-container-lowest p-sm rounded-lg shadow-sm active:scale-95 transition-transform">
+<div class="aspect-square w-full rounded-md overflow-hidden mb-sm bg-surface-variant flex items-center justify-center border-2 border-dashed border-outline-variant">
+<span class="material-symbols-outlined text-outline text-[32px]" data-icon="add_a_photo">add_a_photo</span>
+</div>
+<div class="px-xs">
+<h4 class="font-label-md text-label-md text-on-surface truncate">New Album</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Create folder</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Spacer for FAB/Nav -->
+<div class="h-32"></div>
+</main>
+<!-- Floating Action Button - Mandatory Contextual -->
+<button class="fixed right-6 bottom-24 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-lg flex items-center justify-center z-40 active:scale-95 transition-transform group">
+<span class="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform" data-icon="add">add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-sm pb-safe pt-xs bg-surface-container-lowest shadow-[0_-4px_10px_0_rgba(24,20,17,0.04)] rounded-t-lg">
+<!-- Calendar Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="font-label-sm text-label-sm mt-1">Calendar</span>
+</a>
+<!-- Album Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="photo_library">photo_library</span>
+<span class="font-label-sm text-label-sm mt-1">Album</span>
+</a>
+<!-- Upload Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="add_circle">add_circle</span>
+<span class="font-label-sm text-label-sm mt-1">Upload</span>
+</a>
+<!-- My Album Tab (ACTIVE) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl p-2 active:scale-95 transition-all duration-200" href="#">
+<span class="material-symbols-outlined filled-icon" data-icon="auto_stories" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+<span class="font-label-sm text-label-sm mt-1">My Album</span>
+</a>
+<!-- My Page Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm mt-1">My Page</span>
+</a>
+</nav>
+<script>
+        // Simple Micro-interaction for gallery cards
+        document.querySelectorAll('.active\\:scale-95').forEach(button => {
+            button.addEventListener('touchstart', () => {
+                button.classList.add('scale-95');
+            });
+            button.addEventListener('touchend', () => {
+                button.classList.remove('scale-95');
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hotube - Timeline View</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Plus Jakarta Sans -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#6e3900",
+                        "on-secondary-fixed-variant": "#554431",
+                        "secondary-fixed": "#f9dec5",
+                        "tertiary-fixed": "#ffdcc3",
+                        "primary": "#914d00",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#e2d8d3",
+                        "surface-container-highest": "#eae1db",
+                        "on-surface": "#1f1b18",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f9efe9",
+                        "on-secondary-fixed": "#261909",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "on-primary-fixed": "#2f1500",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#dbc2b0",
+                        "on-surface-variant": "#554336",
+                        "on-tertiary-fixed": "#2f1500",
+                        "tertiary-fixed-dim": "#ffb77e",
+                        "secondary-fixed-dim": "#dbc2aa",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#f48c25",
+                        "surface-bright": "#fff8f5",
+                        "tertiary": "#914d00",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#ffb77d",
+                        "on-secondary-container": "#75614d",
+                        "tertiary-container": "#ec903f",
+                        "surface-container": "#f6ece6",
+                        "inverse-primary": "#ffb77d",
+                        "secondary": "#6e5b47",
+                        "primary-fixed": "#ffdcc3",
+                        "surface-tint": "#914d00",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#fff8f5",
+                        "on-background": "#1f1b18",
+                        "inverse-surface": "#342f2c",
+                        "on-tertiary-container": "#5e3000",
+                        "outline": "#887364",
+                        "background": "#fff8f5",
+                        "secondary-container": "#f9dec5",
+                        "on-primary-container": "#5e3000",
+                        "surface-container-high": "#f0e6e1",
+                        "surface-container-low": "#fcf2ec",
+                        "surface-variant": "#eae1db"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "lg": "24px",
+                        "xl": "40px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "max-width": "1280px",
+                        "margin-desktop": "64px",
+                        "gutter": "20px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #F8F7F5; /* Brand Warm Cream */
+            color: #181411; /* Brand Dark Brown */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            user-select: none;
+        }
+        /* Custom scrollbar for better mobile feel */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        .timeline-line::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 24px;
+            bottom: -24px;
+            width: 2px;
+            background: #E2DDD7;
+        }
+        .timeline-item:last-child .timeline-line::before {
+            display: none;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden antialiased">
+<!-- Top AppBar (from JSON) -->
+<header class="bg-surface dark:bg-surface-dim sticky top-0 z-50 shadow-sm flex justify-between items-center w-full px-margin-mobile py-md">
+<div class="flex items-center gap-sm">
+<img alt="Hotube Logo" class="w-10 h-10 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Zsivg_SXs6DTdCAnZk7ilhES-tHDroT8CAKVwt_Jt3f_rYxzxy1hYD2gElSXk3ke4bKSaIRcyZlGeJqN0SDnKR2N6w6oJcB6n_D2Glhu2_R3m7de_CcHzqmo2b1ZoS391faN0UIT_WkWN6Opokaj3ueoYE_yAV9_ldBOjoykiMrqWjm0zU_wMlcVZRauXs555Z3if2ptOvj1__6C22X3IILLW_zcoG3letaYr7cqWUbkXXVOh340KRrTKVFJ6VREeoPUvZIYGt98"/>
+<span class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-surface dark:text-on-surface-variant">Hotube</span>
+</div>
+<button class="material-symbols-outlined text-primary dark:text-primary-fixed-dim hover:opacity-80 transition-transform active:scale-95 text-[28px]" data-icon="search">
+            search
+        </button>
+</header>
+<main class="pb-32">
+<!-- Monthly Selector & Filters -->
+<section class="px-margin-mobile py-md bg-surface/80 backdrop-blur-md sticky top-[72px] z-40 space-y-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-xs text-primary font-headline-md text-headline-md">
+<span>October 2023</span>
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+<div class="flex items-center gap-sm text-outline">
+<span class="font-label-md text-label-md">148 Items</span>
+</div>
+</div>
+<!-- Filter Chips -->
+<div class="flex gap-sm overflow-x-auto pb-xs no-scrollbar">
+<button class="px-lg py-sm bg-primary-container text-on-primary-container rounded-full font-label-md text-label-md shadow-sm active:scale-95 transition-all">All</button>
+<button class="px-lg py-sm bg-surface-container text-on-surface-variant rounded-full font-label-md text-label-md border border-outline-variant hover:bg-secondary-container transition-all">Photos</button>
+<button class="px-lg py-sm bg-surface-container text-on-surface-variant rounded-full font-label-md text-label-md border border-outline-variant hover:bg-secondary-container transition-all">Videos</button>
+</div>
+</section>
+<!-- Timeline Feed -->
+<section class="px-margin-mobile space-y-xl mt-md">
+<!-- Timeline Day Group 1 -->
+<div class="relative timeline-item">
+<div class="flex items-start gap-md mb-md">
+<div class="z-10 bg-primary w-6 h-6 rounded-full border-4 border-surface shadow-sm mt-1"></div>
+<div class="flex-1">
+<h3 class="font-headline-md text-headline-md text-on-surface">Yesterday</h3>
+<p class="text-on-surface-variant font-label-md text-label-md">Sunday, Oct 15</p>
+</div>
+</div>
+<div class="timeline-line ml-[1px] pl-lg pb-md">
+<div class="grid grid-cols-2 gap-md">
+<!-- Bento-ish Layout -->
+<div class="group relative overflow-hidden rounded-lg aspect-[3/4] shadow-md hover:-translate-y-1 transition-all duration-300">
+<img class="w-full h-full object-cover" data-alt="A warm, candid photo of a young family picnic in a sun-drenched park during autumn. The lighting is golden and soft, highlighting the warm orange and brown tones of the fall leaves. The composition is intimate and professional, reflecting a lifestyle photography style with a high-key light mode aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSggkQ2MWTBzKKib1Vf425xU2uKJgD7NFIhyfnAExlWJPSb5RPL0aeVHDGZV6VGlewyfmCYqJQ7LOrXWBJe4IXZfduufUTWbuzg95ZyqJsd9y-IXcr5oGfu8_Bs25knIvq0NQ_C4uhRIgKY9nDgRKUQGOr5Ioj0lz1d2T0GL04EGyDNe3o8e3gGcz23KWWRZJtH1enUf6d3zsJ5fq1RjvAmImy9T6NCILGHWtx_KeWHjt-ieb5uq-bf5XAlqbOwF1pCjLFhGGXDEZV"/>
+<div class="absolute top-2 right-2 flex gap-xs">
+<button class="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/40 transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="download">download</span>
+</button>
+</div>
+</div>
+<div class="space-y-md">
+<div class="group relative overflow-hidden rounded-lg aspect-square shadow-md hover:-translate-y-1 transition-all duration-300">
+<img class="w-full h-full object-cover" data-alt="A close-up shot of a toddler laughing joyfully while holding a bright orange pumpkin. The background is a soft-focus family farm with warm wooden textures and rustic charm. The overall mood is cheerful, cozy, and professional, utilizing a warm palette of creams, oranges, and deep browns." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTELbtuXR_65zIRnvJP-qf5shFwlQmiBHMwR4NN8E4xDsGgCeJyiatWPNG2I_mRTWIiqg9ikTZSljqCkUGQbfisA7ASPZNNQwIs_i77NIxVt2rg6N9Tqo9qCV7gvAATa0-3YUm1Tx80yqbDHLuAtnaWsBzkIl5wnuapisud2UF_nOpiW1-iueDY5rhFUZLL20i0iTWZhlxF_XxMi3gB-tTgdOT04aXJJsq03S5O49niXN3S0scoHHMwuplxnrWghSpZASjt66CmkNG"/>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+</button>
+</div>
+<div class="group relative overflow-hidden rounded-lg aspect-square shadow-md hover:-translate-y-1 transition-all duration-300">
+<img class="w-full h-full object-cover" data-alt="High-quality lifestyle video still of a family baking together in a modern, warm kitchen. Flour is playfully dusting the air, caught in the soft morning sunlight. The scene is wholesome and clean, following a minimalist and inviting family-oriented aesthetic with warm cream and soft wood tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhOGN95DV9WmyhEsfXS8Q1JaV8Tr9QyraCEp0lzpZrE-f3fD3S5SiDntiAHmG1wlpY7NuESJ6EDOqmjJ_2vHLO8OFGasdOqB3OgNwR1PJubSicTR-YgHAYtCNeMUsiGbE8lQFLNy8vdR_s9X9MgbUJbCducDua39QIkoqBz6-PDg1--50fu4tUf55S70XMzfmsoTa_9ltCPGofgXOCJ2AW2Q9znURpOrg1qiukGv8sv-rFpLw6E6VWn3eD3LY5Lg5sOtau6bZGjkyp"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-12 h-12 bg-white/30 backdrop-blur-lg rounded-full flex items-center justify-center text-white border border-white/50">
+<span class="material-symbols-outlined fill text-[32px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Timeline Day Group 2 -->
+<div class="relative timeline-item">
+<div class="flex items-start gap-md mb-md">
+<div class="z-10 bg-outline w-6 h-6 rounded-full border-4 border-surface shadow-sm mt-1"></div>
+<div class="flex-1">
+<h3 class="font-headline-md text-headline-md text-on-surface">Oct 12, 2023</h3>
+<p class="text-on-surface-variant font-label-md text-label-md">Thursday</p>
+</div>
+</div>
+<div class="timeline-line ml-[1px] pl-lg pb-md">
+<!-- Featured Wide Card -->
+<div class="group relative overflow-hidden rounded-lg aspect-video shadow-lg hover:-translate-y-1 transition-all duration-300">
+<img class="w-full h-full object-cover" data-alt="A panoramic wide-angle shot of a family hike in the mountains during sunrise. Silhouettes of family members are seen walking along a ridge against a breathtaking orange and pink sky. The professional photograph captures a sense of adventure and comfort, matching the warm digital style guidance of the app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYnbW4OLfS2CSRvz-jv0vo2o4hYwMAZPrSXKnhCkNr3skVC72U0fJAtubyPFn_MAfePJ2XOKVZv3a1hMdmlbMMVwWOxdV5YKd5H6TToijnjExJ0w7zeWKcT2nNnHzwV8yvLTJ1gKLtWgmcPHZDn0l1fA2jG6DyQl17YdoENXY2q5q1SehR_GM7Pi0ejvaU4_dD-7Gg6TW7F8yLNOJpOfiLuOgWvP_vual6uG385nEvb1HQmnkcZbTiwAyttMjsyEfuD3bwrCAWOh9-"/>
+<div class="absolute bottom-4 left-4 text-white">
+<span class="bg-primary/80 backdrop-blur px-sm py-xs rounded text-[12px] font-bold tracking-wider">FEATURED</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[20px]" data-icon="download">download</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Timeline Day Group 3 -->
+<div class="relative timeline-item">
+<div class="flex items-start gap-md mb-md">
+<div class="z-10 bg-outline w-6 h-6 rounded-full border-4 border-surface shadow-sm mt-1"></div>
+<div class="flex-1">
+<h3 class="font-headline-md text-headline-md text-on-surface">Oct 10, 2023</h3>
+<p class="text-on-surface-variant font-label-md text-label-md">Tuesday</p>
+</div>
+</div>
+<div class="timeline-line ml-[1px] pl-lg pb-md">
+<div class="grid grid-cols-3 gap-sm">
+<div class="group relative overflow-hidden rounded-lg aspect-square shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Close up of a family dog running through a field of wheat under a golden afternoon sun. The lighting is warm and natural, creating a soft tactile feel. The color palette is rich with golden-browns and warm creams, emphasizing a reliable and professional family memory aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7O2Ijt_t5KqJ6E9K92iGJwv0i9yMIHHm7yT8haBssp7OY_K41JdaIudepD7yB1rFREtVN3b1nkaL5VZ2a3vc0iBtUQ635DLd2jVYN1GYoYDTyzSOkTCOC4jP8wXQRo2DspfchGnhYsfK-6VjKwNOKtopC7yl8SFN7AEwLrw-4-adJyD6fz2n0BjHiDFK80FgwV5na6257dHHp5OOQuzDMwKzlUhATNtjxpur62ArkaOVUMdBL18Gmi_uFTi5sJFGMIgAlDodpEdDj"/>
+<button class="absolute bottom-1 right-1 w-6 h-6 bg-black/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[14px]" data-icon="download">download</span>
+</button>
+</div>
+<div class="group relative overflow-hidden rounded-lg aspect-square shadow-sm">
+<img class="w-full h-full object-cover" data-alt="A joyful candid moment of a baby reaching for bubbles in a garden. Soft sunlight sparkles through the bubbles, creating a magical, high-end family portrait feel. The background is lush and soft, in harmony with the warm, clean design system of the Hotube platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBl38ACm_2q5uSKmstxSAhb8ggchgHK9DuZDHXNj_64EA5Ob1jJaP5M0oQ4GX8BlEUYwrsFj6Le0AuBKKslmIeaHS3k0Jh0yolYS1LjHCwu2xPzrolE-8aRgDMgJtwKQT1CwNibs0mSPlzfIjpF-rojpH1M0PatvSF5Xot8sH70No4nr8N4JBgi17ZXeQqrtek5YGP-eug77bmEtgbrjFGfDT9siZ4rCxYKg9BK1UDifS0zQ_2F1hCTDsyvMoLXWvp85bAzDuRla4fy"/>
+<button class="absolute bottom-1 right-1 w-6 h-6 bg-black/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[14px]" data-icon="download">download</span>
+</button>
+</div>
+<div class="group relative overflow-hidden rounded-lg aspect-square shadow-sm flex items-center justify-center bg-secondary-container">
+<span class="text-on-secondary-container font-bold">+12</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed right-lg bottom-28 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all z-50">
+<span class="material-symbols-outlined text-[32px]" data-icon="add_circle">add_circle</span>
+</button>
+<!-- Bottom Navigation (from JSON) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-surface-container-lowest dark:bg-surface-container-highest flex justify-around items-center px-sm pb-safe pt-xs shadow-[0_-4px_10px_0_rgba(24,20,17,0.04)] rounded-t-lg">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="calendar_month">calendar_month</span>
+<span class="font-label-sm text-label-sm mt-xs">Calendar</span>
+</a>
+<!-- Active Tab: Album (Maps to current Timeline/Album intent) -->
+<a class="flex flex-col items-center justify-center bg-primary-container dark:bg-primary-fixed-dim text-on-primary-container dark:text-on-primary-fixed rounded-xl p-2 active:scale-95 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px] fill" data-icon="photo_library" style="font-variation-settings: 'FILL' 1;">photo_library</span>
+<span class="font-label-sm text-label-sm mt-xs">Album</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="add_circle">add_circle</span>
+<span class="font-label-sm text-label-sm mt-xs">Upload</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="auto_stories">auto_stories</span>
+<span class="font-label-sm text-label-sm mt-xs">My Album</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline p-2 hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm mt-xs">My Page</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions for chips
+        const chips = document.querySelectorAll('button[class*="rounded-full"]');
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                chips.forEach(c => {
+                    c.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+                    c.classList.add('bg-surface-container', 'text-on-surface-variant', 'border', 'border-outline-variant');
+                });
+                chip.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+                chip.classList.remove('bg-surface-container', 'text-on-surface-variant', 'border', 'border-outline-variant');
+            });
+        });
+
+        // Simple scroll parallax or reveal could be added here for higher-end feel
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 20) {
+                header.classList.add('shadow-md');
+            } else {
+                header.classList.remove('shadow-md');
+            }
+        });
+    </script>
+</body></html>
