@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getMediaByDate, memoryMedia } from '../data/memoryMedia';
 import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
+import { markMediaAsViewed } from '../utils/viewedMedia';
 
 const MediaViewerPage = () => {
   const { mediaId } = useParams();
@@ -17,7 +18,10 @@ const MediaViewerPage = () => {
   const next = currentIndex >= 0 && currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
 
   useEffect(() => {
-    if (current && date) markMemoryDateAsViewed(date);
+    if (current && date) {
+      markMemoryDateAsViewed(date);
+      markMediaAsViewed(current.id);
+    }
   }, [current, date]);
 
   const moveTo = (item) => {

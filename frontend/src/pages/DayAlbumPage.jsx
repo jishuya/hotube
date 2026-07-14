@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { getMediaByDate } from '../data/memoryMedia';
 import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
+import { getViewedMediaIds } from '../utils/viewedMedia';
 
 const formatDate = (dateString) => {
   const date = new Date(`${dateString}T00:00:00`);
@@ -17,6 +18,7 @@ const DayAlbumPage = () => {
   const { date } = useParams();
   const navigate = useNavigate();
   const media = getMediaByDate(date);
+  const viewedMediaIds = getViewedMediaIds();
 
   useEffect(() => {
     if (media.length > 0) markMemoryDateAsViewed(date);
@@ -51,6 +53,11 @@ const DayAlbumPage = () => {
                   to={`/media/${item.id}?date=${date}`}
                   className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
                 >
+                  {!viewedMediaIds.includes(item.id) && (
+                    <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
+                      N
+                    </span>
+                  )}
                   <img
                     src={item.thumbnail || item.src}
                     alt={item.title}

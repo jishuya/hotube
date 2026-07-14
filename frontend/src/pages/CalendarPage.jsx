@@ -32,7 +32,7 @@ const CalendarPage = () => {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background px-4 pb-24 pt-6 text-text-primary">
+      <main className="min-h-screen bg-background px-4 pb-10 pt-6 text-text-primary">
         <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-end justify-between">
           <div>
