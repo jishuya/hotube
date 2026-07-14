@@ -9,6 +9,8 @@ import {
   UploadPage,
   MyAlbumPage,
   MyPage,
+  DayAlbumPage,
+  MediaViewerPage,
 } from './pages';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -63,6 +65,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/media/:mediaId"
+        element={
+          <ProtectedRoute>
+            <MediaViewerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         element={
           <ProtectedRoute>
             <BottomNavigationLayout />
@@ -70,6 +80,7 @@ function AppRoutes() {
         }
       >
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/calendar/:date" element={<DayAlbumPage />} />
         <Route path="/album" element={<AlbumPage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/my-album" element={<MyAlbumPage />} />

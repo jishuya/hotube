@@ -6,3 +6,5 @@ export { default as AlbumPage } from './AlbumPage';
 export { default as UploadPage } from './UploadPage';
 export { default as MyAlbumPage } from './MyAlbumPage';
 export { default as MyPage } from './MyPage';
+export { default as DayAlbumPage } from './DayAlbumPage';
+export { default as MediaViewerPage } from './MediaViewerPage';
