@@ -307,3 +307,12 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* PWA Bottom Navigation */
+.bottom-navigation {
+  padding-bottom: max(0.625rem, env(safe-area-inset-bottom));
+}
+
+.bottom-navigation-layout {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}

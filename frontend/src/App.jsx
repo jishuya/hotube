@@ -12,6 +12,7 @@ import {
 } from './pages';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import BottomNavigationLayout from './components/common/BottomNavigationLayout';
 
 // 로그인 필요한 라우트 보호
 const ProtectedRoute = ({ children }) => {
@@ -62,45 +63,18 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/calendar"
         element={
           <ProtectedRoute>
-            <CalendarPage />
+            <BottomNavigationLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/album"
-        element={
-          <ProtectedRoute>
-            <AlbumPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/upload"
-        element={
-          <ProtectedRoute>
-            <UploadPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/my-album"
-        element={
-          <ProtectedRoute>
-            <MyAlbumPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/mypage"
-        element={
-          <ProtectedRoute>
-            <MyPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/album" element={<AlbumPage />} />
+        <Route path="/upload" element={<UploadPage />} />
+        <Route path="/my-album" element={<MyAlbumPage />} />
+        <Route path="/mypage" element={<MyPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
