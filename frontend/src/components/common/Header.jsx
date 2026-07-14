@@ -4,7 +4,7 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import ProfileEditModal from './ProfileEditModal';
 
-const Header = ({ isAdmin = false }) => {
+const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,7 +53,7 @@ const Header = ({ isAdmin = false }) => {
           </div>
 
           {/* 데스크톱 검색바 (640px 이상에서만 표시) */}
-          {!isAdmin && (
+          {showSearch && (
             <div className="hidden sm:flex flex-1 justify-center px-2 sm:px-8 min-w-0">
               <form onSubmit={handleSearch} className="flex w-full max-w-2xl h-10">
                 <div className="flex w-full flex-1 items-stretch rounded-full h-full relative">
@@ -150,7 +150,7 @@ const Header = ({ isAdmin = false }) => {
         </header>
 
       {/* 모바일 검색바 (640px 미만에서만 표시) */}
-      {!isAdmin && (
+      {showSearch && (
         <div className="sm:hidden px-4">
           <form onSubmit={handleSearch} className="flex w-full h-10">
             <div className="flex w-full flex-1 items-stretch rounded-full h-full relative">
