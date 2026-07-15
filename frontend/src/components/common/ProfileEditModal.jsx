@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { TITLES, CATEGORIES, updateUser as updateUserApi, changePassword as changePasswordApi } from '../../services/authApi';
+import { TITLES, CATEGORIES, updateUser as updateUserApi } from '../../services/authApi';
 
 const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
   const [formData, setFormData] = useState({
@@ -8,17 +8,9 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     title: '',
     category: '',
   });
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // 사용자 정보로 폼 초기화
   useEffect(() => {
@@ -36,10 +28,6 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     if (!isOpen) {
       setError('');
       setSuccess(false);
-      setShowPasswordSection(false);
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setPasswordError('');
-      setPasswordSuccess(false);
     }
   }, [isOpen]);
 
@@ -48,52 +36,6 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
     setSuccess(false);
-  };
-
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordData(prev => ({ ...prev, [name]: value }));
-    setPasswordError('');
-    setPasswordSuccess(false);
-  };
-
-  const validatePassword = (password) => {
-    // 5자 이상, 특수문자 1개 이상 포함
-    const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
-    return password.length >= 5 && hasSpecialChar;
-  };
-
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess(false);
-
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      setPasswordError('모든 필드를 입력해주세요');
-      return;
-    }
-
-    if (!validatePassword(passwordData.newPassword)) {
-      setPasswordError('비밀번호는 5자 이상, 특수문자를 1개 이상 포함해야 합니다');
-      return;
-    }
-
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('새 비밀번호가 일치하지 않습니다');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await changePasswordApi(user.id, passwordData.currentPassword, passwordData.newPassword);
-      setPasswordSuccess(true);
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err) {
-      setPasswordError(err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -268,98 +210,6 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
           </div>
         </form>
 
-        {/* 비밀번호 변경 섹션 */}
-        <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700">
-          <button
-            type="button"
-            onClick={() => setShowPasswordSection(!showPasswordSection)}
-            className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 hover:text-primary transition-colors"
-          >
-            <Icon icon={showPasswordSection ? "mdi:chevron-up" : "mdi:chevron-down"} className="text-lg" />
-            비밀번호 변경
-          </button>
-
-          {showPasswordSection && (
-            <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-4">
-              {/* 현재 비밀번호 */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  현재 비밀번호
-                </label>
-                <input
-                  type="password"
-                  name="currentPassword"
-                  value={passwordData.currentPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 dark:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white"
-                  placeholder="현재 비밀번호"
-                />
-              </div>
-
-              {/* 새 비밀번호 */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  새 비밀번호
-                </label>
-                <input
-                  type="password"
-                  name="newPassword"
-                  value={passwordData.newPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 dark:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white"
-                  placeholder="5자 이상, 특수문자 1개 포함"
-                />
-              </div>
-
-              {/* 새 비밀번호 확인 */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  새 비밀번호 확인
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={passwordData.confirmPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full h-11 px-4 rounded-lg border border-zinc-300 dark:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white"
-                  placeholder="새 비밀번호 확인"
-                />
-              </div>
-
-              {/* 비밀번호 에러 메시지 */}
-              {passwordError && (
-                <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                  <Icon icon="mdi:alert-circle" className="text-lg shrink-0" />
-                  <span>{passwordError}</span>
-                </div>
-              )}
-
-              {/* 비밀번호 성공 메시지 */}
-              {passwordSuccess && (
-                <div className="flex items-center gap-2 text-green-600 text-sm bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                  <Icon icon="mdi:check-circle" className="text-lg shrink-0" />
-                  <span>비밀번호가 변경되었습니다</span>
-                </div>
-              )}
-
-              {/* 비밀번호 변경 버튼 */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-11 bg-zinc-800 dark:bg-zinc-600 text-white font-semibold rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Icon icon="mdi:loading" className="text-xl animate-spin" />
-                    변경 중...
-                  </>
-                ) : (
-                  '비밀번호 변경'
-                )}
-              </button>
-            </form>
-          )}
-        </div>
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ const navigationItems = [
 ];
 
 const getItemClassName = (isActive) => [
-  'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2',
+  'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5',
   'text-[11px] font-semibold transition-colors active:scale-95',
   isActive
     ? 'bg-primary/10 text-primary'
@@ -22,7 +22,7 @@ const BottomNavigation = () => (
     aria-label="주요 메뉴"
     className="bottom-navigation fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-surface/95 shadow-[0_-6px_24px_rgb(24_20_17_/_0.08)] backdrop-blur-xl"
   >
-    <div className="mx-auto grid max-w-xl grid-cols-5 items-end px-1 pt-2">
+    <div className="mx-auto grid max-w-xl grid-cols-5 items-end px-1 pt-1">
       {navigationItems.map((item) => (
         <NavLink
           key={item.to}
