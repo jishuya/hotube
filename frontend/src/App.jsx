@@ -8,6 +8,7 @@ import {
   AlbumPage,
   UploadPage,
   MyAlbumPage,
+  MyAlbumDetailPage,
   MyPage,
   DayAlbumPage,
   MediaViewerPage,
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="/album" element={<AlbumPage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/my-album" element={<MyAlbumPage />} />
+        <Route path="/my-album/:albumId" element={<MyAlbumDetailPage />} />
         <Route path="/mypage" element={<MyPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -27,7 +27,7 @@ const DayAlbumPage = () => {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background px-4 pb-32 pt-6 text-text-primary">
+      <main className="min-h-screen bg-background px-4 pb-16 text-text-primary">
         <div className="mx-auto max-w-container">
           <button
             type="button"

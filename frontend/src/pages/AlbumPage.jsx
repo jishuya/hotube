@@ -97,7 +97,7 @@ const AlbumPage = () => {
   return (
     <>
       <Header showSearch={false} />
-      <main className="min-h-screen bg-background pb-10 text-text-primary">
+      <main className="min-h-screen bg-background pb-16 text-text-primary">
         <section className="border-y border-border bg-surface/95 shadow-sm backdrop-blur" aria-label="월 선택">
           <div className="mx-auto flex max-w-4xl items-center px-2">
             <button type="button" onClick={() => moveMonth(-1)} aria-label="이전 달" className="flex size-10 shrink-0 items-center justify-center rounded-full text-primary hover:bg-primary/10">

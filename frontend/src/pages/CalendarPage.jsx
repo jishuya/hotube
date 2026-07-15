@@ -32,11 +32,11 @@ const CalendarPage = () => {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background px-4 pb-10 pt-6 text-text-primary">
+      <main className="min-h-screen bg-background px-4 pb-16 pt-6 text-text-primary">
         <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-end justify-between">
           <div>
-            <h1 className="text-3xl font-bold">2026년 7월</h1>
+            <h1 className="text-xl font-bold">2026년 7월</h1>
           </div>
           <div className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Icon icon="mdi:calendar-month-outline" className="text-2xl" />

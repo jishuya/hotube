@@ -218,7 +218,7 @@ const UploadPage = () => {
   return (
     <>
       <Header showSearch={false} />
-      <main className="min-h-screen bg-background px-4 pb-10 pt-0 text-text-primary">
+      <main className="min-h-screen bg-background px-4 pb-16 pt-0 text-text-primary">
         <div className="mx-auto max-w-4xl bg-transparent">
           <div className="grid grid-cols-2 rounded-full bg-primary/10 p-1">
             {[

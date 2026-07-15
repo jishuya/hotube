@@ -5,6 +5,7 @@ export { default as CalendarPage } from './CalendarPage';
 export { default as AlbumPage } from './AlbumPage';
 export { default as UploadPage } from './UploadPage';
 export { default as MyAlbumPage } from './MyAlbumPage';
+export { default as MyAlbumDetailPage } from './MyAlbumDetailPage';
 export { default as MyPage } from './MyPage';
 export { default as DayAlbumPage } from './DayAlbumPage';
 export { default as MediaViewerPage } from './MediaViewerPage';
