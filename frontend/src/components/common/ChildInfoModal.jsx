@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import Cropper from 'react-easy-crop';
+import { DayPicker } from '@daypicker/react';
+import { ko } from '@daypicker/react/locale/ko';
+import '@daypicker/react/style.css';
+
+const parseLocalDate = (value) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const formatLocalDate = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-');
 
 const readImage = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -42,6 +57,7 @@ const ChildInfoModal = ({ isOpen, onClose, child, onSave }) => {
   const [zoom, setZoom] = useState(1);
   const [croppedArea, setCroppedArea] = useState(null);
   const [processingPhoto, setProcessingPhoto] = useState(false);
+  const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -165,8 +181,43 @@ const ChildInfoModal = ({ isOpen, onClose, child, onSave }) => {
             </fieldset>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-text-primary" htmlFor="child-birthday">태어난 날</label>
-              <input id="child-birthday" type="date" value={formData.birthday} max={new Date().toLocaleDateString('en-CA')} onChange={(event) => updateField('birthday', event.target.value)} className="h-11 w-full rounded-lg border-border bg-background px-4 text-text-primary focus:border-primary focus:ring-primary" />
+              <span className="mb-1.5 block text-sm font-semibold text-text-primary">태어난 날</span>
+              <button
+                type="button"
+                onClick={() => setShowBirthdayCalendar((current) => !current)}
+                className={`flex h-11 w-full items-center justify-between rounded-lg border bg-background px-4 text-left transition ${showBirthdayCalendar ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'}`}
+                aria-expanded={showBirthdayCalendar}
+                aria-controls="child-birthday-calendar"
+              >
+                <span className={formData.birthday ? 'font-medium text-text-primary' : 'text-text-secondary'}>
+                  {formData.birthday
+                    ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(parseLocalDate(formData.birthday))
+                    : '태어난 날을 선택하세요'}
+                </span>
+                <Icon icon="mdi:calendar-month-outline" className="text-xl text-primary" />
+              </button>
+
+              {showBirthdayCalendar && (
+                <div id="child-birthday-calendar" className="mt-2 overflow-hidden rounded-xl border border-border bg-surface p-2 shadow-sm">
+                  <DayPicker
+                    mode="single"
+                    locale={ko}
+                    selected={parseLocalDate(formData.birthday)}
+                    defaultMonth={parseLocalDate(formData.birthday) || new Date()}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      updateField('birthday', formatLocalDate(date));
+                      setShowBirthdayCalendar(false);
+                    }}
+                    disabled={{ after: new Date() }}
+                    startMonth={new Date(1990, 0)}
+                    endMonth={new Date()}
+                    captionLayout="dropdown"
+                    reverseYears
+                    className="child-birthday-picker"
+                  />
+                </div>
+              )}
             </div>
           </div>
 

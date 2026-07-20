@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { DayPicker } from '@daypicker/react';
+import { ko } from '@daypicker/react/locale/ko';
+import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
 import { memoryMedia } from '../data/memoryMedia';
 import { getViewedMemoryDates } from '../utils/viewedMemoryDates';
@@ -20,12 +23,37 @@ const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric', weekday: 'short',
 }).format(new Date(`${dateString}T00:00:00`));
 
+const formatDateKey = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-');
+
+const parseDateKey = (dateString) => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
+  const dateKey = formatDateKey(day.date);
+  const mediaCount = mediaCountByDate[dateKey] || 0;
+
+  return (
+    <button
+      {...buttonProps}
+      className={`${className || ''} calendar-memory-day ${mediaCount ? 'calendar-memory-day--has-media' : ''}`}
+      aria-label={`${dateKey}, 미디어 ${mediaCount}개`}
+    >
+      <span>{day.date.getDate()}</span>
+      {modifiers.unread && <span className="calendar-memory-new">N</span>}
+    </button>
+  );
+};
+
 const CalendarPage = () => {
-  const [selectedMonth, setSelectedMonth] = useState('2026-07');
-  const [year, monthNumber] = selectedMonth.split('-').map(Number);
-  const monthIndex = monthNumber - 1;
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const startDay = new Date(year, monthIndex, 1).getDay();
+  const navigate = useNavigate();
+  const [month, setMonth] = useState(new Date(2026, 6, 1));
+  const selectedMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
   const viewedDates = getViewedMemoryDates();
   const unreadDates = Object.keys(mediaByDate)
     .filter((date) => date.startsWith(selectedMonth) && !viewedDates.includes(date))
@@ -33,55 +61,25 @@ const CalendarPage = () => {
 
   return (
     <>
-      <Header showSearch={false} />
+      <Header showSearch={false} showChildBanner />
       <main className="min-h-screen bg-background px-4 pt-2 text-text-primary">
         <div className="mx-auto max-w-3xl">
-        <div className="mb-2 flex items-center gap-3">
-          <label className="relative flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20">
-            <Icon icon="mdi:calendar-month-outline" className="text-2xl" />
-            <span className="sr-only">이동할 연도와 월 선택</span>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(event) => {
-                if (event.target.value) setSelectedMonth(event.target.value);
-              }}
-              className="absolute inset-0 cursor-pointer opacity-0"
-              aria-label="이동할 연도와 월 선택"
-            />
-          </label>
-          <h1 className="text-xl font-bold">{year}년 {monthNumber}월</h1>
-        </div>
-
-        <section className="rounded-xl bg-surface p-3 shadow-sm sm:p-5" aria-label={`${year}년 ${monthNumber}월 캘린더`}>
-          <div className="mb-3 grid grid-cols-7 text-center text-sm font-bold text-text-secondary sm:text-base">
-            {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
-              <span key={day} className={index === 0 ? 'text-error' : ''}>{day}</span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
-            {Array.from({ length: startDay }).map((_, index) => <div key={`empty-${index}`} />)}
-            {Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
-              const date = `${selectedMonth}-${String(day).padStart(2, '0')}`;
-              const count = mediaCountByDate[date] || 0;
-              const isUnread = count > 0 && !viewedDates.includes(date);
-              return (
-                <Link
-                  key={date}
-                  to={`/calendar/${date}`}
-                  className={`relative flex aspect-square flex-col items-center justify-center rounded-full text-base font-semibold transition active:scale-95 sm:text-lg ${count ? 'bg-primary text-white shadow-sm hover:bg-primary/90' : 'hover:bg-primary/10'}`}
-                  aria-label={`${date}, 미디어 ${count}개`}
-                >
-                  <span>{day}</span>
-                  {isUnread && (
-                    <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-error text-[9px] font-black leading-none text-white shadow-sm sm:right-1 sm:top-1 sm:size-5 sm:text-[10px]">
-                      N
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+        <section className="rounded-xl bg-surface p-3 shadow-sm sm:p-5" aria-label="추억 달력">
+          <DayPicker
+            locale={ko}
+            month={month}
+            onMonthChange={setMonth}
+            onDayClick={(date) => navigate(`/calendar/${formatDateKey(date)}`)}
+            startMonth={new Date(2000, 0)}
+            endMonth={new Date(2035, 11)}
+            captionLayout="dropdown"
+            reverseYears
+            showOutsideDays
+            fixedWeeks
+            modifiers={{ unread: unreadDates.map(parseDateKey) }}
+            components={{ DayButton: CalendarDayButton }}
+            className="memory-calendar"
+          />
         </section>
 
           <section className="mt-8" aria-labelledby="recent-media-title">

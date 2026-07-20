@@ -37,6 +37,159 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Child profile birthday picker */
+.rdp-root.child-birthday-picker {
+  --rdp-accent-color: rgb(var(--color-primary)) !important;
+  --rdp-accent-background-color: rgb(var(--color-primary) / 0.12) !important;
+  --rdp-day-height: 38px;
+  --rdp-day-width: 38px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: 36px;
+  --rdp-today-color: rgb(var(--color-primary));
+  width: 100%;
+  margin: 0 auto;
+  color: rgb(var(--color-text-primary));
+}
+
+.child-birthday-picker .rdp-selected .rdp-day_button {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: white;
+}
+
+.child-birthday-picker .rdp-today:not(.rdp-selected) .rdp-day_button,
+.child-birthday-picker .rdp-chevron {
+  color: rgb(var(--color-primary));
+  fill: rgb(var(--color-primary));
+}
+
+.child-birthday-picker .rdp-month,
+.child-birthday-picker .rdp-month_grid {
+  width: 100%;
+}
+
+.child-birthday-picker .rdp-month_grid {
+  table-layout: fixed;
+}
+
+.child-birthday-picker .rdp-day,
+.child-birthday-picker .rdp-weekday {
+  margin: auto;
+}
+
+.child-birthday-picker .rdp-caption_label {
+  font-weight: 700;
+}
+
+.child-birthday-picker .rdp-dropdown {
+  border-color: rgb(var(--color-border));
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-background));
+}
+
+/* Main memory calendar */
+.rdp-root.memory-calendar {
+  --rdp-accent-color: rgb(var(--color-primary));
+  --rdp-accent-background-color: rgb(var(--color-primary) / 0.12);
+  --rdp-day-height: clamp(40px, 10vw, 64px);
+  --rdp-day-width: clamp(40px, 10vw, 64px);
+  --rdp-day_button-height: clamp(38px, 9vw, 58px);
+  --rdp-day_button-width: clamp(38px, 9vw, 58px);
+  --rdp-today-color: rgb(var(--color-primary));
+  width: 100%;
+  color: rgb(var(--color-text-primary));
+}
+
+.memory-calendar .rdp-months,
+.memory-calendar .rdp-month,
+.memory-calendar .rdp-month_grid {
+  width: 100%;
+}
+
+.memory-calendar .rdp-month_grid {
+  table-layout: fixed;
+}
+
+.memory-calendar .rdp-weekday {
+  padding-bottom: 0.75rem;
+  color: rgb(var(--color-text-secondary));
+  font-weight: 700;
+}
+
+.memory-calendar .rdp-weekday:first-child {
+  color: rgb(var(--color-error));
+}
+
+.memory-calendar .rdp-day {
+  margin: auto;
+}
+
+.memory-calendar .rdp-outside {
+  opacity: 0.28;
+}
+
+.memory-calendar .rdp-caption_label {
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.memory-calendar .rdp-dropdown {
+  border-color: rgb(var(--color-border));
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-background));
+}
+
+.calendar-memory-day {
+  position: relative;
+  display: flex;
+  width: var(--rdp-day_button-width);
+  height: var(--rdp-day_button-height);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.calendar-memory-day:hover {
+  background: rgb(var(--color-primary) / 0.1);
+}
+
+.calendar-memory-day:active {
+  transform: scale(0.95);
+}
+
+.calendar-memory-day--has-media {
+  background: rgb(var(--color-primary));
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-memory-day--has-media:hover {
+  background: rgb(var(--color-primary) / 0.9);
+}
+
+.calendar-memory-new {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgb(var(--color-error));
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+}
+
 /* ============================================
    1. DESIGN TOKENS (디자인 토큰)
    ============================================ */

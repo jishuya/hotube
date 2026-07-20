@@ -40,7 +40,7 @@ const getDaysSinceBirth = (birthday) => {
   return Math.max(1, Math.floor((currentDate - birthDate) / 86400000) + 1);
 };
 
-const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
+const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = false }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,9 +153,10 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
           </div>
         </header>
 
-        <div
-          className="mx-4 mb-2 flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-3 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:mx-10 sm:px-4 dark:to-primary/5 md:mx-auto"
-        >
+        {showChildBanner && (
+          <div
+            className="mx-4 mb-2 flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-3 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:mx-10 sm:px-4 dark:to-primary/5 md:mx-auto"
+          >
             <div className="relative shrink-0">
               <img
                 src={child.profileImage}
@@ -176,7 +177,8 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
             <button type="button" onClick={() => setShowChildInfoModal(true)} className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-white/70 hover:text-primary" aria-label="아이 정보 수정" title="아이 정보 수정">
               <Icon icon="mdi:dots-vertical" className="text-xl" />
             </button>
-        </div>
+          </div>
+        )}
 
       {/* 모바일 검색바 (640px 미만에서만 표시) */}
       {showSearch && (
@@ -209,7 +211,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
         </div>
       )}
       </div>
-      {showChildInfoModal && (
+      {showChildBanner && showChildInfoModal && (
         <ChildInfoModal
           isOpen
           onClose={() => setShowChildInfoModal(false)}
