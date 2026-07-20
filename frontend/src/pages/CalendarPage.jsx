@@ -1,13 +1,10 @@
+import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { memoryMedia } from '../data/memoryMedia';
 import { getViewedMemoryDates } from '../utils/viewedMemoryDates';
 
-const year = 2026;
-const month = 6;
-const daysInMonth = new Date(year, month + 1, 0).getDate();
-const startDay = new Date(year, month, 1).getDay();
 const mediaCountByDate = memoryMedia.reduce((counts, item) => {
   counts[item.date] = (counts[item.date] || 0) + 1;
   return counts;
@@ -24,26 +21,39 @@ const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
 }).format(new Date(`${dateString}T00:00:00`));
 
 const CalendarPage = () => {
+  const [selectedMonth, setSelectedMonth] = useState('2026-07');
+  const [year, monthNumber] = selectedMonth.split('-').map(Number);
+  const monthIndex = monthNumber - 1;
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const startDay = new Date(year, monthIndex, 1).getDay();
   const viewedDates = getViewedMemoryDates();
   const unreadDates = Object.keys(mediaByDate)
-    .filter((date) => !viewedDates.includes(date))
+    .filter((date) => date.startsWith(selectedMonth) && !viewedDates.includes(date))
     .sort((a, b) => b.localeCompare(a));
 
   return (
     <>
-      <Header />
-      <main className="min-h-screen bg-background px-4 pb-16 pt-6 text-text-primary">
+      <Header showSearch={false} />
+      <main className="min-h-screen bg-background px-4 pt-2 text-text-primary">
         <div className="mx-auto max-w-3xl">
-        <div className="mb-6 flex items-end justify-between">
-          <div>
-            <h1 className="text-xl font-bold">2026년 7월</h1>
-          </div>
-          <div className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div className="mb-2 flex items-center gap-3">
+          <label className="relative flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20">
             <Icon icon="mdi:calendar-month-outline" className="text-2xl" />
-          </div>
+            <span className="sr-only">이동할 연도와 월 선택</span>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(event) => {
+                if (event.target.value) setSelectedMonth(event.target.value);
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label="이동할 연도와 월 선택"
+            />
+          </label>
+          <h1 className="text-xl font-bold">{year}년 {monthNumber}월</h1>
         </div>
 
-        <section className="rounded-xl bg-surface p-3 shadow-sm sm:p-5" aria-label="2026년 7월 캘린더">
+        <section className="rounded-xl bg-surface p-3 shadow-sm sm:p-5" aria-label={`${year}년 ${monthNumber}월 캘린더`}>
           <div className="mb-3 grid grid-cols-7 text-center text-sm font-bold text-text-secondary sm:text-base">
             {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
               <span key={day} className={index === 0 ? 'text-error' : ''}>{day}</span>
@@ -52,7 +62,7 @@ const CalendarPage = () => {
           <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {Array.from({ length: startDay }).map((_, index) => <div key={`empty-${index}`} />)}
             {Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
-              const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const date = `${selectedMonth}-${String(day).padStart(2, '0')}`;
               const count = mediaCountByDate[date] || 0;
               const isUnread = count > 0 && !viewedDates.includes(date);
               return (

@@ -15,6 +15,36 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS child_profiles (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    nickname VARCHAR(100) NOT NULL,
+    gender VARCHAR(10) NOT NULL,
+    birth_date DATE NOT NULL,
+    photo_url TEXT,
+    photo_path TEXT,
+    created_by TEXT,
+    updated_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_child_profiles_name
+        CHECK (BTRIM(name) <> ''),
+    CONSTRAINT chk_child_profiles_nickname
+        CHECK (BTRIM(nickname) <> ''),
+    CONSTRAINT chk_child_profiles_gender
+        CHECK (gender IN ('male', 'female')),
+    CONSTRAINT fk_child_profiles_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL,
+    CONSTRAINT fk_child_profiles_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS media (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -121,6 +151,7 @@ CREATE TABLE IF NOT EXISTS user_watched_media (
 );
 
 CREATE INDEX IF NOT EXISTS idx_comments_media_id ON comments (media_id);
+CREATE INDEX IF NOT EXISTS idx_child_profiles_birth_date ON child_profiles (birth_date);
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments (user_id);
 CREATE INDEX IF NOT EXISTS idx_media_title_trgm ON media USING GIN (title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media (uploaded_at);

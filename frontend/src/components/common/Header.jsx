@@ -2,21 +2,70 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
-import ProfileEditModal from './ProfileEditModal';
+import ChildInfoModal from './ChildInfoModal';
+import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
+
+const DEFAULT_CHILD = {
+  name: '김수호',
+  nickname: '수호',
+  gender: 'male',
+  birthday: '2023-10-16',
+  profileImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBl38ACm_2q5uSKmstxSAhb8ggchgHK9DuZDHXNj_64EA5Ob1jJaP5M0oQ4GX8BlEUYwrsFj6Le0AuBKKslmIeaHS3k0Jh0yolYS1LjHCwu2xPzrolE-8aRgDMgJtwKQT1CwNibs0mSPlzfIjpF-rojpH1M0PatvSF5Xot8sH70No4nr8N4JBgi17ZXeQqrtek5YGP-eug77bmEtgbrjFGfDT9siZ4rCxYKg9BK1UDifS0zQ_2F1hCTDsyvMoLXWvp85bAzDuRla4fy',
+};
+
+const PROFILE_AVATARS = [
+  { id: 'grandfather', x: 0, y: 9, label: '할아버지' },
+  { id: 'grandmother-curly', x: 25, y: 9, label: '곱슬머리 할머니' },
+  { id: 'woman-long', x: 50, y: 9, label: '긴 머리 여성' },
+  { id: 'woman-short', x: 75, y: 9, label: '짧은 머리 여성' },
+  { id: 'woman-glasses', x: 100, y: 9, label: '안경 쓴 여성' },
+  { id: 'man', x: 0, y: 89, label: '성인 남성' },
+  { id: 'man-glasses', x: 25, y: 89, label: '안경 쓴 남성' },
+  { id: 'grandmother-bob', x: 50, y: 89, label: '단발머리 할머니' },
+  { id: 'woman-ponytail', x: 75, y: 89, label: '머리 묶은 여성' },
+  { id: 'man-short', x: 100, y: 89, label: '짧은 머리 남성' },
+];
+
+const getAvatarStyle = (avatar) => ({
+  backgroundImage: "url('/avatars/hotube-family-avatars.png')",
+  backgroundPosition: `${avatar.x}% ${avatar.y}%`,
+  backgroundSize: '500% auto',
+  backgroundRepeat: 'no-repeat',
+});
+
+const getDaysSinceBirth = (birthday) => {
+  const today = new Date();
+  const birthDate = new Date(`${birthday}T00:00:00`);
+  const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(1, Math.floor((currentDate - birthDate) / 86400000) + 1);
+};
 
 const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const { user, logout, updateUser } = useAuth();
+  const [child, setChild] = useState(DEFAULT_CHILD);
+  const [showChildInfoModal, setShowChildInfoModal] = useState(false);
+  const { user } = useAuth();
+  const selectedAvatar = PROFILE_AVATARS.find((avatar) => avatar.id === user?.avatar) || PROFILE_AVATARS[2];
 
   // URL의 검색어와 input 동기화
   useEffect(() => {
     const q = searchParams.get('q') || '';
     setSearchQuery(q);
   }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    getChildProfile()
+      .then((savedChild) => {
+        if (active && savedChild) setChild({ ...DEFAULT_CHILD, ...savedChild });
+      })
+      .catch((error) => console.error('아이 정보 조회 실패:', error));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -32,13 +81,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
     navigate('/');
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const handleProfileUpdate = (updatedUser) => {
-    updateUser(updatedUser);
+  const handleChildSave = async (updatedChild) => {
+    const savedChild = await saveChildProfile(updatedChild, user?.id);
+    setChild({ ...DEFAULT_CHILD, ...savedChild });
   };
 
   return (
@@ -91,63 +136,47 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
               >
                 <Icon icon="lucide:home" className="text-xl" />
               </Link>
-            ) : (
-              <Link
-                to="/admin"
-                className="flex items-center justify-center rounded-full size-10 bg-primary/10 dark:bg-primary/20 text-primary hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors"
-                title="동영상 추가"
-              >
-                <Icon icon="mdi:plus" className="text-2xl" />
-              </Link>
-            )}
-
-            {/* 사용자 메뉴 (원형 버튼 + 드롭다운) - 홈화면에서만 표시 */}
-            {!isAdmin && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center justify-center size-10 rounded-full bg-primary/10 dark:bg-primary/20 text-primary hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors"
-                  title="회원정보"
-                >
-                  <Icon icon="mdi:account" className="text-xl" />
-                </button>
-
-                {showUserMenu && (
-                  <>
-                    {/* Backdrop */}
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setShowUserMenu(false)}
-                    />
-                    {/* Dropdown */}
-                    <div className="absolute right-0 top-full mt-2 w-32 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-2 z-20">
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setShowProfileModal(true);
-                        }}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                      >
-                        <Icon icon="mdi:account-edit" className="text-lg" />
-                        <span>정보수정</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          handleLogout();
-                        }}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                      >
-                        <Icon icon="mdi:logout" className="text-lg" />
-                        <span>로그아웃</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            ) : null}
+            <Link
+              to="/mypage"
+              className="size-10 overflow-hidden rounded-full border-2 border-white bg-primary/10 shadow-sm ring-1 ring-primary/20 transition hover:scale-105 hover:ring-primary/50 dark:border-surface"
+              aria-label={`${user?.name || '내'} 프로필 보기`}
+              title="마이페이지"
+            >
+              <span
+                className="block size-full"
+                role="img"
+                aria-label={selectedAvatar.label}
+                style={getAvatarStyle(selectedAvatar)}
+              />
+            </Link>
           </div>
         </header>
+
+        <div
+          className="mx-4 mb-2 flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-3 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:mx-10 sm:px-4 dark:to-primary/5 md:mx-auto"
+        >
+            <div className="relative shrink-0">
+              <img
+                src={child.profileImage}
+                alt={`${child.nickname || child.name} 대표 사진`}
+                className="size-12 rounded-full border-2 border-white object-cover shadow-sm dark:border-surface"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-white ring-2 ring-white dark:ring-surface">
+                <Icon icon="mdi:heart" className="text-[11px]" />
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-text-secondary">{child.nickname || child.name}와 함께한 시간</p>
+              <p className="truncate text-lg font-extrabold leading-tight text-text-primary sm:text-xl">
+                태어난 지 <span className="text-primary">{getDaysSinceBirth(child.birthday)}일째</span>
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowChildInfoModal(true)} className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-white/70 hover:text-primary" aria-label="아이 정보 수정" title="아이 정보 수정">
+              <Icon icon="mdi:dots-vertical" className="text-xl" />
+            </button>
+        </div>
 
       {/* 모바일 검색바 (640px 미만에서만 표시) */}
       {showSearch && (
@@ -180,14 +209,14 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin }) => {
         </div>
       )}
       </div>
-
-      {/* 프로필 수정 모달 */}
-      <ProfileEditModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        user={user}
-        onUpdate={handleProfileUpdate}
-      />
+      {showChildInfoModal && (
+        <ChildInfoModal
+          isOpen
+          onClose={() => setShowChildInfoModal(false)}
+          child={child}
+          onSave={handleChildSave}
+        />
+      )}
     </>
   );
 };
