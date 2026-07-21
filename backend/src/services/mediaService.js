@@ -30,7 +30,7 @@ const fetchMediaById = async (client, id) => {
   return result.rows[0] || null;
 };
 
-const listMedia = async ({ contentType = null, tag = null, uploadedAt = null, source = null, mediaType = null } = {}) => {
+const listMedia = async ({ contentType = null, search = null, tag = null, uploadedAt = null, source = null, mediaType = null } = {}) => {
   const conditions = [];
   const params = [];
   const addParam = (value) => {
@@ -44,6 +44,19 @@ const listMedia = async ({ contentType = null, tag = null, uploadedAt = null, so
   if (source === 'file') conditions.push("m.media_type IN ('photo', 'video')");
   if (mediaType === 'photo') conditions.push("m.media_type = 'photo'");
   if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
+  if (search) {
+    const searchParam = addParam(`%${search}%`);
+    conditions.push(`(
+      m.title ILIKE ${searchParam}
+      OR EXISTS (
+        SELECT 1
+        FROM media_tags search_mt
+        JOIN tags search_t ON search_t.id = search_mt.tag_id
+        WHERE search_mt.media_id = m.id
+          AND search_t.name ILIKE ${searchParam}
+      )
+    )`);
+  }
   if (tag) {
     const tagParam = addParam(`%${tag}%`);
     conditions.push(`EXISTS (

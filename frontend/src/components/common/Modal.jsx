@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 
 const Modal = ({
@@ -36,19 +37,19 @@ const Modal = ({
 
   const isError = title?.includes('실패') || message?.includes('실패');
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center overflow-hidden"
       onClick={onClose}
     >
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
 
       <div
-        className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200"
+        className="relative max-h-[76dvh] w-[calc(100vw-3rem)] max-w-[280px] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200 sm:max-w-xs sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col items-center text-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className={`flex size-10 items-center justify-center rounded-full ${
             isError
               ? 'bg-red-100 text-red-600'
               : type === 'confirm'
@@ -71,7 +72,7 @@ const Modal = ({
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           )}
 
-          <p className="text-gray-600">{message}</p>
+          <p className="max-w-full break-words text-gray-600">{message}</p>
 
           <div className="flex gap-3 w-full mt-2">
             {type === 'confirm' && (
@@ -102,7 +103,8 @@ const Modal = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

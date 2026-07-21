@@ -44,6 +44,7 @@ const sendRouteError = (res, fallbackMessage, error) => {
 router.get("/getVideos", async (req, res) => {
   try {
     const contentType = req.query.contentType || null;
+    const search = req.query.search?.trim().replace(/^#/, '') || null;
     const tag = req.query.tag?.trim() || null;
     const uploadedAt = req.query.uploadedAt || null;
     const source = req.query.source || null;
@@ -61,7 +62,7 @@ router.get("/getVideos", async (req, res) => {
       return res.status(400).json({ error: "mediaType은 photo 또는 video여야 합니다" });
     }
 
-    const videos = await listMedia({ contentType, tag, uploadedAt, source, mediaType });
+    const videos = await listMedia({ contentType, search, tag, uploadedAt, source, mediaType });
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
     console.error("비디오 조회 오류:", error);

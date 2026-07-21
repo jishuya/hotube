@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
@@ -83,7 +84,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
     let active = true;
     const timer = window.setTimeout(() => {
       getAllVideos({
-        tag: filterTag.trim().replace(/^#/, ''),
+        search: filterTag.trim().replace(/^#/, ''),
         uploadedAt: filterDate,
         source: filterSource,
         mediaType: filterMediaType,
@@ -450,21 +451,39 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                   </span>
                 </div>
               </div>
-              <div className="scrollbar-hide mb-2 mt-2 flex gap-2 overflow-x-auto py-1">
-                <label className="relative w-36 shrink-0">
-                  <span className="sr-only">태그 검색</span>
-                  <Icon icon="mdi:magnify" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-text-secondary" />
-                  <input
-                    value={filterTag}
-                    onChange={(event) => {
-                      setFilterTag(event.target.value);
+              <div className="mb-2 mt-2 grid grid-cols-3 gap-2 py-1">
+                <div className="col-span-3 flex gap-2">
+                  <label className="relative min-w-0 flex-1">
+                    <span className="sr-only">태그 또는 제목 검색</span>
+                    <Icon icon="mdi:magnify" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-text-secondary" />
+                    <input
+                      value={filterTag}
+                      onChange={(event) => {
+                        setFilterTag(event.target.value);
+                        setPage(1);
+                      }}
+                      className="h-10 w-full rounded-lg border-border bg-background pl-9 text-sm focus:border-primary focus:ring-primary"
+                      placeholder="태그, 제목 검색"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterTag('');
+                      setFilterDate('');
+                      setFilterSource('all');
+                      setFilterMediaType('all');
                       setPage(1);
                     }}
-                    className="h-10 w-full rounded-lg border-border bg-background pl-9 text-sm focus:border-primary focus:ring-primary"
-                    placeholder="태그 검색"
-                  />
-                </label>
-                <label className="w-32 shrink-0">
+                    disabled={!hasActiveFilters}
+                    className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-secondary transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="검색 필터 초기화"
+                    title="검색 필터 초기화"
+                  >
+                    <Icon icon="mdi:refresh" className="text-lg" />
+                  </button>
+                </div>
+                <label className="min-w-0">
                   <span className="sr-only">날짜 선택</span>
                   <select
                     value={filterDate}
@@ -478,7 +497,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                     {availableDates.map((uploadDate) => <option key={uploadDate} value={uploadDate}>{uploadDate}</option>)}
                   </select>
                 </label>
-                <label className="w-28 shrink-0">
+                <label className="min-w-0">
                   <span className="sr-only">업로드 출처</span>
                   <select
                     value={filterSource}
@@ -493,7 +512,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                     <option value="youtube">유투브</option>
                   </select>
                 </label>
-                <label className="w-28 shrink-0">
+                <label className="min-w-0">
                   <span className="sr-only">미디어 종류</span>
                   <select
                     value={filterMediaType}
@@ -565,11 +584,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
         </div>
       </main>
 
-      {editingUpload && (
-        <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+      {editingUpload && createPortal((
+        <div className="fixed left-0 top-0 z-modal flex h-[100dvh] w-screen items-center justify-center overflow-hidden">
           <button type="button" className="absolute inset-0 bg-black/50" onClick={() => setEditingUpload(null)} aria-label="수정 창 닫기" />
-          <form onSubmit={saveEdit} className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-surface p-6 shadow-xl">
-            <div className="mb-5 flex items-center justify-between">
+          <form onSubmit={saveEdit} className="relative max-h-[76dvh] w-[calc(100vw-3rem)] max-w-xs overflow-x-hidden overflow-y-auto rounded-xl bg-surface p-4 shadow-xl sm:max-w-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-bold">업로드 수정</h2>
               <button type="button" onClick={() => setEditingUpload(null)} className="text-2xl text-text-secondary"><Icon icon="mdi:close" /></button>
             </div>
@@ -582,10 +601,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
               />
               <label className="block"><span className="mb-1 block text-sm font-bold">태그</span><input value={editingUpload.tagsText} onChange={(event) => setEditingUpload((current) => ({ ...current, tagsText: event.target.value, tags: event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) }))} className="w-full rounded-lg border-border bg-background focus:border-primary focus:ring-primary" /></label>
             </div>
-            <button type="submit" className="mt-6 h-11 w-full rounded-full bg-primary font-bold text-white">수정 저장</button>
+            <button type="submit" className="mt-5 h-10 w-full rounded-full bg-primary font-bold text-white">수정 저장</button>
           </form>
         </div>
-      )}
+      ), document.body)}
 
       <Modal
         isOpen={uploadSuccess}

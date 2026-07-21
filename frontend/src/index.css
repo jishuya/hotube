@@ -90,10 +90,10 @@
 .rdp-root.upload-date-picker {
   --rdp-accent-color: rgb(var(--color-primary));
   --rdp-accent-background-color: rgb(var(--color-primary) / 0.12);
-  --rdp-day-height: clamp(32px, 9vw, 40px);
-  --rdp-day-width: clamp(32px, 9vw, 40px);
-  --rdp-day_button-height: clamp(30px, 8vw, 38px);
-  --rdp-day_button-width: clamp(30px, 8vw, 38px);
+  --rdp-day-height: clamp(28px, 8vw, 34px);
+  --rdp-day-width: clamp(28px, 8vw, 34px);
+  --rdp-day_button-height: clamp(27px, 7vw, 32px);
+  --rdp-day_button-width: clamp(27px, 7vw, 32px);
   width: 100%;
   margin: 0 auto;
   color: rgb(var(--color-text-primary));
@@ -115,10 +115,11 @@
 }
 
 .upload-date-picker .rdp-weekday {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 
 .upload-date-picker .rdp-caption_label {
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -126,6 +127,7 @@
   border-color: rgb(var(--color-border));
   border-radius: var(--radius-md);
   background: rgb(var(--color-background));
+  font-size: 0.75rem;
 }
 
 /* Main memory calendar */
