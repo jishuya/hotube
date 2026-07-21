@@ -1,23 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
-import { memoryMedia } from '../data/memoryMedia';
+import { getAllVideos, toMemoryMedia } from '../services/videoApi';
 import { getViewedMemoryDates } from '../utils/viewedMemoryDates';
-
-const mediaCountByDate = memoryMedia.reduce((counts, item) => {
-  counts[item.date] = (counts[item.date] || 0) + 1;
-  return counts;
-}, {});
-
-const mediaByDate = memoryMedia.reduce((groups, item) => {
-  if (!groups[item.date]) groups[item.date] = [];
-  groups[item.date].push(item);
-  return groups;
-}, {});
 
 const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric', weekday: 'short',
@@ -36,13 +25,12 @@ const parseDateKey = (dateString) => {
 
 const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
   const dateKey = formatDateKey(day.date);
-  const mediaCount = mediaCountByDate[dateKey] || 0;
 
   return (
     <button
       {...buttonProps}
-      className={`${className || ''} calendar-memory-day ${mediaCount ? 'calendar-memory-day--has-media' : ''}`}
-      aria-label={`${dateKey}, 미디어 ${mediaCount}개`}
+      className={`${className || ''} calendar-memory-day ${modifiers.hasMedia ? 'calendar-memory-day--has-media' : ''}`}
+      aria-label={`${dateKey}, 미디어 ${modifiers.hasMedia ? '있음' : '없음'}`}
     >
       <span>{day.date.getDate()}</span>
       {modifiers.unread && <span className="calendar-memory-new">N</span>}
@@ -53,11 +41,28 @@ const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
 const CalendarPage = () => {
   const navigate = useNavigate();
   const [month, setMonth] = useState(new Date(2026, 6, 1));
+  const [mediaItems, setMediaItems] = useState([]);
   const selectedMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+  const mediaByDate = useMemo(() => mediaItems.reduce((groups, item) => {
+    if (item.date) {
+      if (!groups[item.date]) groups[item.date] = [];
+      groups[item.date].push(item);
+    }
+    return groups;
+  }, {}), [mediaItems]);
   const viewedDates = getViewedMemoryDates();
   const unreadDates = Object.keys(mediaByDate)
     .filter((date) => date.startsWith(selectedMonth) && !viewedDates.includes(date))
     .sort((a, b) => b.localeCompare(a));
+
+  useEffect(() => {
+    const loadMedia = () => getAllVideos()
+      .then((items) => setMediaItems(items.map(toMemoryMedia)))
+      .catch((error) => console.error('캘린더 미디어 조회 실패:', error));
+    loadMedia();
+    window.addEventListener('hotube:media-updated', loadMedia);
+    return () => window.removeEventListener('hotube:media-updated', loadMedia);
+  }, []);
 
   return (
     <>
@@ -76,7 +81,10 @@ const CalendarPage = () => {
             reverseYears
             showOutsideDays
             fixedWeeks
-            modifiers={{ unread: unreadDates.map(parseDateKey) }}
+            modifiers={{
+              hasMedia: Object.keys(mediaByDate).map(parseDateKey),
+              unread: unreadDates.map(parseDateKey),
+            }}
             components={{ DayButton: CalendarDayButton }}
             className="memory-calendar"
           />
@@ -106,11 +114,11 @@ const CalendarPage = () => {
                           className={`group relative min-w-0 overflow-hidden rounded-lg bg-black/5 ${index === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`}
                           aria-label={item.title}
                         >
-                          <img
-                            src={item.thumbnail || item.src}
-                            alt={item.title}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          />
+                          {item.type === 'video' && !item.thumbnail ? (
+                            <video src={item.src} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                          ) : (
+                            <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                          )}
                           {item.type === 'video' && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/10">
                               <Icon icon="mdi:play-circle" className="text-3xl text-white drop-shadow sm:text-4xl" />

@@ -135,6 +135,45 @@ const createMedia = async ({
   }
 };
 
+const createFileMedia = async ({
+  id,
+  title,
+  filePath,
+  mediaType,
+  tags,
+  uploadedAt,
+}) => {
+  let client;
+
+  if (!id || !title || !filePath || !['photo', 'video'].includes(mediaType) || !uploadedAt) {
+    throw new HttpError(400, '필수 파일 정보가 누락되었습니다');
+  }
+
+  try {
+    client = await pgDb.getClient();
+    await client.query('BEGIN');
+    const now = new Date().toISOString();
+    await client.query(`
+      INSERT INTO media (
+        id, title, description, content_type, media_type, youtube_url, file_path,
+        thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
+        view_count, like_count, channel_title, created_at, updated_at
+      )
+      VALUES ($1, $2, '', 'long', $3, NULL, $4, NULL, NULL, $5, $6, NULL, 0, 0, NULL, $7, $7)
+    `, [id, title, mediaType, filePath, Number(uploadedAt.slice(0, 4)), uploadedAt, now]);
+
+    await replaceMediaTags(client, id, tags);
+    const createdMedia = await fetchMediaById(client, id);
+    await client.query('COMMIT');
+    return createdMedia;
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client?.release();
+  }
+};
+
 const updateMedia = async (id, {
   title,
   description,
@@ -219,7 +258,7 @@ const deleteMedia = async (id) => {
     client = await pgDb.getClient();
     await client.query("BEGIN");
 
-    const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id", [id]);
+    const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id, file_path, thumbnail_path", [id]);
     if (deleted.rows.length === 0) {
       throw new HttpError(404, "비디오를 찾을 수 없습니다");
     }
@@ -260,6 +299,7 @@ const replaceMediaTags = async (client, mediaId, tags) => {
 };
 
 module.exports = {
+  createFileMedia,
   createMedia,
   deleteMedia,
   getMedia,

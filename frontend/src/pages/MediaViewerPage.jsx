@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getMediaByDate, memoryMedia } from '../data/memoryMedia';
+import { getAllVideos, toMemoryMedia } from '../services/videoApi';
 import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
 import { markMediaAsViewed } from '../utils/viewedMedia';
 
@@ -9,13 +9,22 @@ const MediaViewerPage = () => {
   const { mediaId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [mediaItems, setMediaItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const requestedDate = searchParams.get('date');
-  const current = memoryMedia.find((item) => item.id === mediaId);
+  const current = mediaItems.find((item) => item.id === mediaId);
   const date = requestedDate || current?.date;
-  const items = getMediaByDate(date);
+  const items = mediaItems.filter((item) => item.date === date);
   const currentIndex = items.findIndex((item) => item.id === mediaId);
   const previous = currentIndex > 0 ? items[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
+
+  useEffect(() => {
+    getAllVideos()
+      .then((allMedia) => setMediaItems(allMedia.map(toMemoryMedia)))
+      .catch((error) => console.error('미디어 조회 실패:', error))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     if (current && date) {
@@ -37,6 +46,14 @@ const MediaViewerPage = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+        <Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" aria-label="미디어 불러오는 중" />
+      </main>
+    );
+  }
 
   if (!current) {
     return (

@@ -1,4 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Icon } from '@iconify/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
   HomePage,
@@ -37,8 +39,12 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function AppRoutes() {
+  const location = useLocation();
+  const backgroundLocation = location.state?.backgroundLocation;
+
   return (
-    <Routes>
+    <>
+    <Routes location={backgroundLocation || location}>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route
@@ -90,8 +96,54 @@ function AppRoutes() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    {backgroundLocation && (
+      <Routes>
+        <Route
+          path="/upload"
+          element={(
+            <ProtectedRoute>
+              <UploadOverlay initialDate={location.state?.uploadDate} />
+            </ProtectedRoute>
+          )}
+        />
+      </Routes>
+    )}
+    </>
   );
 }
+
+const UploadOverlay = ({ initialDate }) => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') navigate(-1);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [navigate]);
+
+  return (
+    <div className="fixed inset-0 z-modal flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="업로드">
+      <button type="button" className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={() => navigate(-1)} aria-label="업로드 닫기" />
+      <div className="relative flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+        <div className="z-20 flex h-12 shrink-0 items-center justify-end border-b border-border bg-surface px-3 sm:px-4">
+          <button type="button" onClick={() => navigate(-1)} className="flex size-9 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary" aria-label="업로드 닫기">
+            <Icon icon="mdi:close" className="text-2xl" />
+          </button>
+        </div>
+        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <UploadPage embedded initialDate={initialDate} />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function App() {
   return (

@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 
 const navigationItems = [
   { to: '/calendar', label: '캘린더', icon: 'mdi:calendar-month-outline' },
@@ -17,8 +17,11 @@ const getItemClassName = (isActive) => [
     : 'text-text-secondary hover:bg-primary/5 hover:text-primary',
 ].join(' ');
 
-const BottomNavigation = () => (
-  <nav
+const BottomNavigation = () => {
+  const location = useLocation();
+
+  return (
+    <nav
     aria-label="주요 메뉴"
     className="bottom-navigation fixed inset-x-0 bottom-0 z-sticky border-t border-border bg-surface/95 shadow-[0_-6px_24px_rgb(24_20_17_/_0.08)] backdrop-blur-xl"
   >
@@ -27,6 +30,7 @@ const BottomNavigation = () => (
         <NavLink
           key={item.to}
           to={item.to}
+          state={item.upload ? { backgroundLocation: location } : undefined}
           aria-label={item.label}
           className={({ isActive }) => item.upload
             ? 'group relative -top-5 flex min-w-0 flex-col items-center justify-end gap-1 text-[11px] font-bold text-primary active:scale-95'
@@ -48,7 +52,8 @@ const BottomNavigation = () => (
         </NavLink>
       ))}
     </div>
-  </nav>
-);
+    </nav>
+  );
+};
 
 export default BottomNavigation;

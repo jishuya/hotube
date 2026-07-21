@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { getMediaByDate } from '../data/memoryMedia';
+import { getAllVideos, toMemoryMedia } from '../services/videoApi';
 import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
 import { getViewedMediaIds } from '../utils/viewedMedia';
 
@@ -20,8 +20,18 @@ const formatDateKey = (date) => [
 const DayAlbumPage = () => {
   const { date } = useParams();
   const navigate = useNavigate();
-  const media = getMediaByDate(date);
+  const location = useLocation();
+  const [media, setMedia] = useState([]);
   const viewedMediaIds = getViewedMediaIds();
+
+  useEffect(() => {
+    const loadMedia = () => getAllVideos()
+      .then((items) => setMedia(items.map(toMemoryMedia).filter((item) => item.date === date)))
+      .catch((error) => console.error('날짜별 미디어 조회 실패:', error));
+    loadMedia();
+    window.addEventListener('hotube:media-updated', loadMedia);
+    return () => window.removeEventListener('hotube:media-updated', loadMedia);
+  }, [date]);
 
   const moveDate = (amount) => {
     const currentDate = parseDate(date);
@@ -91,11 +101,11 @@ const DayAlbumPage = () => {
                       N
                     </span>
                   )}
-                  <img
-                    src={item.thumbnail || item.src}
-                    alt={item.title}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
+                  {item.type === 'video' && !item.thumbnail ? (
+                    <video src={item.src} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  ) : (
+                    <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  )}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-semibold">{item.title}</p>
@@ -112,7 +122,13 @@ const DayAlbumPage = () => {
               <p className="mt-2 max-w-md text-sm leading-relaxed text-text-secondary sm:text-base">
                 이 날의 사진이나 영상을 업로드해 보세요.
               </p>
-              <Link to="/upload" className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90 active:scale-95">기록 추가하기</Link>
+              <Link
+                to="/upload"
+                state={{ backgroundLocation: location, uploadDate: date }}
+                className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90 active:scale-95"
+              >
+                기록 추가하기
+              </Link>
             </section>
           )}
         </div>

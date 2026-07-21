@@ -16,7 +16,11 @@ const toDateString = (value) => {
   }
 
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return [
+      value.getFullYear(),
+      String(value.getMonth() + 1).padStart(2, "0"),
+      String(value.getDate()).padStart(2, "0"),
+    ].join("-");
   }
 
   return value;
@@ -39,6 +43,8 @@ const mapMediaRowToVideo = (row) => ({
   title: row.title,
   description: row.description,
   youtubeUrl: row.youtube_url,
+  mediaType: row.media_type,
+  fileUrl: row.file_path ? `/mediaFile/${encodeURIComponent(row.id)}` : null,
   thumbnailUrl: row.thumbnail_url,
   type: row.content_type ?? row.type,
   year: row.year,

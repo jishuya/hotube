@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
-import { memoryMedia } from '../data/memoryMedia';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
+import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -12,26 +12,9 @@ const extractYouTubeId = (url) => {
   return match?.[1] || '';
 };
 
-const initialUploads = Array.from({ length: 30 }, (_, index) => {
-  const item = memoryMedia[index % memoryMedia.length];
-  const isYoutube = index % 4 === 0;
-  const day = String((index % 28) + 1).padStart(2, '0');
-
-  return {
-    ...item,
-    id: `sample-upload-${index + 1}`,
-    date: `2026-07-${day}`,
-    title: isYoutube ? `유투브 ${index + 1}` : `2026-07-${day}`,
-    type: isYoutube ? 'video' : item.type,
-    source: isYoutube ? 'youtube' : 'file',
-    thumbnail: isYoutube ? (item.thumbnail || item.src) : item.thumbnail,
-    tags: index % 3 === 0 ? ['가족', '여행'] : index % 3 === 1 ? ['일상'] : ['추억'],
-  };
-});
-
-const UploadPage = () => {
+const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
   const [activeTab, setActiveTab] = useState('upload');
-  const [uploads, setUploads] = useState(initialUploads);
+  const [uploads, setUploads] = useState([]);
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(null);
@@ -40,7 +23,7 @@ const UploadPage = () => {
   const [fetchingYoutube, setFetchingYoutube] = useState(false);
   const [youtubeError, setYoutubeError] = useState('');
   const [title, setTitle] = useState('');
-  const [date, setDate] = useState('2026-07-14');
+  const [date, setDate] = useState(initialDate);
   const [tags, setTags] = useState('');
   const [page, setPage] = useState(1);
   const [filterDate, setFilterDate] = useState('');
@@ -48,6 +31,9 @@ const UploadPage = () => {
   const [filterSource, setFilterSource] = useState('all');
   const [editingUpload, setEditingUpload] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
   const availableDates = useMemo(() => Array.from(new Set(
     uploads.map((item) => item.date).filter(Boolean),
@@ -69,6 +55,12 @@ const UploadPage = () => {
     page * ITEMS_PER_PAGE,
   ), [filteredUploads, page]);
   const hasActiveFilters = Boolean(filterDate || filterTag.trim() || filterSource !== 'all');
+
+  useEffect(() => {
+    getAllVideos()
+      .then((items) => setUploads(items.map(toMemoryMedia)))
+      .catch((error) => setUploadError(error.message));
+  }, []);
 
   const addFiles = (files) => {
     const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
@@ -156,69 +148,90 @@ const UploadPage = () => {
     }
   };
 
-  const handleUpload = (event) => {
+  const handleUpload = async (event) => {
     event.preventDefault();
     const youtubeId = extractYouTubeId(youtubeUrl.trim());
     const normalizedTags = tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean);
-    const newUploads = uploadSource === 'device' ? selectedFiles.map((item, index) => {
-      const itemTags = item.tags.trim()
-        ? item.tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean)
-        : normalizedTags;
-
-      return {
-        id: `upload-${Date.now()}-${index}`,
-        date: item.date || date,
-        type: item.type,
-        title: item.date || date,
-        description: '',
-        src: item.preview,
-        thumbnail: item.type === 'video' ? item.preview : undefined,
-        source: 'file',
-        tags: itemTags,
-      };
-    }) : [];
-
-    if (uploadSource === 'youtube' && youtubeId && youtubeInfo) {
-      newUploads.push({
-        id: `youtube-${Date.now()}`,
-        date,
-        type: 'video',
-        videoType: youtubeInfo.type,
-        title: title.trim() || youtubeInfo.title,
-        description: youtubeInfo.description || '',
-        src: youtubeUrl.trim(),
-        thumbnail: youtubeInfo.thumbnailUrl || `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`,
-        source: 'youtube',
-        tags: normalizedTags,
-      });
+    setUploading(true);
+    setUploadError('');
+    try {
+      const created = [];
+      if (uploadSource === 'device') {
+        for (const item of selectedFiles) {
+          const itemTags = item.tags.trim()
+            ? item.tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean)
+            : normalizedTags;
+          const saved = await uploadMediaFile(item.file, {
+            title: item.name,
+            uploadedAt: item.date || date,
+            tags: itemTags,
+          });
+          created.push(toMemoryMedia(saved));
+        }
+      } else if (youtubeId && youtubeInfo) {
+        const saved = await addVideo({
+          videoId: youtubeInfo.videoId,
+          title: title.trim() || youtubeInfo.title,
+          description: youtubeInfo.description || '',
+          youtubeUrl: youtubeUrl.trim(),
+          thumbnailUrl: youtubeInfo.thumbnailUrl,
+          type: youtubeInfo.type,
+          year: Number(date.slice(0, 4)),
+          tags: normalizedTags,
+          uploadedAt: date,
+          durationSeconds: youtubeInfo.durationInSeconds,
+          viewCount: youtubeInfo.viewCount,
+          likeCount: youtubeInfo.likeCount,
+          channelTitle: youtubeInfo.channelTitle,
+        });
+        created.push(toMemoryMedia(saved));
+      }
+      if (created.length === 0) return;
+      setUploads((current) => [...created, ...current]);
+      resetForm();
+      setPage(1);
+      setActiveTab('list');
+      setUploadSuccess(true);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+    } catch (error) {
+      setUploadError(error.message);
+    } finally {
+      setUploading(false);
     }
-
-    if (newUploads.length === 0) return;
-    setUploads((current) => [...newUploads, ...current]);
-    resetForm();
-    setPage(1);
-    setActiveTab('list');
   };
 
-  const saveEdit = (event) => {
+  const saveEdit = async (event) => {
     event.preventDefault();
-    setUploads((current) => current.map((item) => item.id === editingUpload.id
-      ? { ...item, ...editingUpload }
-      : item));
-    setEditingUpload(null);
+    try {
+      const saved = toMemoryMedia(await updateVideo(editingUpload.id, {
+        title: editingUpload.title,
+        uploadedAt: editingUpload.date,
+        tags: editingUpload.tags,
+      }));
+      setUploads((current) => current.map((item) => item.id === saved.id ? saved : item));
+      setEditingUpload(null);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+    } catch (error) {
+      setUploadError(error.message);
+    }
   };
 
-  const confirmDelete = () => {
-    const nextUploads = uploads.filter((item) => item.id !== deleteTarget.id);
-    setUploads(nextUploads);
-    setPage(1);
-    setDeleteTarget(null);
+  const confirmDelete = async () => {
+    try {
+      await deleteVideo(deleteTarget.id);
+      setUploads((current) => current.filter((item) => item.id !== deleteTarget.id));
+      setPage(1);
+      setDeleteTarget(null);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+    } catch (error) {
+      setUploadError(error.message);
+    }
   };
 
   return (
     <>
-      <Header showSearch={false} />
-      <main className="min-h-screen bg-background px-4 pb-16 pt-0 text-text-primary">
+      {!embedded && <Header showSearch={false} />}
+      <main className={`${embedded ? 'bg-surface px-4 pb-8 pt-4' : 'min-h-screen bg-background px-4 pb-16 pt-0'} text-text-primary`}>
         <div className="mx-auto max-w-4xl bg-transparent">
           <div className="grid grid-cols-2 rounded-full bg-primary/10 p-1">
             {[
@@ -393,9 +406,10 @@ const UploadPage = () => {
                 </label>
               </section>
 
-              <button type="submit" disabled={selectedFiles.length === 0 && !youtubeInfo} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
-                <Icon icon="mdi:cloud-upload" className="text-xl" />
-                업로드하기
+              {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}
+              <button type="submit" disabled={uploading || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
+                <Icon icon={uploading ? 'mdi:loading' : 'mdi:cloud-upload'} className={`text-xl ${uploading ? 'animate-spin' : ''}`} />
+                {uploading ? '업로드 중...' : '업로드하기'}
               </button>
             </form>
           ) : (
@@ -524,6 +538,14 @@ const UploadPage = () => {
           </form>
         </div>
       )}
+
+      <Modal
+        isOpen={uploadSuccess}
+        onClose={() => setUploadSuccess(false)}
+        title="업로드 완료"
+        message="업로드가 완료되었습니다."
+        confirmText="확인"
+      />
 
       <Modal
         isOpen={Boolean(deleteTarget)}
