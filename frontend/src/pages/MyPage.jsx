@@ -36,7 +36,7 @@ const getAvatarStyle = (avatar) => ({
 
 const MyPage = () => {
   const navigate = useNavigate();
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, isAdmin } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -159,6 +159,22 @@ const MyPage = () => {
                 </span>
                 <Icon icon="mdi:chevron-right" className="text-xl text-text-secondary" />
               </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/upload-list')}
+                  className="flex w-full items-center gap-3 border-b border-border px-5 py-4 text-left transition hover:bg-primary/5"
+                >
+                  <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon icon="mdi:format-list-bulleted" className="text-xl" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">업로드 목록</span>
+                    <span className="mt-0.5 block text-xs text-text-secondary">업로드한 사진과 영상을 관리할 수 있어요.</span>
+                  </span>
+                  <Icon icon="mdi:chevron-right" className="text-xl text-text-secondary" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(true)}

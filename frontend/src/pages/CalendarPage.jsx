@@ -25,15 +25,18 @@ const parseDateKey = (dateString) => {
 
 const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
   const dateKey = formatDateKey(day.date);
+  const hasMedia = Boolean(modifiers.hasMedia);
+  const isUnread = Boolean(modifiers.unread);
 
   return (
     <button
       {...buttonProps}
-      className={`${className || ''} calendar-memory-day ${modifiers.hasMedia ? 'calendar-memory-day--has-media' : ''}`}
-      aria-label={`${dateKey}, 미디어 ${modifiers.hasMedia ? '있음' : '없음'}`}
+      className={`${className || ''} calendar-memory-day ${hasMedia ? 'calendar-memory-day--has-media' : ''}`}
+      data-has-media={hasMedia ? 'true' : undefined}
+      aria-label={`${dateKey}, 미디어 ${hasMedia ? '있음' : '없음'}${isUnread ? ', 새 미디어' : ''}`}
     >
       <span>{day.date.getDate()}</span>
-      {modifiers.unread && <span className="calendar-memory-new">N</span>}
+      {isUnread && <span className="calendar-memory-new">N</span>}
     </button>
   );
 };

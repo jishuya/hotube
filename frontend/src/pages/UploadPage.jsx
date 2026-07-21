@@ -1,20 +1,55 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
+import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
+import DatePickerField from '../components/common/DatePickerField';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 
 const ITEMS_PER_PAGE = 20;
+
+const getTodayDateKey = () => {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const formatFileDate = (value) => {
+  const fileDate = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(fileDate.getTime())) return getTodayDateKey();
+  return [
+    fileDate.getFullYear(),
+    String(fileDate.getMonth() + 1).padStart(2, '0'),
+    String(fileDate.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const getMediaDate = async (file) => {
+  if (file.type.startsWith('image/')) {
+    try {
+      const metadata = await parseExif(file, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+      const capturedAt = metadata?.DateTimeOriginal || metadata?.CreateDate || metadata?.ModifyDate;
+      if (capturedAt) return formatFileDate(capturedAt);
+    } catch {
+      // EXIF가 없거나 읽을 수 없는 이미지는 파일 수정일을 사용한다.
+    }
+  }
+  return formatFileDate(file.lastModified || Date.now());
+};
 
 const extractYouTubeId = (url) => {
   const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([^?&/]+)/);
   return match?.[1] || '';
 };
 
-const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
-  const [activeTab, setActiveTab] = useState('upload');
+const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnly = false }) => {
   const [uploads, setUploads] = useState([]);
+  const [totalUploadCount, setTotalUploadCount] = useState(0);
+  const [availableDates, setAvailableDates] = useState([]);
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(null);
@@ -29,51 +64,64 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
   const [filterDate, setFilterDate] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [filterSource, setFilterSource] = useState('all');
+  const [filterMediaType, setFilterMediaType] = useState('all');
   const [editingUpload, setEditingUpload] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
-  const availableDates = useMemo(() => Array.from(new Set(
-    uploads.map((item) => item.date).filter(Boolean),
-  )).sort((a, b) => b.localeCompare(a)), [uploads]);
-
-  const filteredUploads = useMemo(() => {
-    const normalizedFilterTag = filterTag.trim().replace(/^#/, '').toLowerCase();
-
-    return uploads.filter((item) => {
-      const matchesDate = !filterDate || item.date === filterDate;
-      const matchesSource = filterSource === 'all' || item.source === filterSource;
-      const matchesTag = !normalizedFilterTag || (item.tags || []).some((tag) => tag.toLowerCase().includes(normalizedFilterTag));
-      return matchesDate && matchesSource && matchesTag;
-    });
-  }, [uploads, filterDate, filterTag, filterSource]);
-  const totalPages = Math.max(1, Math.ceil(filteredUploads.length / ITEMS_PER_PAGE));
-  const paginatedUploads = useMemo(() => filteredUploads.slice(
+  const totalPages = Math.max(1, Math.ceil(uploads.length / ITEMS_PER_PAGE));
+  const paginatedUploads = useMemo(() => uploads.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE,
-  ), [filteredUploads, page]);
-  const hasActiveFilters = Boolean(filterDate || filterTag.trim() || filterSource !== 'all');
+  ), [uploads, page]);
+  const hasActiveFilters = Boolean(filterDate || filterTag.trim() || filterSource !== 'all' || filterMediaType !== 'all');
 
   useEffect(() => {
-    getAllVideos()
-      .then((items) => setUploads(items.map(toMemoryMedia)))
-      .catch((error) => setUploadError(error.message));
-  }, []);
+    if (!listOnly) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      getAllVideos({
+        tag: filterTag.trim().replace(/^#/, ''),
+        uploadedAt: filterDate,
+        source: filterSource,
+        mediaType: filterMediaType,
+      })
+        .then((items) => {
+          if (!active) return;
+          const mappedItems = items.map(toMemoryMedia);
+          setUploads(mappedItems);
+          if (!hasActiveFilters) {
+            setTotalUploadCount(mappedItems.length);
+            setAvailableDates(Array.from(new Set(mappedItems.map((item) => item.date).filter(Boolean))).sort((a, b) => b.localeCompare(a)));
+          }
+        })
+        .catch((error) => {
+          if (active) setUploadError(error.message);
+        });
+    }, filterTag.trim() ? 250 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [listOnly, filterDate, filterTag, filterSource, filterMediaType, hasActiveFilters]);
 
   const addFiles = (files) => {
     const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     Promise.all(mediaFiles.map((file) => new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({
-        file,
-        name: file.name,
-        type: file.type.startsWith('video/') ? 'video' : 'photo',
-        preview: reader.result,
-        date: '',
-        tags: '',
-      });
+      reader.onload = async () => {
+        const mediaDate = await getMediaDate(file);
+        resolve({
+          file,
+          name: file.name,
+          type: file.type.startsWith('video/') ? 'video' : 'photo',
+          preview: reader.result,
+          date: mediaDate,
+          tags: '',
+        });
+      };
       reader.readAsDataURL(file);
     }))).then((nextFiles) => {
       setSelectedFiles((current) => [...current, ...nextFiles]);
@@ -190,7 +238,6 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
       setUploads((current) => [...created, ...current]);
       resetForm();
       setPage(1);
-      setActiveTab('list');
       setUploadSuccess(true);
       window.dispatchEvent(new Event('hotube:media-updated'));
     } catch (error) {
@@ -220,6 +267,7 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
     try {
       await deleteVideo(deleteTarget.id);
       setUploads((current) => current.filter((item) => item.id !== deleteTarget.id));
+      setTotalUploadCount((current) => Math.max(0, current - 1));
       setPage(1);
       setDeleteTarget(null);
       window.dispatchEvent(new Event('hotube:media-updated'));
@@ -233,24 +281,7 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
       {!embedded && <Header showSearch={false} />}
       <main className={`${embedded ? 'bg-surface px-4 pb-8 pt-4' : 'min-h-screen bg-background px-4 pb-16 pt-0'} text-text-primary`}>
         <div className="mx-auto max-w-4xl bg-transparent">
-          <div className="grid grid-cols-2 rounded-full bg-primary/10 p-1">
-            {[
-              ['upload', '업로드', 'mdi:cloud-upload-outline'],
-              ['list', '업로드 목록', 'mdi:format-list-bulleted'],
-            ].map(([value, label, icon]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setActiveTab(value)}
-                className={`flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition ${activeTab === value ? 'bg-primary text-white shadow-sm' : 'text-text-secondary hover:text-primary'}`}
-              >
-                <Icon icon={icon} className="text-lg" />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === 'upload' ? (
+          {!listOnly ? (
             <form onSubmit={handleUpload} className="space-y-5">
               <section className="rounded-xl bg-transparent p-5 sm:p-6">
                 <div className="rounded-xl border border-border p-4 sm:p-5">
@@ -287,7 +318,6 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
                         <div className="mt-5 space-y-3">
                           <div>
                             <p className="text-sm font-bold">선택한 파일</p>
-                            <p className="mt-1 text-xs text-text-secondary">파일을 선택하면 해당 기록의 날짜와 태그만 따로 설정할 수 있어요.</p>
                           </div>
                           <div className="flex gap-2 overflow-x-auto pb-1">
                             {selectedFiles.map((item, index) => (
@@ -323,16 +353,11 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
                             ))}
                           </div>
 
-                          {selectedFile && (
+                          {selectedFile && selectedFiles.length > 1 && (
                             <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 sm:grid-cols-2">
                               <div className="sm:col-span-2">
                                 <p className="truncate text-sm font-bold">{selectedFile.name}</p>
-                                <p className="mt-1 text-xs text-text-secondary">미입력시 공통정보가 자동으로 적용됩니다.</p>
                               </div>
-                              <label>
-                                <span className="mb-1 block text-xs font-bold">개별 날짜</span>
-                                <input type="date" value={selectedFile.date} onChange={(event) => updateSelectedFile(selectedFileIndex, 'date', event.target.value)} className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" />
-                              </label>
                               <label>
                                 <span className="mb-1 block text-xs font-bold">개별 태그</span>
                                 <input value={selectedFile.tags} onChange={(event) => updateSelectedFile(selectedFileIndex, 'tags', event.target.value)} className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={tags || '공통 태그 사용'} />
@@ -396,11 +421,14 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="제목을 입력하세요" />
                   </label>
                 )}
-                <label>
-                  <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '공통 날짜' : '날짜'}</span>
-                  <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" required />
-                </label>
-                <label>
+                {uploadSource === 'youtube' && (
+                  <DatePickerField
+                    label="날짜"
+                    value={date}
+                    onChange={setDate}
+                  />
+                )}
+                <label className={uploadSource === 'device' ? 'sm:col-span-2' : ''}>
                   <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '공통 태그' : '태그'}</span>
                   <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="가족, 여행, 생일" />
                 </label>
@@ -414,6 +442,14 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
             </form>
           ) : (
             <section>
+              <div className="mb-5 mt-2">
+                <div className="flex items-center justify-between gap-4">
+                  <h1 className="text-2xl font-extrabold">업로드 목록</h1>
+                  <span className="shrink-0 text-sm font-bold text-primary">
+                    {hasActiveFilters ? `${uploads.length}/${totalUploadCount}개` : `${totalUploadCount}개`}
+                  </span>
+                </div>
+              </div>
               <div className="scrollbar-hide mb-2 mt-2 flex gap-2 overflow-x-auto py-1">
                 <label className="relative w-36 shrink-0">
                   <span className="sr-only">태그 검색</span>
@@ -457,13 +493,21 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
                     <option value="youtube">유투브</option>
                   </select>
                 </label>
-              </div>
-
-              <div className="mb-4 flex items-end justify-between">
-                <div>
-                  <p className="text-sm text-text-secondary">지금까지 업로드한 사진과 영상을 관리하세요.</p>
-                </div>
-                <span className="text-sm font-bold text-primary">{hasActiveFilters ? `${filteredUploads.length}/${uploads.length}개` : `${uploads.length}개`}</span>
+                <label className="w-28 shrink-0">
+                  <span className="sr-only">미디어 종류</span>
+                  <select
+                    value={filterMediaType}
+                    onChange={(event) => {
+                      setFilterMediaType(event.target.value);
+                      setPage(1);
+                    }}
+                    className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
+                  >
+                    <option value="all">전체 종류</option>
+                    <option value="photo">사진</option>
+                    <option value="video">영상</option>
+                  </select>
+                </label>
               </div>
 
               {paginatedUploads.length > 0 ? (
@@ -524,14 +568,18 @@ const UploadPage = ({ embedded = false, initialDate = '2026-07-14' }) => {
       {editingUpload && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           <button type="button" className="absolute inset-0 bg-black/50" onClick={() => setEditingUpload(null)} aria-label="수정 창 닫기" />
-          <form onSubmit={saveEdit} className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-xl">
+          <form onSubmit={saveEdit} className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">업로드 수정</h2>
               <button type="button" onClick={() => setEditingUpload(null)} className="text-2xl text-text-secondary"><Icon icon="mdi:close" /></button>
             </div>
             <div className="space-y-4">
               <label className="block"><span className="mb-1 block text-sm font-bold">제목</span><input value={editingUpload.title} onChange={(event) => setEditingUpload((current) => ({ ...current, title: event.target.value }))} className="w-full rounded-lg border-border bg-background focus:border-primary focus:ring-primary" /></label>
-              <label className="block"><span className="mb-1 block text-sm font-bold">날짜</span><input type="date" value={editingUpload.date} onChange={(event) => setEditingUpload((current) => ({ ...current, date: event.target.value }))} className="w-full rounded-lg border-border bg-background focus:border-primary focus:ring-primary" /></label>
+              <DatePickerField
+                label="날짜"
+                value={editingUpload.date}
+                onChange={(value) => setEditingUpload((current) => ({ ...current, date: value }))}
+              />
               <label className="block"><span className="mb-1 block text-sm font-bold">태그</span><input value={editingUpload.tagsText} onChange={(event) => setEditingUpload((current) => ({ ...current, tagsText: event.target.value, tags: event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) }))} className="w-full rounded-lg border-border bg-background focus:border-primary focus:ring-primary" /></label>
             </div>
             <button type="submit" className="mt-6 h-11 w-full rounded-full bg-primary font-bold text-white">수정 저장</button>

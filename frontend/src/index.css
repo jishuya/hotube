@@ -87,6 +87,47 @@
   background: rgb(var(--color-background));
 }
 
+.rdp-root.upload-date-picker {
+  --rdp-accent-color: rgb(var(--color-primary));
+  --rdp-accent-background-color: rgb(var(--color-primary) / 0.12);
+  --rdp-day-height: clamp(32px, 9vw, 40px);
+  --rdp-day-width: clamp(32px, 9vw, 40px);
+  --rdp-day_button-height: clamp(30px, 8vw, 38px);
+  --rdp-day_button-width: clamp(30px, 8vw, 38px);
+  width: 100%;
+  margin: 0 auto;
+  color: rgb(var(--color-text-primary));
+}
+
+.upload-date-picker .rdp-months,
+.upload-date-picker .rdp-month,
+.upload-date-picker .rdp-month_grid {
+  width: 100%;
+  max-width: 100%;
+}
+
+.upload-date-picker .rdp-month_grid {
+  table-layout: fixed;
+}
+
+.upload-date-picker .rdp-day {
+  margin: auto;
+}
+
+.upload-date-picker .rdp-weekday {
+  font-size: 0.75rem;
+}
+
+.upload-date-picker .rdp-caption_label {
+  font-weight: 700;
+}
+
+.upload-date-picker .rdp-dropdown {
+  border-color: rgb(var(--color-border));
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-background));
+}
+
 /* Main memory calendar */
 .rdp-root.memory-calendar {
   --rdp-accent-color: rgb(var(--color-primary));
@@ -162,14 +203,16 @@
   transform: scale(0.95);
 }
 
-.calendar-memory-day--has-media {
-  background: rgb(var(--color-primary));
-  color: white;
-  box-shadow: var(--shadow-sm);
+.memory-calendar .calendar-memory-day--has-media,
+.memory-calendar .calendar-memory-day[data-has-media="true"] {
+  background-color: rgb(var(--color-primary) / 0.2);
+  color: rgb(var(--color-primary));
+  box-shadow: inset 0 0 0 1px rgb(var(--color-primary) / 0.12);
 }
 
-.calendar-memory-day--has-media:hover {
-  background: rgb(var(--color-primary) / 0.9);
+.memory-calendar .calendar-memory-day--has-media:hover,
+.memory-calendar .calendar-memory-day[data-has-media="true"]:hover {
+  background-color: rgb(var(--color-primary) / 0.3);
 }
 
 .calendar-memory-new {

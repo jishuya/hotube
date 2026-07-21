@@ -31,8 +31,13 @@ export const toMemoryMedia = (media) => ({
 });
 
 // 모든 비디오 조회
-export const getAllVideos = async (contentType = null) => {
-  const query = contentType ? `?contentType=${encodeURIComponent(contentType)}` : '';
+export const getAllVideos = async (filters = null) => {
+  const normalizedFilters = typeof filters === 'string' ? { contentType: filters } : (filters || {});
+  const searchParams = new URLSearchParams();
+  Object.entries(normalizedFilters).forEach(([key, value]) => {
+    if (value && value !== 'all') searchParams.set(key, value);
+  });
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
   const response = await fetch(`${FUNCTIONS_URL.getVideos}${query}`);
 
   if (!response.ok) {

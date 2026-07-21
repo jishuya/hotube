@@ -44,11 +44,24 @@ const sendRouteError = (res, fallbackMessage, error) => {
 router.get("/getVideos", async (req, res) => {
   try {
     const contentType = req.query.contentType || null;
+    const tag = req.query.tag?.trim() || null;
+    const uploadedAt = req.query.uploadedAt || null;
+    const source = req.query.source || null;
+    const mediaType = req.query.mediaType || null;
     if (contentType && !["long", "short"].includes(contentType)) {
       return res.status(400).json({ error: "contentType은 long 또는 short여야 합니다" });
     }
+    if (uploadedAt && !/^\d{4}-\d{2}-\d{2}$/.test(uploadedAt)) {
+      return res.status(400).json({ error: "uploadedAt은 YYYY-MM-DD 형식이어야 합니다" });
+    }
+    if (source && !['youtube', 'file'].includes(source)) {
+      return res.status(400).json({ error: "source는 youtube 또는 file이어야 합니다" });
+    }
+    if (mediaType && !['photo', 'video'].includes(mediaType)) {
+      return res.status(400).json({ error: "mediaType은 photo 또는 video여야 합니다" });
+    }
 
-    const videos = await listMedia(contentType);
+    const videos = await listMedia({ contentType, tag, uploadedAt, source, mediaType });
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
     console.error("비디오 조회 오류:", error);

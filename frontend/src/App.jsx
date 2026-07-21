@@ -38,6 +38,21 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+const AdminRoute = ({ children }) => {
+  const { isAdmin, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-zinc-500">로딩 중...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) return <Navigate to="/mypage" replace />;
+  return children;
+};
+
 function AppRoutes() {
   const location = useLocation();
   const backgroundLocation = location.state?.backgroundLocation;
@@ -90,6 +105,14 @@ function AppRoutes() {
         <Route path="/calendar/:date" element={<DayAlbumPage />} />
         <Route path="/album" element={<AlbumPage />} />
         <Route path="/upload" element={<UploadPage />} />
+        <Route
+          path="/upload-list"
+          element={(
+            <AdminRoute>
+              <UploadPage listOnly />
+            </AdminRoute>
+          )}
+        />
         <Route path="/my-album" element={<MyAlbumPage />} />
         <Route path="/my-album/:albumId" element={<MyAlbumDetailPage />} />
         <Route path="/mypage" element={<MyPage />} />
@@ -129,10 +152,11 @@ const UploadOverlay = ({ initialDate }) => {
   }, [navigate]);
 
   return (
-    <div className="fixed inset-0 z-modal flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="업로드">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="업로드">
       <button type="button" className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={() => navigate(-1)} aria-label="업로드 닫기" />
-      <div className="relative flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
-        <div className="z-20 flex h-12 shrink-0 items-center justify-end border-b border-border bg-surface px-3 sm:px-4">
+      <div className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
+        <div className="z-20 flex shrink-0 items-center justify-between bg-surface p-6 pb-0">
+          <h2 className="text-xl font-bold text-text-primary">업로드</h2>
           <button type="button" onClick={() => navigate(-1)} className="flex size-9 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary" aria-label="업로드 닫기">
             <Icon icon="mdi:close" className="text-2xl" />
           </button>

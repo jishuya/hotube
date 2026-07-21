@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS media (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT,
-    content_type TEXT NOT NULL,
-    media_type TEXT NOT NULL DEFAULT 'long',
+    content_type TEXT,
+    media_type TEXT NOT NULL,
     youtube_url TEXT,
     file_path TEXT,
     thumbnail_url TEXT,
@@ -66,7 +66,11 @@ CREATE TABLE IF NOT EXISTS media (
     CONSTRAINT chk_media_type
         CHECK (media_type IN ('youtube', 'video', 'photo')),
     CONSTRAINT chk_content_type
-        CHECK (content_type IN ('long', 'short')),
+        CHECK (
+            (media_type = 'youtube' AND content_type IN ('long', 'short'))
+            OR
+            (media_type IN ('photo', 'video') AND content_type IS NULL)
+        ),
     CONSTRAINT chk_media_source
         CHECK (
             (media_type = 'youtube' AND youtube_url IS NOT NULL AND file_path IS NULL)

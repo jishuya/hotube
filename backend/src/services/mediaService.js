@@ -30,9 +30,32 @@ const fetchMediaById = async (client, id) => {
   return result.rows[0] || null;
 };
 
-const listMedia = async (contentType = null) => {
-  const whereClause = contentType ? "WHERE m.content_type = $1" : "";
-  const params = contentType ? [contentType] : [];
+const listMedia = async ({ contentType = null, tag = null, uploadedAt = null, source = null, mediaType = null } = {}) => {
+  const conditions = [];
+  const params = [];
+  const addParam = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  if (contentType) conditions.push(`m.content_type = ${addParam(contentType)}`);
+  if (uploadedAt) conditions.push(`m.uploaded_at = ${addParam(uploadedAt)}`);
+  if (source === 'youtube') conditions.push("m.media_type = 'youtube'");
+  if (source === 'file') conditions.push("m.media_type IN ('photo', 'video')");
+  if (mediaType === 'photo') conditions.push("m.media_type = 'photo'");
+  if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
+  if (tag) {
+    const tagParam = addParam(`%${tag}%`);
+    conditions.push(`EXISTS (
+      SELECT 1
+      FROM media_tags filter_mt
+      JOIN tags filter_t ON filter_t.id = filter_mt.tag_id
+      WHERE filter_mt.media_id = m.id
+        AND filter_t.name ILIKE ${tagParam}
+    )`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const result = await pgDb.query(`
     ${MEDIA_WITH_TAGS_SELECT}
@@ -159,7 +182,7 @@ const createFileMedia = async ({
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
         view_count, like_count, channel_title, created_at, updated_at
       )
-      VALUES ($1, $2, '', 'long', $3, NULL, $4, NULL, NULL, $5, $6, NULL, 0, 0, NULL, $7, $7)
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, NULL, $5, $6, NULL, 0, 0, NULL, $7, $7)
     `, [id, title, mediaType, filePath, Number(uploadedAt.slice(0, 4)), uploadedAt, now]);
 
     await replaceMediaTags(client, id, tags);
