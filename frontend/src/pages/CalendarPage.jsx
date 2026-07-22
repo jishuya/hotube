@@ -78,7 +78,7 @@ const CalendarPage = () => {
             locale={ko}
             month={month}
             onMonthChange={setMonth}
-            onDayClick={(date) => navigate(`/calendar/${formatDateKey(date)}`)}
+            onDayClick={(date) => navigate(`/calendar/${formatDateKey(date)}`, { state: { returnTo: '/calendar' } })}
             startMonth={new Date(2000, 0)}
             endMonth={new Date(2035, 11)}
             captionLayout="dropdown"
@@ -104,6 +104,7 @@ const CalendarPage = () => {
                       <h3 className="font-bold">{formatRecentDate(date)}</h3>
                       <Link
                         to={`/calendar/${date}`}
+                        state={{ returnTo: '/calendar' }}
                         className="flex shrink-0 items-center gap-0.5 text-sm font-bold text-primary hover:underline"
                       >
                         더보기

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     title TEXT,
     category TEXT,
     role TEXT NOT NULL DEFAULT 'user',
+    avatar TEXT,
     password TEXT NOT NULL,
     created_at TIMESTAMPTZ
 );
@@ -61,6 +62,8 @@ CREATE TABLE IF NOT EXISTS media (
     view_count INTEGER NOT NULL DEFAULT 0,
     like_count INTEGER NOT NULL DEFAULT 0,
     channel_title TEXT,
+    uploaded_by TEXT,
+    shared_with TEXT[] NOT NULL DEFAULT ARRAY['dad', 'mom']::TEXT[],
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
     CONSTRAINT chk_media_type
@@ -76,7 +79,12 @@ CREATE TABLE IF NOT EXISTS media (
             (media_type = 'youtube' AND youtube_url IS NOT NULL AND file_path IS NULL)
             OR
             (media_type IN ('video', 'photo') AND file_path IS NOT NULL AND youtube_url IS NULL)
-        )
+    ),
+    CONSTRAINT fk_media_uploaded_by
+        FOREIGN KEY (uploaded_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -164,6 +172,19 @@ CREATE TABLE IF NOT EXISTS user_watched_media (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS user_favorite_media (
+    user_id TEXT NOT NULL,
+    media_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, media_id),
+    CONSTRAINT fk_user_favorite_media_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_user_favorite_media_media
+        FOREIGN KEY (media_id) REFERENCES media (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_comments_media_id ON comments (media_id);
 CREATE INDEX IF NOT EXISTS idx_child_profiles_birth_date ON child_profiles (birth_date);
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments (user_id);
@@ -176,5 +197,6 @@ CREATE INDEX IF NOT EXISTS idx_media_tags_tag_media ON media_tags (tag_id, media
 CREATE INDEX IF NOT EXISTS idx_memory_date_tags_tag_date ON memory_date_tags (tag_id, album_date);
 CREATE INDEX IF NOT EXISTS idx_user_watched_media_media_id ON user_watched_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_user_liked_media_media_id ON user_liked_media (media_id);
+CREATE INDEX IF NOT EXISTS idx_user_favorite_media_media_id ON user_favorite_media (media_id);
 
 COMMIT;

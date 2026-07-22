@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal';
 import DatePickerField from '../components/common/DatePickerField';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
+import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -48,6 +49,7 @@ const extractYouTubeId = (url) => {
 };
 
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnly = false }) => {
+  const { user } = useAuth();
   const [uploads, setUploads] = useState([]);
   const [totalUploadCount, setTotalUploadCount] = useState(0);
   const [availableDates, setAvailableDates] = useState([]);
@@ -215,6 +217,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
             uploadedAt: item.date || date,
             tags: itemTags,
             dateTags: normalizedTags,
+            uploadedBy: user?.id,
           });
           created.push(toMemoryMedia(saved));
         }
@@ -233,6 +236,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
           viewCount: youtubeInfo.viewCount,
           likeCount: youtubeInfo.likeCount,
           channelTitle: youtubeInfo.channelTitle,
+          uploadedBy: user?.id,
+          sharedWith: ['dad', 'mom'],
         });
         created.push(toMemoryMedia(saved));
       }

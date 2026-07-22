@@ -135,6 +135,8 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       tags,
       dateTags,
       uploadedAt: req.body.uploadedAt,
+      uploadedBy: req.body.uploadedBy || null,
+      sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
     });
     return res.status(201).json(mapMediaRowToVideo(createdMedia));
   } catch (error) {

@@ -8,6 +8,8 @@ const FUNCTIONS_URL = {
   deleteVideo: `${API_BASE_URL}/deleteVideo`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
+  getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
+  toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
 };
 
 const resolveApiUrl = (value) => {
@@ -83,13 +85,17 @@ export const addVideo = async (videoData) => {
   return resolveMediaUrls(await response.json());
 };
 
-export const uploadMediaFile = async (file, { title, uploadedAt, tags, dateTags = [] }) => {
+export const uploadMediaFile = async (file, {
+  title, uploadedAt, tags, dateTags = [], uploadedBy, sharedWith = ['dad', 'mom'],
+}) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('title', title || file.name);
   formData.append('uploadedAt', uploadedAt);
   formData.append('tags', JSON.stringify(tags || []));
   formData.append('dateTags', JSON.stringify(dateTags));
+  if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+  formData.append('sharedWith', JSON.stringify(sharedWith));
 
   const response = await fetch(FUNCTIONS_URL.uploadMedia, {
     method: 'POST',
@@ -100,6 +106,24 @@ export const uploadMediaFile = async (file, { title, uploadedAt, tags, dateTags 
     throw new Error(error.error || '파일 업로드에 실패했습니다');
   }
   return resolveMediaUrls(await response.json());
+};
+
+export const getMediaDetails = async (id, userId) => {
+  const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+  const response = await fetch(`${FUNCTIONS_URL.getMediaDetails}/${encodeURIComponent(id)}${query}`);
+  if (!response.ok) throw new Error('미디어 상세 정보를 가져오지 못했습니다');
+  return response.json();
+};
+
+export const toggleFavorite = async (userId, videoId) => {
+  const response = await fetch(FUNCTIONS_URL.toggleFavorite, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, videoId }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || '즐겨찾기 처리에 실패했습니다');
+  return data;
 };
 
 // 비디오 수정

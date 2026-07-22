@@ -311,15 +311,14 @@ const AlbumPage = () => {
                         <Icon icon="mdi:chevron-down" className={`text-base transition-transform ${collapsed ? '-rotate-90' : ''}`} />
                       </button>
                       <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => toggleDate(date)}
+                        <Link
+                          to={`/calendar/${date}`}
+                          state={{ returnTo: '/album' }}
                           className="flex min-w-0 items-end gap-2 text-left"
-                          aria-expanded={!collapsed}
                         >
                           <span className="text-xl font-bold sm:text-2xl">{formatDateTitle(date)}</span>
                           <span className="mb-0.5 shrink-0 text-sm font-medium text-text-secondary">{formatWeekday(date)}</span>
-                        </button>
+                        </Link>
                         <div className="-mt-1 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
                           {(dateTags[date] || []).map((tag) => (
                             <span key={tag} className="inline-flex items-center gap-0.5 text-text-secondary">
@@ -376,6 +375,7 @@ const AlbumPage = () => {
                             <Link
                               key={item.id}
                               to={`/media/${item.id}?date=${date}`}
+                              state={{ returnTo: '/album' }}
                               className="group relative aspect-square overflow-hidden rounded-lg bg-surface shadow-sm transition-transform duration-300 hover:-translate-y-1"
                               aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}`}
                             >

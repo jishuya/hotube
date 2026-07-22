@@ -56,6 +56,8 @@ const mapMediaRowToVideo = (row) => ({
   viewCount: row.view_count,
   likeCount: row.like_count,
   channelTitle: row.channel_title,
+  uploadedBy: row.uploaded_by,
+  sharedWith: normalizeArray(row.shared_with),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
@@ -67,6 +69,7 @@ const mapUserRowToUser = (row) => ({
   title: row.title,
   category: row.category,
   role: row.role,
+  avatar: row.avatar,
   createdAt: toIsoString(row.created_at),
   likedVideos: normalizeArray(row.liked_videos),
   watchedVideos: normalizeArray(row.watched_videos),

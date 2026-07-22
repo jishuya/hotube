@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
 import Modal from '../common/Modal';
 
-const CommentSection = ({ videoId }) => {
+const CommentSection = ({ videoId, onCountChange }) => {
   const { user } = useAuth();
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -27,6 +27,7 @@ const CommentSection = ({ videoId }) => {
       setLoading(true);
       const data = await getComments(videoId, user.category, user.role);
       setComments(data);
+      onCountChange?.(data.length);
     } catch (error) {
       console.error('댓글 로드 실패:', error);
     } finally {
@@ -42,6 +43,7 @@ const CommentSection = ({ videoId }) => {
       setSubmitting(true);
       const comment = await createComment(videoId, user.id, newComment.trim());
       setComments(prev => [comment, ...prev]);
+      onCountChange?.(comments.length + 1);
       setNewComment('');
     } catch (error) {
       console.error('댓글 작성 실패:', error);
@@ -58,6 +60,7 @@ const CommentSection = ({ videoId }) => {
     try {
       await deleteComment(deleteModal.commentId, user.id);
       setComments(prev => prev.filter(c => c.id !== deleteModal.commentId));
+      onCountChange?.(Math.max(0, comments.length - 1));
     } catch (error) {
       console.error('댓글 삭제 실패:', error);
     }
@@ -156,12 +159,7 @@ const CommentSection = ({ videoId }) => {
         <div className="flex justify-center py-4">
           <Icon icon="mdi:loading" className="text-2xl text-primary animate-spin" />
         </div>
-      ) : comments.length === 0 ? (
-        <div className="text-center py-2 text-zinc-500">
-          <Icon icon="mdi:comment-off-outline" className="hidden sm:block text-3xl mb-1 mx-auto opacity-50" />
-          <p className="text-sm">아직 댓글이 없습니다</p>
-        </div>
-      ) : (
+      ) : comments.length > 0 ? (
         <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
           {comments.map((comment) => (
             <div key={comment.id} className="flex gap-2">
@@ -231,7 +229,7 @@ const CommentSection = ({ videoId }) => {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       <Modal
         isOpen={deleteModal.isOpen}

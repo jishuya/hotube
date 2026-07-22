@@ -155,6 +155,8 @@ const createMedia = async ({
   viewCount,
   likeCount,
   channelTitle,
+  uploadedBy,
+  sharedWith,
 }) => {
   let client;
 
@@ -176,9 +178,9 @@ const createMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, 'youtube', $5, NULL, $6, NULL, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, 'youtube', $5, NULL, $6, NULL, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     `, [
       videoId,
       title,
@@ -192,6 +194,8 @@ const createMedia = async ({
       viewCount || 0,
       likeCount || 0,
       channelTitle || null,
+      uploadedBy || null,
+      Array.isArray(sharedWith) && sharedWith.length ? sharedWith : ['dad', 'mom'],
       now,
       now,
     ]);
@@ -222,6 +226,8 @@ const createFileMedia = async ({
   tags,
   dateTags,
   uploadedAt,
+  uploadedBy = null,
+  sharedWith = ['dad', 'mom'],
 }) => {
   let client;
 
@@ -237,10 +243,10 @@ const createFileMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $8)
-    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $10)
+    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, now]);
 
     await replaceMediaTags(client, id, tags);
     await addDateAlbumTags(client, uploadedAt, dateTags);
@@ -268,6 +274,7 @@ const updateMedia = async (id, {
   viewCount,
   likeCount,
   channelTitle,
+  sharedWith,
 }) => {
   let client;
 
@@ -294,7 +301,8 @@ const updateMedia = async (id, {
         view_count = COALESCE($10, view_count),
         like_count = COALESCE($11, like_count),
         channel_title = COALESCE($12, channel_title),
-        updated_at = $13
+        shared_with = COALESCE($13, shared_with),
+        updated_at = $14
       WHERE id = $1
     `, [
       id,
@@ -309,6 +317,7 @@ const updateMedia = async (id, {
       viewCount ?? null,
       likeCount ?? null,
       channelTitle ?? null,
+      Array.isArray(sharedWith) ? sharedWith : null,
       new Date().toISOString(),
     ]);
 

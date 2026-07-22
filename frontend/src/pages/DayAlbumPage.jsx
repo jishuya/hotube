@@ -23,6 +23,7 @@ const DayAlbumPage = () => {
   const { user } = useAuth();
   const [media, setMedia] = useState([]);
   const viewedMediaIds = user?.watchedVideos || [];
+  const returnTo = location.state?.returnTo === '/album' ? '/album' : '/calendar';
 
   useEffect(() => {
     const loadMedia = () => getAllVideos()
@@ -37,7 +38,7 @@ const DayAlbumPage = () => {
     const currentDate = parseDate(date);
     if (!currentDate) return;
     currentDate.setDate(currentDate.getDate() + amount);
-    navigate(`/calendar/${formatDateKey(currentDate)}`);
+    navigate(`/calendar/${formatDateKey(currentDate)}`, { state: { returnTo } });
   };
 
   return (
@@ -48,10 +49,10 @@ const DayAlbumPage = () => {
           <div className="mx-auto grid h-16 max-w-container grid-cols-[44px_1fr_44px] items-center px-4 sm:h-20">
           <button
             type="button"
-            onClick={() => navigate('/calendar')}
+            onClick={() => navigate(returnTo)}
             className="flex size-11 items-center justify-center rounded-full text-text-primary transition hover:bg-primary/10 hover:text-primary active:scale-95"
-            aria-label="캘린더로 돌아가기"
-            title="캘린더로 돌아가기"
+            aria-label={returnTo === '/album' ? '앨범으로 돌아가기' : '캘린더로 돌아가기'}
+            title={returnTo === '/album' ? '앨범으로 돌아가기' : '캘린더로 돌아가기'}
           >
             <Icon icon="mdi:arrow-left" className="text-3xl" />
           </button>
@@ -90,6 +91,7 @@ const DayAlbumPage = () => {
                 <Link
                   key={item.id}
                   to={`/media/${item.id}?date=${date}`}
+                  state={{ returnTo }}
                   className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
                 >
                   {!viewedMediaIds.includes(item.id) && (

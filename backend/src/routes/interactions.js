@@ -89,4 +89,68 @@ router.post("/markVideoWatched", async (req, res) => {
   }
 });
 
+router.get('/getMediaDetails/:id', async (req, res) => {
+  try {
+    const mediaId = req.params.id;
+    const userId = req.query.userId || null;
+    const [mediaResult, viewersResult, countsResult, favoriteResult] = await Promise.all([
+      pgDb.query(`
+        SELECT m.uploaded_by, m.shared_with, u.name AS uploader_name,
+          u.title AS uploader_title, u.avatar AS uploader_avatar
+        FROM media m LEFT JOIN users u ON u.id = m.uploaded_by WHERE m.id = $1
+      `, [mediaId]),
+      pgDb.query(`
+        SELECT u.id, u.name, u.title, u.category, u.avatar
+        FROM user_watched_media uwm JOIN users u ON u.id = uwm.user_id
+        WHERE uwm.media_id = $1 ORDER BY u.name
+      `, [mediaId]),
+      pgDb.query(`SELECT
+        (SELECT COUNT(*)::int FROM comments WHERE media_id = $1) AS comment_count,
+        (SELECT COUNT(*)::int FROM user_liked_media WHERE media_id = $1) AS like_count
+      `, [mediaId]),
+      userId
+        ? pgDb.query('SELECT 1 FROM user_favorite_media WHERE user_id = $1 AND media_id = $2', [userId, mediaId])
+        : Promise.resolve({ rows: [] }),
+    ]);
+    if (!mediaResult.rows.length) return res.status(404).json({ error: '미디어를 찾을 수 없습니다' });
+    const media = mediaResult.rows[0];
+    return res.json({
+      uploader: media.uploaded_by ? {
+        id: media.uploaded_by,
+        name: media.uploader_name,
+        title: media.uploader_title,
+        avatar: media.uploader_avatar,
+      } : null,
+      sharedWith: media.shared_with || ['dad', 'mom'],
+      viewers: viewersResult.rows,
+      commentCount: countsResult.rows[0].comment_count,
+      likeCount: countsResult.rows[0].like_count,
+      favorited: favoriteResult.rows.length > 0,
+    });
+  } catch (error) {
+    console.error('미디어 상세 정보 조회 오류:', error);
+    return res.status(500).json({ error: '미디어 상세 정보 조회 실패' });
+  }
+});
+
+router.post('/toggleFavorite', async (req, res) => {
+  try {
+    const { userId, videoId } = req.body;
+    if (!userId || !videoId) return res.status(400).json({ error: 'userId와 videoId가 필요합니다' });
+    const existing = await pgDb.query(
+      'SELECT 1 FROM user_favorite_media WHERE user_id = $1 AND media_id = $2',
+      [userId, videoId],
+    );
+    if (existing.rows.length) {
+      await pgDb.query('DELETE FROM user_favorite_media WHERE user_id = $1 AND media_id = $2', [userId, videoId]);
+      return res.json({ favorited: false, videoId });
+    }
+    await pgDb.query('INSERT INTO user_favorite_media (user_id, media_id) VALUES ($1, $2)', [userId, videoId]);
+    return res.json({ favorited: true, videoId });
+  } catch (error) {
+    console.error('즐겨찾기 토글 오류:', error);
+    return res.status(500).json({ error: '즐겨찾기 처리 실패' });
+  }
+});
+
 module.exports = router;
