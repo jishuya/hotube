@@ -1,3 +1,10 @@
+/**
+ * @deprecated Firebase Functions 서버는 현재 사용하지 않습니다.
+ * HoTube의 백엔드는 ../backend/src/server.js에서 실행되는 Express 서버입니다.
+ * 신규 API 개발 및 수정은 ../backend 디렉터리에서 진행하세요.
+ *
+ * 이 디렉터리는 이전 구현 참고용으로만 보존합니다.
+ */
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");

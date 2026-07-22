@@ -207,13 +207,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
       const created = [];
       if (uploadSource === 'device') {
         for (const item of selectedFiles) {
-          const itemTags = item.tags.trim()
-            ? item.tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean)
-            : normalizedTags;
+          const itemTags = item.tags.split(',')
+            .map((tag) => tag.trim().replace(/^#/, ''))
+            .filter(Boolean);
           const saved = await uploadMediaFile(item.file, {
             title: item.name,
             uploadedAt: item.date || date,
             tags: itemTags,
+            dateTags: normalizedTags,
           });
           created.push(toMemoryMedia(saved));
         }
@@ -361,7 +362,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                               </div>
                               <label>
                                 <span className="mb-1 block text-xs font-bold">개별 태그</span>
-                                <input value={selectedFile.tags} onChange={(event) => updateSelectedFile(selectedFileIndex, 'tags', event.target.value)} className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={tags || '공통 태그 사용'} />
+                                <input value={selectedFile.tags} onChange={(event) => updateSelectedFile(selectedFileIndex, 'tags', event.target.value)} className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="이 파일에만 적용할 태그" />
                               </label>
                             </div>
                           )}
@@ -430,8 +431,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                   />
                 )}
                 <label className={uploadSource === 'device' ? 'sm:col-span-2' : ''}>
-                  <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '공통 태그' : '태그'}</span>
-                  <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="가족, 여행, 생일" />
+                  <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '추억 태그' : '태그'}</span>
+                  <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={uploadSource === 'device' ? '돌잔치, 수영장, 첫응가' : '가족, 여행, 생일'} />
                 </label>
               </section>
 

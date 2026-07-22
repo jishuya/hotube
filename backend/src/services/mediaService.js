@@ -18,6 +18,17 @@ const normalizeTags = (tags) => {
   return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))];
 };
 
+const cleanupOrphanTags = async (client, tagIds) => {
+  const uniqueTagIds = [...new Set(tagIds)];
+  if (uniqueTagIds.length === 0) return;
+  await client.query(`
+    DELETE FROM tags t
+    WHERE t.id = ANY($1::bigint[])
+      AND NOT EXISTS (SELECT 1 FROM media_tags mt WHERE mt.tag_id = t.id)
+      AND NOT EXISTS (SELECT 1 FROM memory_date_tags mdt WHERE mdt.tag_id = t.id)
+  `, [uniqueTagIds]);
+};
+
 const toContentType = (type) => (type === "short" ? "short" : "long");
 
 const fetchMediaById = async (client, id) => {
@@ -30,7 +41,16 @@ const fetchMediaById = async (client, id) => {
   return result.rows[0] || null;
 };
 
-const listMedia = async ({ contentType = null, search = null, tag = null, uploadedAt = null, source = null, mediaType = null } = {}) => {
+const listMedia = async ({
+  contentType = null,
+  search = null,
+  tag = null,
+  uploadedAt = null,
+  dateFrom = null,
+  dateTo = null,
+  source = null,
+  mediaType = null,
+} = {}) => {
   const conditions = [];
   const params = [];
   const addParam = (value) => {
@@ -40,6 +60,8 @@ const listMedia = async ({ contentType = null, search = null, tag = null, upload
 
   if (contentType) conditions.push(`m.content_type = ${addParam(contentType)}`);
   if (uploadedAt) conditions.push(`m.uploaded_at = ${addParam(uploadedAt)}`);
+  if (dateFrom) conditions.push(`m.uploaded_at >= ${addParam(dateFrom)}`);
+  if (dateTo) conditions.push(`m.uploaded_at < ${addParam(dateTo)}`);
   if (source === 'youtube') conditions.push("m.media_type = 'youtube'");
   if (source === 'file') conditions.push("m.media_type IN ('photo', 'video')");
   if (mediaType === 'photo') conditions.push("m.media_type = 'photo'");
@@ -48,12 +70,20 @@ const listMedia = async ({ contentType = null, search = null, tag = null, upload
     const searchParam = addParam(`%${search}%`);
     conditions.push(`(
       m.title ILIKE ${searchParam}
+      OR COALESCE(m.description, '') ILIKE ${searchParam}
       OR EXISTS (
         SELECT 1
         FROM media_tags search_mt
         JOIN tags search_t ON search_t.id = search_mt.tag_id
         WHERE search_mt.media_id = m.id
           AND search_t.name ILIKE ${searchParam}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM memory_date_tags search_dat
+        JOIN tags search_date_t ON search_date_t.id = search_dat.tag_id
+        WHERE search_dat.album_date = m.uploaded_at
+          AND search_date_t.name ILIKE ${searchParam}
       )
     )`);
   }
@@ -92,6 +122,18 @@ const getMedia = async (id) => {
   }
 
   return result.rows[0];
+};
+
+const getMediaDateRange = async () => {
+  const result = await pgDb.query(`
+    SELECT
+      TO_CHAR(MIN(uploaded_at), 'YYYY-MM-DD') AS min_date,
+      TO_CHAR(MAX(uploaded_at), 'YYYY-MM-DD') AS max_date
+    FROM media
+    WHERE uploaded_at IS NOT NULL
+  `);
+
+  return result.rows[0] || { min_date: null, max_date: null };
 };
 
 const mediaExists = async (db, id) => {
@@ -175,8 +217,10 @@ const createFileMedia = async ({
   id,
   title,
   filePath,
+  thumbnailPath = null,
   mediaType,
   tags,
+  dateTags,
   uploadedAt,
 }) => {
   let client;
@@ -195,10 +239,11 @@ const createFileMedia = async ({
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
         view_count, like_count, channel_title, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, NULL, $5, $6, NULL, 0, 0, NULL, $7, $7)
-    `, [id, title, mediaType, filePath, Number(uploadedAt.slice(0, 4)), uploadedAt, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $8)
+    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, now]);
 
     await replaceMediaTags(client, id, tags);
+    await addDateAlbumTags(client, uploadedAt, dateTags);
     const createdMedia = await fetchMediaById(client, id);
     await client.query('COMMIT');
     return createdMedia;
@@ -294,11 +339,13 @@ const deleteMedia = async (id) => {
     client = await pgDb.getClient();
     await client.query("BEGIN");
 
+    const linkedTags = await client.query('SELECT tag_id FROM media_tags WHERE media_id = $1', [id]);
     const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id, file_path, thumbnail_path", [id]);
     if (deleted.rows.length === 0) {
       throw new HttpError(404, "비디오를 찾을 수 없습니다");
     }
 
+    await cleanupOrphanTags(client, linkedTags.rows.map((row) => row.tag_id));
     await client.query("COMMIT");
     return deleted.rows[0];
   } catch (error) {
@@ -315,6 +362,7 @@ const deleteMedia = async (id) => {
 
 const replaceMediaTags = async (client, mediaId, tags) => {
   const normalizedTags = normalizeTags(tags);
+  const previousTags = await client.query('SELECT tag_id FROM media_tags WHERE media_id = $1', [mediaId]);
 
   await client.query("DELETE FROM media_tags WHERE media_id = $1", [mediaId]);
 
@@ -332,6 +380,24 @@ const replaceMediaTags = async (client, mediaId, tags) => {
       ON CONFLICT (media_id, tag_id) DO NOTHING
     `, [mediaId, tagResult.rows[0].id]);
   }
+
+  await cleanupOrphanTags(client, previousTags.rows.map((row) => row.tag_id));
+};
+
+const addDateAlbumTags = async (client, albumDate, tags) => {
+  for (const tag of normalizeTags(tags)) {
+    const tagResult = await client.query(`
+      INSERT INTO tags (name)
+      VALUES ($1)
+      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id
+    `, [tag]);
+    await client.query(`
+      INSERT INTO memory_date_tags (album_date, tag_id)
+      VALUES ($1, $2)
+      ON CONFLICT (album_date, tag_id) DO NOTHING
+    `, [albumDate, tagResult.rows[0].id]);
+  }
 };
 
 module.exports = {
@@ -339,6 +405,7 @@ module.exports = {
   createMedia,
   deleteMedia,
   getMedia,
+  getMediaDateRange,
   listMedia,
   mediaExists,
   updateMedia,

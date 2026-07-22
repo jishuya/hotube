@@ -1,23 +1,35 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { memoryMedia } from '../data/memoryMedia';
-import { getViewedMediaIds } from '../utils/viewedMedia';
-import { getDateAlbumTags, saveDateAlbumTags } from '../utils/dateAlbumTags';
+import { getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
+import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
+import { useAuth } from '../contexts/AuthContext';
 
-const MONTH_COUNT = 18;
-const BASE_YEAR = 2026;
-const BASE_MONTH = 7;
+const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const currentMonthKey = formatMonthKey(new Date());
 
-const monthOptions = Array.from({ length: MONTH_COUNT }, (_, index) => {
-  const date = new Date(BASE_YEAR, BASE_MONTH - 1 - index, 1);
-  return {
-    key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
-    year: date.getFullYear(),
-    month: date.getMonth() + 1,
-  };
-});
+const buildMonthOptions = (minDate, maxDate) => {
+  const minKey = minDate?.slice(0, 7) || currentMonthKey;
+  const maxKey = maxDate?.slice(0, 7) || currentMonthKey;
+  const firstKey = maxKey > currentMonthKey ? maxKey : currentMonthKey;
+  const lastKey = minKey < currentMonthKey ? minKey : currentMonthKey;
+  const [firstYear, firstMonth] = firstKey.split('-').map(Number);
+  const [lastYear, lastMonth] = lastKey.split('-').map(Number);
+  const cursor = new Date(firstYear, firstMonth - 1, 1);
+  const last = new Date(lastYear, lastMonth - 1, 1);
+  const options = [];
+
+  while (cursor >= last) {
+    options.push({
+      key: formatMonthKey(cursor),
+      year: cursor.getFullYear(),
+      month: cursor.getMonth() + 1,
+    });
+    cursor.setMonth(cursor.getMonth() - 1);
+  }
+  return options;
+};
 
 const formatDateTitle = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric',
@@ -27,6 +39,19 @@ const formatWeekday = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   weekday: 'long',
 }).format(new Date(`${dateString}T00:00:00`));
 
+const getMonthRange = (monthKey) => {
+  const [year, month] = monthKey.split('-').map(Number);
+  const nextMonth = new Date(year, month, 1);
+  return {
+    dateFrom: `${monthKey}-01`,
+    dateTo: [
+      nextMonth.getFullYear(),
+      String(nextMonth.getMonth() + 1).padStart(2, '0'),
+      '01',
+    ].join('-'),
+  };
+};
+
 const NewMediaBadge = () => (
   <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
     N
@@ -35,31 +60,99 @@ const NewMediaBadge = () => (
 
 const AlbumPage = () => {
   const monthBarRef = useRef(null);
-  const [selectedMonthKey, setSelectedMonthKey] = useState(monthOptions[0].key);
+  const tagSavingRef = useRef(false);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
+  const [mediaDateRange, setMediaDateRange] = useState({ minDate: null, maxDate: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [mediaType, setMediaType] = useState('all');
   const [collapsedDates, setCollapsedDates] = useState([]);
-  const [dateTags, setDateTags] = useState(getDateAlbumTags);
+  const [dateTags, setDateTags] = useState({});
+  const [tagError, setTagError] = useState('');
   const [taggingDate, setTaggingDate] = useState(null);
   const [tagDraft, setTagDraft] = useState('');
-  const viewedMediaIds = getViewedMediaIds();
+  const [mediaItems, setMediaItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const { user } = useAuth();
+  const viewedMediaIds = user?.watchedVideos || [];
+  const monthOptions = useMemo(() => buildMonthOptions(
+    mediaDateRange.minDate,
+    mediaDateRange.maxDate,
+  ), [mediaDateRange]);
 
   const [selectedYear, selectedMonth] = selectedMonthKey.split('-').map(Number);
 
   const timeline = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    const filtered = memoryMedia.filter((item) => item.date.startsWith(selectedMonthKey)
-      && (mediaType === 'all' || item.type === mediaType)
-      && (!normalizedQuery
-        || item.title?.toLowerCase().includes(normalizedQuery)
-        || item.description?.toLowerCase().includes(normalizedQuery)));
-
-    return Object.entries(filtered.reduce((groups, item) => {
+    return Object.entries(mediaItems.reduce((groups, item) => {
       if (!groups[item.date]) groups[item.date] = [];
       groups[item.date].push(item);
       return groups;
     }, {})).sort(([a], [b]) => b.localeCompare(a));
-  }, [selectedMonthKey, searchQuery, mediaType]);
+  }, [mediaItems]);
+
+  useEffect(() => {
+    let active = true;
+    const loadMedia = () => {
+      setLoading(true);
+      setLoadError('');
+      getAllVideos({
+        ...getMonthRange(selectedMonthKey),
+        search: searchQuery.trim().replace(/^#/, ''),
+        mediaType,
+      })
+        .then((items) => {
+          if (active) setMediaItems(items.map(toMemoryMedia));
+        })
+        .catch((error) => {
+          if (active) setLoadError(error.message);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    const timer = window.setTimeout(loadMedia, searchQuery.trim() ? 250 : 0);
+    window.addEventListener('hotube:media-updated', loadMedia);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      window.removeEventListener('hotube:media-updated', loadMedia);
+    };
+  }, [selectedMonthKey, searchQuery, mediaType, reloadKey]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDateRange = () => getMediaDateRange()
+      .then((range) => {
+        if (active) setMediaDateRange(range);
+      })
+      .catch((error) => console.error('앨범 날짜 범위 조회 실패:', error));
+
+    loadDateRange();
+    window.addEventListener('hotube:media-updated', loadDateRange);
+    return () => {
+      active = false;
+      window.removeEventListener('hotube:media-updated', loadDateRange);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getDateAlbumTags(getMonthRange(selectedMonthKey))
+      .then((tagsByDate) => {
+        if (active) {
+          setDateTags(tagsByDate);
+          setTagError('');
+        }
+      })
+      .catch((error) => {
+        if (active) setTagError(error.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedMonthKey]);
 
   const selectMonth = (key) => {
     setSelectedMonthKey(key);
@@ -79,19 +172,36 @@ const AlbumPage = () => {
       : [...current, date]);
   };
 
-  const addTag = (date) => {
+  const addTag = async (date) => {
+    if (tagSavingRef.current) return;
     const normalizedTag = tagDraft.trim().replace(/^#/, '');
     const currentTags = dateTags[date] || [];
+    tagSavingRef.current = true;
     if (normalizedTag && !currentTags.includes(normalizedTag)) {
-      setDateTags(saveDateAlbumTags(date, [...currentTags, normalizedTag]));
+      try {
+        await addDateAlbumTag(date, normalizedTag);
+        setDateTags((current) => ({ ...current, [date]: [...(current[date] || []), normalizedTag] }));
+        setTagError('');
+      } catch (error) {
+        setTagError(error.message);
+      }
     }
+    tagSavingRef.current = false;
     setTaggingDate(null);
     setTagDraft('');
   };
 
-  const removeTag = (date, tag) => {
-    const nextTags = (dateTags[date] || []).filter((item) => item !== tag);
-    setDateTags(saveDateAlbumTags(date, nextTags));
+  const removeTag = async (date, tag) => {
+    try {
+      await deleteDateAlbumTag(date, tag);
+      setDateTags((current) => ({
+        ...current,
+        [date]: (current[date] || []).filter((item) => item !== tag),
+      }));
+      setTagError('');
+    } catch (error) {
+      setTagError(error.message);
+    }
   };
 
   return (
@@ -169,7 +279,22 @@ const AlbumPage = () => {
             </form>
           </section>
 
-          {timeline.length > 0 ? (
+          {tagError && <p className="mb-2 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{tagError}</p>}
+
+          {loading ? (
+            <section className="flex min-h-[45vh] items-center justify-center" aria-label="앨범 불러오는 중">
+              <Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" />
+            </section>
+          ) : loadError ? (
+            <section className="flex min-h-[45vh] flex-col items-center justify-center rounded-xl bg-surface px-6 py-12 text-center shadow-sm">
+              <Icon icon="mdi:alert-circle-outline" className="mb-3 text-5xl text-error/70" />
+              <h2 className="text-lg font-bold">앨범을 불러오지 못했어요</h2>
+              <p className="mt-2 text-sm text-text-secondary">{loadError}</p>
+              <button type="button" onClick={() => setReloadKey((current) => current + 1)} className="mt-5 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white">
+                다시 시도
+              </button>
+            </section>
+          ) : timeline.length > 0 ? (
             <section aria-label={`${selectedYear}년 ${selectedMonth}월 타임라인`}>
               {timeline.map(([date, media]) => {
                 const collapsed = collapsedDates.includes(date);
@@ -252,9 +377,24 @@ const AlbumPage = () => {
                               key={item.id}
                               to={`/media/${item.id}?date=${date}`}
                               className="group relative aspect-square overflow-hidden rounded-lg bg-surface shadow-sm transition-transform duration-300 hover:-translate-y-1"
+                              aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}`}
                             >
                               {!viewedMediaIds.includes(item.id) && <NewMediaBadge />}
-                              <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                              {item.type === 'video' && !item.thumbnail ? (
+                                <video
+                                  src={item.src}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                />
+                              ) : (
+                                <img
+                                  src={item.thumbnail || item.src}
+                                  alt={item.title}
+                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                />
+                              )}
                               {item.type === 'video' && (
                                 <span className="absolute inset-0 flex items-center justify-center bg-black/10">
                                   <Icon icon="mdi:play-circle" className="text-4xl text-white drop-shadow" />

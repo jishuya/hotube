@@ -5,11 +5,13 @@ const { randomUUID } = require('crypto');
 const multer = require('multer');
 const { mapMediaRowToVideo } = require("../responseMappers");
 const { ensureMediaDirectory, mediaDirectory } = require('../mediaStorage');
+const { createVideoThumbnail } = require('../videoThumbnail');
 const {
   createFileMedia,
   createMedia,
   deleteMedia,
   getMedia,
+  getMediaDateRange,
   listMedia,
   updateMedia,
 } = require("../services/mediaService");
@@ -41,12 +43,24 @@ const sendRouteError = (res, fallbackMessage, error) => {
   return res.status(500).json({ error: fallbackMessage });
 };
 
+router.get('/getMediaDateRange', async (req, res) => {
+  try {
+    const range = await getMediaDateRange();
+    return res.json({ minDate: range.min_date, maxDate: range.max_date });
+  } catch (error) {
+    console.error('미디어 날짜 범위 조회 오류:', error);
+    return sendRouteError(res, '미디어 날짜 범위 조회 실패', error);
+  }
+});
+
 router.get("/getVideos", async (req, res) => {
   try {
     const contentType = req.query.contentType || null;
     const search = req.query.search?.trim().replace(/^#/, '') || null;
     const tag = req.query.tag?.trim() || null;
     const uploadedAt = req.query.uploadedAt || null;
+    const dateFrom = req.query.dateFrom || null;
+    const dateTo = req.query.dateTo || null;
     const source = req.query.source || null;
     const mediaType = req.query.mediaType || null;
     if (contentType && !["long", "short"].includes(contentType)) {
@@ -55,6 +69,15 @@ router.get("/getVideos", async (req, res) => {
     if (uploadedAt && !/^\d{4}-\d{2}-\d{2}$/.test(uploadedAt)) {
       return res.status(400).json({ error: "uploadedAt은 YYYY-MM-DD 형식이어야 합니다" });
     }
+    if (dateFrom && !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+      return res.status(400).json({ error: "dateFrom은 YYYY-MM-DD 형식이어야 합니다" });
+    }
+    if (dateTo && !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      return res.status(400).json({ error: "dateTo는 YYYY-MM-DD 형식이어야 합니다" });
+    }
+    if (dateFrom && dateTo && dateFrom >= dateTo) {
+      return res.status(400).json({ error: "dateTo는 dateFrom보다 이후여야 합니다" });
+    }
     if (source && !['youtube', 'file'].includes(source)) {
       return res.status(400).json({ error: "source는 youtube 또는 file이어야 합니다" });
     }
@@ -62,7 +85,7 @@ router.get("/getVideos", async (req, res) => {
       return res.status(400).json({ error: "mediaType은 photo 또는 video여야 합니다" });
     }
 
-    const videos = await listMedia({ contentType, search, tag, uploadedAt, source, mediaType });
+    const videos = await listMedia({ contentType, search, tag, uploadedAt, dateFrom, dateTo, source, mediaType });
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
     console.error("비디오 조회 오류:", error);
@@ -92,19 +115,31 @@ router.post("/createVideo", async (req, res) => {
 
 router.post('/uploadMedia', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '업로드할 파일이 없습니다' });
+  let thumbnailPath = null;
   try {
     const tags = JSON.parse(req.body.tags || '[]');
+    const dateTags = JSON.parse(req.body.dateTags || '[]');
+    const isVideo = req.file.mimetype.startsWith('video/');
+
+    if (isVideo) {
+      thumbnailPath = `${randomUUID()}.jpg`;
+      await createVideoThumbnail(req.file.path, path.join(mediaDirectory, thumbnailPath));
+    }
+
     const createdMedia = await createFileMedia({
       id: randomUUID(),
       title: req.body.title?.trim() || req.file.originalname,
       filePath: req.file.filename,
-      mediaType: req.file.mimetype.startsWith('video/') ? 'video' : 'photo',
+      thumbnailPath,
+      mediaType: isVideo ? 'video' : 'photo',
       tags,
+      dateTags,
       uploadedAt: req.body.uploadedAt,
     });
     return res.status(201).json(mapMediaRowToVideo(createdMedia));
   } catch (error) {
     await fs.unlink(req.file.path).catch(() => {});
+    if (thumbnailPath) await fs.unlink(path.join(mediaDirectory, thumbnailPath)).catch(() => {});
     console.error('미디어 파일 업로드 오류:', error);
     return sendRouteError(res, '미디어 업로드 실패', error);
   }
@@ -121,6 +156,20 @@ router.get('/mediaFile/:id', async (req, res) => {
   } catch (error) {
     console.error('미디어 파일 조회 오류:', error);
     return sendRouteError(res, '미디어 파일 조회 실패', error);
+  }
+});
+
+router.get('/mediaThumbnail/:id', async (req, res) => {
+  try {
+    const media = await getMedia(req.params.id);
+    if (!media.thumbnail_path) return res.status(404).json({ error: '썸네일을 찾을 수 없습니다' });
+    const filename = path.basename(media.thumbnail_path);
+    if (filename !== media.thumbnail_path) return res.status(400).json({ error: '잘못된 썸네일 경로입니다' });
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    return res.sendFile(filename, { root: mediaDirectory });
+  } catch (error) {
+    console.error('미디어 썸네일 조회 오류:', error);
+    return sendRouteError(res, '미디어 썸네일 조회 실패', error);
   }
 });
 

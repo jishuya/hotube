@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getAllVideos, toMemoryMedia } from '../services/videoApi';
-import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
-import { markMediaAsViewed } from '../utils/viewedMedia';
+import { markVideoWatched } from '../services/authApi';
+import { extractVideoId } from '../services/youtubeService';
+import { useAuth } from '../contexts/AuthContext';
 
 const MediaViewerPage = () => {
   const { mediaId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user, markWatchedLocal } = useAuth();
   const [mediaItems, setMediaItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const requestedDate = searchParams.get('date');
@@ -27,11 +29,11 @@ const MediaViewerPage = () => {
   }, []);
 
   useEffect(() => {
-    if (current && date) {
-      markMemoryDateAsViewed(date);
-      markMediaAsViewed(current.id);
-    }
-  }, [current, date]);
+    if (!current || !user || user.watchedVideos?.includes(current.id)) return;
+    markVideoWatched(user.id, current.id)
+      .then(() => markWatchedLocal(current.id))
+      .catch((error) => console.error('시청 기록 추가 실패:', error));
+  }, [current, user, markWatchedLocal]);
 
   const moveTo = (item) => {
     if (item) navigate(`/media/${item.id}?date=${date}`);
@@ -81,7 +83,16 @@ const MediaViewerPage = () => {
       </header>
 
       <section className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden px-3 py-24 sm:px-20">
-        {current.type === 'video' ? (
+        {current.source === 'youtube' ? (
+          <iframe
+            key={current.id}
+            src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1`}
+            title={current.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="aspect-video max-h-[72vh] w-full max-w-5xl rounded-lg shadow-2xl"
+          />
+        ) : current.type === 'video' ? (
           <video
             key={current.id}
             src={current.src}

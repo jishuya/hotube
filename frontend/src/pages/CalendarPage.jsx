@@ -6,7 +6,7 @@ import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
 import { getAllVideos, toMemoryMedia } from '../services/videoApi';
-import { getViewedMemoryDates } from '../utils/viewedMemoryDates';
+import { useAuth } from '../contexts/AuthContext';
 
 const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric', weekday: 'short',
@@ -43,6 +43,7 @@ const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
 
 const CalendarPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [month, setMonth] = useState(new Date(2026, 6, 1));
   const [mediaItems, setMediaItems] = useState([]);
   const selectedMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
@@ -53,9 +54,9 @@ const CalendarPage = () => {
     }
     return groups;
   }, {}), [mediaItems]);
-  const viewedDates = getViewedMemoryDates();
   const unreadDates = Object.keys(mediaByDate)
-    .filter((date) => date.startsWith(selectedMonth) && !viewedDates.includes(date))
+    .filter((date) => date.startsWith(selectedMonth)
+      && mediaByDate[date].some((item) => !user?.watchedVideos?.includes(item.id)))
     .sort((a, b) => b.localeCompare(a));
 
   useEffect(() => {

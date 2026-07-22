@@ -3,8 +3,7 @@ import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { getAllVideos, toMemoryMedia } from '../services/videoApi';
-import { markMemoryDateAsViewed } from '../utils/viewedMemoryDates';
-import { getViewedMediaIds } from '../utils/viewedMedia';
+import { useAuth } from '../contexts/AuthContext';
 
 const parseDate = (dateString) => {
   const date = new Date(`${dateString}T00:00:00`);
@@ -21,8 +20,9 @@ const DayAlbumPage = () => {
   const { date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [media, setMedia] = useState([]);
-  const viewedMediaIds = getViewedMediaIds();
+  const viewedMediaIds = user?.watchedVideos || [];
 
   useEffect(() => {
     const loadMedia = () => getAllVideos()
@@ -39,10 +39,6 @@ const DayAlbumPage = () => {
     currentDate.setDate(currentDate.getDate() + amount);
     navigate(`/calendar/${formatDateKey(currentDate)}`);
   };
-
-  useEffect(() => {
-    if (media.length > 0) markMemoryDateAsViewed(date);
-  }, [date, media.length]);
 
   return (
     <>

@@ -7,6 +7,7 @@ const FUNCTIONS_URL = {
   updateVideo: `${API_BASE_URL}/updateVideo`,
   deleteVideo: `${API_BASE_URL}/deleteVideo`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
+  getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
 };
 
 const resolveApiUrl = (value) => {
@@ -47,6 +48,12 @@ export const getAllVideos = async (filters = null) => {
   return (await response.json()).map(resolveMediaUrls);
 };
 
+export const getMediaDateRange = async () => {
+  const response = await fetch(FUNCTIONS_URL.getMediaDateRange);
+  if (!response.ok) throw new Error('미디어 날짜 범위를 가져오는데 실패했습니다');
+  return response.json();
+};
+
 // 단일 비디오 조회
 export const getVideoById = async (id) => {
   const response = await fetch(`${FUNCTIONS_URL.getVideo}/${id}`);
@@ -76,12 +83,13 @@ export const addVideo = async (videoData) => {
   return resolveMediaUrls(await response.json());
 };
 
-export const uploadMediaFile = async (file, { title, uploadedAt, tags }) => {
+export const uploadMediaFile = async (file, { title, uploadedAt, tags, dateTags = [] }) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('title', title || file.name);
   formData.append('uploadedAt', uploadedAt);
   formData.append('tags', JSON.stringify(tags || []));
+  formData.append('dateTags', JSON.stringify(dateTags));
 
   const response = await fetch(FUNCTIONS_URL.uploadMedia, {
     method: 'POST',

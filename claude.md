@@ -2,11 +2,14 @@
 
 가족 전용 비공개 유튜브 영상 시청 웹사이트
 
+> **백엔드 안내:** 현재 백엔드는 `backend/src/server.js`에서 실행되는 일반 Express 서버입니다.
+> `functions/`의 Firebase Functions 코드는 이전 구현 참고용이며 실행·수정·배포 대상으로 사용하지 않습니다.
+
 ## 기술 스택
 
 - **Frontend**: React 19 + Vite + Tailwind CSS
-- **Backend**: Firebase Functions (Node.js 24)
-- **Database**: Firebase Firestore
+- **Backend**: Express (`backend/`)
+- **Database**: PostgreSQL
 - **외부 API**: YouTube Data API v3 (`VITE_YOUTUBE_API_KEY`)
 
 ## 배포 정보
@@ -18,7 +21,7 @@
   - Build command: `npm run build`
   - Publish directory: `frontend/dist`
 
-### Backend (Firebase Functions)
+### Legacy Backend (Firebase Functions, 미사용)
 - **프로젝트**: hotube-9e9dd
 - **리전**: asia-northeast3 (서울)
 - **Functions URL**:
