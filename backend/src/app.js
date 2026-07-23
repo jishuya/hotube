@@ -6,6 +6,7 @@ const interactionRoutes = require("./routes/interactions");
 const commentRoutes = require("./routes/comments");
 const childProfileRoutes = require("./routes/childProfiles");
 const dateAlbumTagRoutes = require('./routes/dateAlbumTags');
+const userAlbumRoutes = require('./routes/userAlbums');
 
 const app = express();
 
@@ -22,5 +23,6 @@ app.use(interactionRoutes);
 app.use(commentRoutes);
 app.use(childProfileRoutes);
 app.use(dateAlbumTagRoutes);
+app.use(userAlbumRoutes);
 
 module.exports = app;

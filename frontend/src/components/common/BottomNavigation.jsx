@@ -33,7 +33,7 @@ const BottomNavigation = () => {
           state={item.upload ? { backgroundLocation: location } : undefined}
           aria-label={item.label}
           className={({ isActive }) => item.upload
-            ? 'group relative -top-5 flex min-w-0 flex-col items-center justify-end gap-1 text-[11px] font-bold text-primary active:scale-95'
+            ? 'group relative -top-1 flex min-w-0 flex-col items-center justify-end gap-1 text-[11px] font-bold text-primary active:scale-95'
             : getItemClassName(isActive)}
         >
           {({ isActive }) => item.upload ? (

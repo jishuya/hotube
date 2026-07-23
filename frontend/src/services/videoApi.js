@@ -9,6 +9,7 @@ const FUNCTIONS_URL = {
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
   getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
+  getFavoriteMedia: `${API_BASE_URL}/getFavoriteMedia`,
   toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
 };
 
@@ -129,6 +130,16 @@ export const getMediaDetails = async (id, userId) => {
   const response = await fetch(`${FUNCTIONS_URL.getMediaDetails}/${encodeURIComponent(id)}${query}`);
   if (!response.ok) throw new Error('미디어 상세 정보를 가져오지 못했습니다');
   return response.json();
+};
+
+export const getFavoriteMedia = async (userId = getViewerId()) => {
+  if (!userId) throw new Error('로그인 정보가 필요합니다');
+  const response = await fetch(`${FUNCTIONS_URL.getFavoriteMedia}?userId=${encodeURIComponent(userId)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || '즐겨찾기 목록을 가져오지 못했습니다');
+  }
+  return (await response.json()).map(resolveMediaUrls);
 };
 
 export const toggleFavorite = async (userId, videoId) => {

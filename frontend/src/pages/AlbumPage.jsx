@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
+import { deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
 import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
+import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -61,6 +62,9 @@ const NewMediaBadge = () => (
 const AlbumPage = () => {
   const monthBarRef = useRef(null);
   const tagSavingRef = useRef(false);
+  const longPressTimerRef = useRef(null);
+  const pointerStartRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [mediaDateRange, setMediaDateRange] = useState({ minDate: null, maxDate: null });
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +78,14 @@ const AlbumPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedMediaIds, setSelectedMediaIds] = useState([]);
+  const [selectionBusy, setSelectionBusy] = useState('');
+  const [selectionError, setSelectionError] = useState('');
+  const [albumCreateOpen, setAlbumCreateOpen] = useState(false);
+  const [albumTitleDraft, setAlbumTitleDraft] = useState('');
+  const [albumCreateError, setAlbumCreateError] = useState('');
   const { user } = useAuth();
+  const selectionMode = selectedMediaIds.length > 0;
   const viewedMediaIds = user?.watchedVideos || [];
   const monthOptions = useMemo(() => buildMonthOptions(
     mediaDateRange.minDate,
@@ -157,6 +168,8 @@ const AlbumPage = () => {
   const selectMonth = (key) => {
     setSelectedMonthKey(key);
     setCollapsedDates([]);
+    setSelectedMediaIds([]);
+    setSelectionError('');
   };
 
   const moveMonth = (direction) => {
@@ -204,10 +217,91 @@ const AlbumPage = () => {
     }
   };
 
+  const toggleMediaSelection = (mediaId) => {
+    setSelectedMediaIds((current) => current.includes(mediaId)
+      ? current.filter((id) => id !== mediaId)
+      : [...current, mediaId]);
+    setSelectionError('');
+  };
+
+  const beginLongPress = (event, mediaId) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressTriggeredRef.current = false;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      toggleMediaSelection(mediaId);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 550);
+  };
+
+  const trackLongPress = (event) => {
+    const start = pointerStartRef.current;
+    if (!start) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+      window.clearTimeout(longPressTimerRef.current);
+      pointerStartRef.current = null;
+    }
+  };
+
+  const endLongPress = () => {
+    window.clearTimeout(longPressTimerRef.current);
+    pointerStartRef.current = null;
+  };
+
+  const openAlbumCreateModal = () => {
+    setAlbumTitleDraft('');
+    setAlbumCreateError('');
+    setAlbumCreateOpen(true);
+  };
+
+  const createAlbumFromSelection = async (event) => {
+    event.preventDefault();
+    const title = albumTitleDraft.trim();
+    if (!title || !user?.id || selectionBusy) {
+      if (!title) setAlbumCreateError('앨범 제목을 입력해 주세요.');
+      return;
+    }
+    setSelectionBusy('album');
+    let createdAlbum = null;
+    try {
+      createdAlbum = await createMyAlbum(user.id, { title });
+      await addMediaToMyAlbum(user.id, createdAlbum.id, selectedMediaIds);
+      setSelectedMediaIds([]);
+      setSelectionError('');
+      setAlbumCreateOpen(false);
+      setAlbumTitleDraft('');
+    } catch (error) {
+      if (createdAlbum) await deleteMyAlbum(user.id, createdAlbum.id).catch(() => {});
+      setAlbumCreateError(error.message);
+    } finally {
+      setSelectionBusy('');
+    }
+  };
+
+  const deleteSelectedMedia = async () => {
+    if (!user?.id || selectionBusy) return;
+    if (!window.confirm(`선택한 ${selectedMediaIds.length}개의 사진·영상을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`)) return;
+    setSelectionBusy('delete');
+    const results = await Promise.allSettled(
+      selectedMediaIds.map((mediaId) => deleteVideo(mediaId, user.id)),
+    );
+    const deletedIds = selectedMediaIds.filter((_, index) => results[index].status === 'fulfilled');
+    const failedCount = results.length - deletedIds.length;
+    setMediaItems((current) => current.filter((item) => !deletedIds.includes(item.id)));
+    setSelectedMediaIds([]);
+    setSelectionError(failedCount > 0
+      ? `${deletedIds.length}개를 삭제했고, 권한이 없는 ${failedCount}개는 삭제하지 못했습니다.`
+      : '');
+    setSelectionBusy('');
+    if (deletedIds.length) window.dispatchEvent(new Event('hotube:media-updated'));
+  };
+
   return (
     <>
       <Header showSearch={false} />
-      <main className="min-h-screen bg-background pb-16 text-text-primary">
+      <main className={`min-h-screen bg-background text-text-primary ${selectionMode ? 'pb-36' : 'pb-16'}`}>
         <section className="border-y border-border bg-surface/95 shadow-sm backdrop-blur" aria-label="월 선택">
           <div className="mx-auto flex max-w-4xl items-center px-2">
             <button type="button" onClick={() => moveMonth(-1)} aria-label="이전 달" className="flex size-10 shrink-0 items-center justify-center rounded-full text-primary hover:bg-primary/10">
@@ -280,6 +374,7 @@ const AlbumPage = () => {
           </section>
 
           {tagError && <p className="mb-2 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{tagError}</p>}
+          {selectionError && <p className="mb-2 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{selectionError}</p>}
 
           {loading ? (
             <section className="flex min-h-[45vh] items-center justify-center" aria-label="앨범 불러오는 중">
@@ -376,10 +471,35 @@ const AlbumPage = () => {
                               key={item.id}
                               to={`/media/${item.id}?date=${date}`}
                               state={{ returnTo: '/album' }}
-                              className="group relative aspect-square overflow-hidden rounded-lg bg-surface shadow-sm transition-transform duration-300 hover:-translate-y-1"
+                              onPointerDown={(event) => beginLongPress(event, item.id)}
+                              onPointerMove={trackLongPress}
+                              onPointerUp={endLongPress}
+                              onPointerCancel={endLongPress}
+                              onPointerLeave={endLongPress}
+                              onContextMenu={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                if (!selectionMode && !longPressTriggeredRef.current) return;
+                                event.preventDefault();
+                                if (!longPressTriggeredRef.current) toggleMediaSelection(item.id);
+                                longPressTriggeredRef.current = false;
+                              }}
+                              className={`group relative aspect-square select-none overflow-hidden rounded-lg bg-surface shadow-sm transition duration-200 ${
+                                selectedMediaIds.includes(item.id)
+                                  ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background'
+                                  : 'hover:-translate-y-1'
+                              }`}
                               aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}`}
                             >
                               {!viewedMediaIds.includes(item.id) && <NewMediaBadge />}
+                              {selectionMode && (
+                                <span className={`absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
+                                  selectedMediaIds.includes(item.id)
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-white bg-black/35 text-transparent'
+                                }`}>
+                                  <Icon icon="mdi:check" className="text-lg" />
+                                </span>
+                              )}
                               {item.type === 'video' && !item.thumbnail ? (
                                 <video
                                   src={item.src}
@@ -417,6 +537,107 @@ const AlbumPage = () => {
             </section>
           )}
         </div>
+        {selectionMode && (
+          <section className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 미디어 작업">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedMediaIds([]);
+                setSelectionError('');
+              }}
+              disabled={Boolean(selectionBusy)}
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-text-secondary hover:bg-primary/10 disabled:opacity-40"
+              aria-label="선택 취소"
+            >
+              <Icon icon="mdi:close" className="text-2xl" />
+            </button>
+            <span className="min-w-12 text-center text-sm font-black text-primary">{selectedMediaIds.length}개</span>
+            <button
+              type="button"
+              onClick={openAlbumCreateModal}
+              disabled={Boolean(selectionBusy)}
+              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-bold text-white disabled:opacity-50"
+            >
+              <Icon icon={selectionBusy === 'album' ? 'mdi:loading' : 'mdi:folder-plus-outline'} className={`text-lg ${selectionBusy === 'album' ? 'animate-spin' : ''}`} />
+              앨범 만들기
+            </button>
+            <button
+              type="button"
+              onClick={deleteSelectedMedia}
+              disabled={Boolean(selectionBusy)}
+              className="flex h-10 items-center justify-center gap-1 rounded-xl bg-error px-3 text-sm font-bold text-white disabled:opacity-50"
+            >
+              <Icon icon={selectionBusy === 'delete' ? 'mdi:loading' : 'mdi:trash-can-outline'} className={`text-lg ${selectionBusy === 'delete' ? 'animate-spin' : ''}`} />
+              삭제
+            </button>
+          </section>
+        )}
+        {albumCreateOpen && (
+          <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => {
+                if (!selectionBusy) setAlbumCreateOpen(false);
+              }}
+              aria-label="새 앨범 만들기 닫기"
+            />
+            <form
+              onSubmit={createAlbumFromSelection}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !selectionBusy) setAlbumCreateOpen(false);
+              }}
+              className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+              aria-labelledby="selection-create-album-title"
+            >
+              <div className="flex flex-col items-center text-center">
+                <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Icon icon="mdi:image-multiple-outline" className="text-2xl" />
+                </span>
+                <h2 id="selection-create-album-title" className="mt-3 text-lg font-bold text-gray-900">새 앨범 만들기</h2>
+                <p className="mt-1 text-sm text-gray-600">선택한 {selectedMediaIds.length}개 미디어를 담을 앨범 제목을 입력해 주세요.</p>
+              </div>
+
+              <label className="mt-5 block">
+                <span className="sr-only">앨범 제목</span>
+                <input
+                  autoFocus
+                  value={albumTitleDraft}
+                  onChange={(event) => {
+                    setAlbumTitleDraft(event.target.value);
+                    setAlbumCreateError('');
+                  }}
+                  maxLength={80}
+                  placeholder="예: 우리 가족 여름 여행"
+                  className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <div className="mt-1 flex min-h-5 items-start justify-between gap-2 text-xs">
+                <span className="font-semibold text-error">{albumCreateError}</span>
+                <span className="shrink-0 text-text-secondary">{albumTitleDraft.length}/80</span>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAlbumCreateOpen(false)}
+                  disabled={Boolean(selectionBusy)}
+                  className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={Boolean(selectionBusy) || !albumTitleDraft.trim()}
+                  className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {selectionBusy === 'album' && <Icon icon="mdi:loading" className="animate-spin text-lg" />}
+                  {selectionBusy === 'album' ? '만드는 중' : '만들기'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </main>
     </>
   );

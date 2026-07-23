@@ -176,10 +176,20 @@ const MediaViewerPage = () => {
   const [toasts, setToasts] = useState([]);
 
   const requestedDate = searchParams.get('date');
-  const returnTo = location.state?.returnTo === '/album' ? '/album' : '/calendar';
+  const requestedReturnTo = location.state?.returnTo;
+  const returnTo = requestedReturnTo === '/album' || requestedReturnTo?.startsWith('/my-album/')
+    ? requestedReturnTo
+    : '/calendar';
+  const albumMediaIds = location.state?.albumMediaIds;
   const current = mediaItems.find((item) => item.id === mediaId);
   const date = requestedDate || current?.date;
-  const items = useMemo(() => mediaItems.filter((item) => item.date === date), [mediaItems, date]);
+  const items = useMemo(() => {
+    if (Array.isArray(albumMediaIds)) {
+      const byId = new Map(mediaItems.map((item) => [item.id, item]));
+      return albumMediaIds.map((id) => byId.get(id)).filter(Boolean);
+    }
+    return mediaItems.filter((item) => item.date === date);
+  }, [albumMediaIds, date, mediaItems]);
   const currentIndex = items.findIndex((item) => item.id === mediaId);
   const previous = currentIndex > 0 ? items[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
@@ -240,7 +250,7 @@ const MediaViewerPage = () => {
   }, [current, user, markWatchedLocal]);
 
   const moveTo = (item) => {
-    if (item) navigate(`/media/${item.id}?date=${date}`, { state: { returnTo } });
+    if (item) navigate(`/media/${item.id}?date=${date}`, { state: { returnTo, albumMediaIds } });
   };
 
   useEffect(() => {
@@ -249,6 +259,7 @@ const MediaViewerPage = () => {
       if (event.key === 'ArrowRight' && next) moveTo(next);
       if (event.key === 'Escape') {
         if (editing) setEditing(false);
+        else if (returnTo.startsWith('/my-album/')) navigate(returnTo, { replace: true });
         else navigate(`/calendar/${date}`, { state: { returnTo } });
       }
     };
@@ -351,7 +362,7 @@ const MediaViewerPage = () => {
     try {
       await deleteVideo(mediaId, user?.id);
       window.dispatchEvent(new Event('hotube:media-updated'));
-      navigate(`/calendar/${date}`, { replace: true, state: { returnTo } });
+      navigate(returnTo.startsWith('/my-album/') ? returnTo : `/calendar/${date}`, { replace: true, state: { returnTo } });
     } catch (actionError) {
       showToast('error', actionError.message);
     }
@@ -379,9 +390,20 @@ const MediaViewerPage = () => {
     <main className="min-h-screen bg-background pb-16 text-text-primary">
       <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link to={`/calendar/${date}`} state={{ returnTo }} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="날짜 앨범으로 돌아가기">
-            <Icon icon="mdi:arrow-left" className="text-2xl" />
-          </Link>
+          {returnTo.startsWith('/my-album/') ? (
+            <button
+              type="button"
+              onClick={() => navigate(returnTo, { replace: true })}
+              className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10"
+              aria-label="내 앨범 상세로 돌아가기"
+            >
+              <Icon icon="mdi:arrow-left" className="text-2xl" />
+            </button>
+          ) : (
+            <Link to={`/calendar/${date}`} state={{ returnTo }} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="날짜 앨범으로 돌아가기">
+              <Icon icon="mdi:arrow-left" className="text-2xl" />
+            </Link>
+          )}
           <div className="text-center">
             <p className="text-sm font-bold">추억 보기</p>
             <p className="text-xs text-text-secondary">{currentIndex + 1} / {items.length}</p>
