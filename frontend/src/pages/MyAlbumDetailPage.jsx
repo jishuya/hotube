@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
@@ -16,6 +16,9 @@ const MyAlbumDetailPage = () => {
   const { albumId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const longPressTimerRef = useRef(null);
+  const pointerStartRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
   const isFavorites = albumId === 'favorites';
   const [album, setAlbum] = useState(null);
   const [media, setMedia] = useState([]);
@@ -32,8 +35,13 @@ const MyAlbumDetailPage = () => {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerError, setPickerError] = useState('');
+  const [selectedMediaIds, setSelectedMediaIds] = useState([]);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState('');
   const requestKey = user?.id ? `${user.id}:${albumId}` : null;
   const loading = Boolean(requestKey) && loadedRequestKey !== requestKey;
+  const selectionMode = selectedMediaIds.length > 0;
   const existingMediaIds = useMemo(() => new Set(media.map((item) => item.id)), [media]);
   const availablePickerMedia = useMemo(
     () => pickerMedia.filter((item) => !existingMediaIds.has(item.id)),
@@ -126,15 +134,58 @@ const MyAlbumDetailPage = () => {
     }
   };
 
-  const removeMedia = async (item) => {
-    if (!window.confirm(`‘${item.title}’을(를) 이 앨범에서 뺄까요?`)) return;
+  const toggleMediaSelection = (mediaId) => {
+    setSelectedMediaIds((current) => current.includes(mediaId)
+      ? current.filter((id) => id !== mediaId)
+      : [...current, mediaId]);
+    setRemoveError('');
+  };
+
+  const beginLongPress = (event, mediaId) => {
+    if (isFavorites || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressTriggeredRef.current = false;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      toggleMediaSelection(mediaId);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 550);
+  };
+
+  const trackLongPress = (event) => {
+    const start = pointerStartRef.current;
+    if (!start) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+      window.clearTimeout(longPressTimerRef.current);
+      pointerStartRef.current = null;
+    }
+  };
+
+  const endLongPress = () => {
+    window.clearTimeout(longPressTimerRef.current);
+    pointerStartRef.current = null;
+  };
+
+  const removeSelectedMedia = async () => {
+    if (!selectedMediaIds.length || removeBusy) return;
+    setRemoveBusy(true);
     try {
-      await removeMediaFromMyAlbum(user.id, albumId, [item.id]);
-      setMedia((current) => current.filter((mediaItem) => mediaItem.id !== item.id));
-      setAlbum((current) => ({ ...current, mediaCount: Math.max(0, current.mediaCount - 1) }));
+      const result = await removeMediaFromMyAlbum(user.id, albumId, selectedMediaIds);
+      const removedIds = new Set(result.removedMediaIds);
+      setMedia((current) => current.filter((item) => !removedIds.has(item.id)));
+      setAlbum((current) => ({
+        ...current,
+        mediaCount: Math.max(0, current.mediaCount - removedIds.size),
+      }));
+      setSelectedMediaIds([]);
+      setRemoveConfirmOpen(false);
+      setRemoveError('');
       setError('');
     } catch (actionError) {
-      setError(actionError.message);
+      setRemoveError(actionError.message);
+    } finally {
+      setRemoveBusy(false);
     }
   };
 
@@ -181,7 +232,7 @@ const MyAlbumDetailPage = () => {
   return (
     <>
       <Header showSearch={false} />
-      <main className="min-h-screen bg-background px-4 pb-16 text-text-primary">
+      <main className={`min-h-screen bg-background px-4 text-text-primary ${selectionMode ? 'pb-36' : 'pb-16'}`}>
         <div className="mx-auto max-w-container">
           <header className="mb-6">
             <div className="flex items-center justify-between gap-4">
@@ -215,7 +266,11 @@ const MyAlbumDetailPage = () => {
           {media.length > 0 ? (
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label={`${title} 사진과 영상`}>
               {media.map((item) => (
-                <article key={item.id} className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm">
+                <article className={`group relative aspect-square select-none overflow-hidden rounded-xl bg-surface shadow-sm transition ${
+                  selectedMediaIds.includes(item.id)
+                    ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background'
+                    : ''
+                }`} key={item.id}>
                   <Link
                     to={`/media/${item.id}`}
                     state={{
@@ -223,6 +278,20 @@ const MyAlbumDetailPage = () => {
                       albumMediaIds: media.map((mediaItem) => mediaItem.id),
                     }}
                     className="absolute inset-0"
+                    onPointerDown={(event) => beginLongPress(event, item.id)}
+                    onPointerMove={trackLongPress}
+                    onPointerUp={endLongPress}
+                    onPointerCancel={endLongPress}
+                    onPointerLeave={endLongPress}
+                    onContextMenu={(event) => {
+                      if (!isFavorites) event.preventDefault();
+                    }}
+                    onClick={(event) => {
+                      if (isFavorites || (!selectionMode && !longPressTriggeredRef.current)) return;
+                      event.preventDefault();
+                      if (!longPressTriggeredRef.current) toggleMediaSelection(item.id);
+                      longPressTriggeredRef.current = false;
+                    }}
                   >
                     <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   </Link>
@@ -231,15 +300,14 @@ const MyAlbumDetailPage = () => {
                       <Icon icon="mdi:heart" />
                     </span>
                   )}
-                  {!isFavorites && (
-                    <button
-                      type="button"
-                      onClick={() => removeMedia(item)}
-                      className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-white/90 text-error shadow-sm transition hover:bg-white"
-                      aria-label={`${item.title} 앨범에서 빼기`}
-                    >
-                      <Icon icon="mdi:close" />
-                    </button>
+                  {selectionMode && !isFavorites && (
+                    <span className={`pointer-events-none absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
+                      selectedMediaIds.includes(item.id)
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-white bg-black/35 text-transparent'
+                    }`}>
+                      <Icon icon="mdi:check" className="text-lg" />
+                    </span>
                   )}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
                     <div className="flex items-center justify-between gap-2">
@@ -270,6 +338,33 @@ const MyAlbumDetailPage = () => {
             </div>
           )}
         </div>
+        {selectionMode && !isFavorites && (
+          <section className="fixed inset-x-3 bottom-24 z-40 mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 앨범 미디어 작업">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedMediaIds([]);
+                setRemoveError('');
+              }}
+              className="flex size-10 items-center justify-center rounded-xl text-text-secondary hover:bg-primary/10"
+              aria-label="선택 취소"
+            >
+              <Icon icon="mdi:close" className="text-2xl" />
+            </button>
+            <span className="min-w-14 text-center text-sm font-black text-primary">{selectedMediaIds.length}개</span>
+            <button
+              type="button"
+              onClick={() => {
+                setRemoveError('');
+                setRemoveConfirmOpen(true);
+              }}
+              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-error px-4 text-sm font-bold text-white"
+            >
+              <Icon icon="mdi:folder-remove-outline" className="text-lg" />
+              앨범에서 빼기
+            </button>
+          </section>
+        )}
       </main>
       {renameOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
@@ -415,6 +510,49 @@ const MyAlbumDetailPage = () => {
                 {pickerBusy ? '추가 중' : '앨범에 추가'}
               </button>
             </footer>
+          </section>
+        </div>
+      )}
+      {removeConfirmOpen && (
+        <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              if (!removeBusy) setRemoveConfirmOpen(false);
+            }}
+            aria-label="앨범에서 미디어 빼기 닫기"
+          />
+          <section className="relative w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl" aria-labelledby="remove-album-media-title">
+            <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-error/10 text-error">
+              <Icon icon="mdi:folder-remove-outline" className="text-2xl" />
+            </span>
+            <h2 id="remove-album-media-title" className="mt-3 text-lg font-bold text-gray-900">앨범에서 빼기</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              선택한 {selectedMediaIds.length}개의 사진·영상을 이 앨범에서 뺄까요?
+              <br />
+              원본 사진과 영상은 삭제되지 않습니다.
+            </p>
+            {removeError && <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{removeError}</p>}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRemoveConfirmOpen(false)}
+                disabled={removeBusy}
+                className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={removeSelectedMedia}
+                disabled={removeBusy}
+                className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-error font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                {removeBusy && <Icon icon="mdi:loading" className="animate-spin text-lg" />}
+                {removeBusy ? '처리 중' : '앨범에서 빼기'}
+              </button>
+            </div>
           </section>
         </div>
       )}
