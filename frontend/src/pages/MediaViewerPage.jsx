@@ -82,20 +82,22 @@ const formatPlaybackTime = (seconds) => {
   return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
 };
 
+const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
+
 const MediaVideoPlayer = ({ src, poster }) => {
   const playerRef = useRef(null);
   const videoRef = useRef(null);
   const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = true;
-    video.play().catch(() => {});
-  }, [src]);
+    if (!playing || !controlsVisible) return undefined;
+    const timer = window.setTimeout(() => setControlsVisible(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [playing, controlsVisible]);
 
   const togglePlayback = async () => {
     const video = videoRef.current;
@@ -105,7 +107,15 @@ const MediaVideoPlayer = ({ src, poster }) => {
   };
 
   return (
-    <div ref={playerRef} className="w-full self-center bg-black">
+    <div
+      ref={playerRef}
+      className="relative w-full self-center overflow-hidden bg-black"
+      onMouseMove={() => setControlsVisible(true)}
+      onMouseLeave={() => {
+        if (playing) setControlsVisible(false);
+      }}
+      onTouchStart={() => setControlsVisible(true)}
+    >
       <div className="flex items-center justify-center bg-black">
         <video
           ref={videoRef}
@@ -115,20 +125,29 @@ const MediaVideoPlayer = ({ src, poster }) => {
           muted={muted}
           playsInline
           preload="auto"
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPlay={() => {
+            setPlaying(true);
+            setControlsVisible(true);
+          }}
+          onPause={() => {
+            setPlaying(false);
+            setControlsVisible(true);
+          }}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
           className="max-h-[70vh] max-w-full object-contain"
         />
       </div>
-      <div className="flex h-11 items-center gap-2 bg-zinc-900 px-3 text-white">
-        <button type="button" onClick={togglePlayback} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
-        <span className="w-10 text-right text-[11px] tabular-nums">{formatPlaybackTime(currentTime)}</span>
-        <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
-        <span className="w-10 text-[11px] tabular-nums">{formatPlaybackTime(duration)}</span>
-        <button type="button" onClick={() => setMuted((value) => !value)} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
-        <button type="button" onClick={() => playerRef.current?.requestFullscreen?.()} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label="전체 화면"><Icon icon="mdi:fullscreen" className="text-xl" /></button>
+      <div className={`absolute inset-x-2 bottom-1.5 flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-zinc-950/75 px-2.5 text-white shadow-2xl backdrop-blur-md transition-all duration-300 sm:inset-x-3 sm:px-3 ${
+        controlsVisible || !playing ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}>
+        <button type="button" onClick={togglePlayback} className={playerControlButtonClass} aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
+        <span className="hidden whitespace-nowrap text-xs font-medium tabular-nums text-white/80 sm:inline">
+          {formatPlaybackTime(currentTime)} <span className="text-white/35">/</span> {formatPlaybackTime(duration)}
+        </span>
+        <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
+        <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
+        <button type="button" onClick={() => playerRef.current?.requestFullscreen?.()} className={playerControlButtonClass} aria-label="전체 화면"><Icon icon="mdi:fullscreen" className="text-xl" /></button>
       </div>
     </div>
   );
