@@ -25,7 +25,7 @@ const CommentSection = ({ videoId, onCountChange }) => {
   const loadComments = async () => {
     try {
       setLoading(true);
-      const data = await getComments(videoId, user.category, user.role);
+      const data = await getComments(videoId, user.id);
       setComments(data);
       onCountChange?.(data.length);
     } catch (error) {

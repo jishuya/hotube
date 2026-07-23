@@ -11,6 +11,23 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 20;
 
+const VideoFramePreview = ({ src, className }) => (
+  <video
+    src={src}
+    muted
+    playsInline
+    preload="metadata"
+    className={className}
+    onLoadedMetadata={(event) => {
+      const video = event.currentTarget;
+      const previewTime = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(1, video.duration / 2)
+        : 0;
+      if (previewTime > 0) video.currentTime = previewTime;
+    }}
+  />
+);
+
 const getTodayDateKey = () => {
   const today = new Date();
   return [
@@ -113,6 +130,17 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
   const addFiles = (files) => {
     const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     Promise.all(mediaFiles.map((file) => new Promise((resolve) => {
+      if (file.type.startsWith('video/')) {
+        getMediaDate(file).then((mediaDate) => resolve({
+          file,
+          name: file.name,
+          type: 'video',
+          preview: null,
+          date: mediaDate,
+          tags: '',
+        }));
+        return;
+      }
       const reader = new FileReader();
       reader.onload = async () => {
         const mediaDate = await getMediaDate(file);
@@ -201,6 +229,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
 
   const handleUpload = async (event) => {
     event.preventDefault();
+    if (!user?.id) {
+      setUploadError('로그인 사용자 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
+      return;
+    }
     const youtubeId = extractYouTubeId(youtubeUrl.trim());
     const normalizedTags = tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean);
     setUploading(true);
@@ -329,13 +361,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                           <div className="flex gap-2 overflow-x-auto pb-1">
                             {selectedFiles.map((item, index) => (
                               <button type="button" key={`${item.name}-${index}`} onClick={() => setSelectedFileIndex(index)} className={`relative w-24 shrink-0 overflow-hidden rounded-xl border-2 p-1 text-left transition ${selectedFileIndex === index ? 'border-primary bg-primary/10' : 'border-transparent bg-gray-100 hover:border-primary/30'}`}>
-                                <span className="block aspect-square overflow-hidden rounded-lg bg-black/5">
-                                  {item.type === 'video' ? (
-                                    <video src={item.preview} className="h-full w-full object-cover" />
-                                  ) : (
+                                {item.type !== 'video' && (
+                                  <span className="block aspect-square overflow-hidden rounded-lg bg-black/5">
                                     <img src={item.preview} alt={item.name} className="h-full w-full object-cover" />
-                                  )}
-                                </span>
+                                  </span>
+                                )}
                                 <span className="mt-1 block truncate px-1 text-xs">{item.name}</span>
                                 <span
                                   role="button"
@@ -540,8 +570,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                   {paginatedUploads.map((item) => (
                     <article key={item.id} className="flex items-center gap-3 p-3 transition hover:bg-gray-50 sm:px-4">
                       <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-black/5 sm:size-20">
-                        {item.type === 'video' && item.source === 'file' ? (
-                          <video src={item.src} className="h-full w-full object-cover" />
+                        {item.type === 'video' && item.source === 'file' && !item.thumbnail ? (
+                          <VideoFramePreview src={item.src} className="h-full w-full object-cover" />
                         ) : (
                           <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover" />
                         )}

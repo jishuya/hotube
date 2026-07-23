@@ -6,7 +6,7 @@ import Modal from '../components/common/Modal';
 import PasswordChangeModal from '../components/common/PasswordChangeModal';
 import ProfileEditModal from '../components/common/ProfileEditModal';
 import { useAuth } from '../contexts/AuthContext';
-import { CATEGORIES } from '../services/authApi';
+import { CATEGORIES, updateUser as updateUserApi } from '../services/authApi';
 
 const roleLabels = {
   admin: '관리자',
@@ -55,9 +55,19 @@ const MyPage = () => {
     navigate('/login', { replace: true });
   };
 
-  const selectAvatar = (avatarId) => {
-    updateUser({ avatar: avatarId });
-    setShowAvatarModal(false);
+  const selectAvatar = async (avatarId) => {
+    try {
+      const savedUser = await updateUserApi(user.id, {
+        name: user.name,
+        title: user.title,
+        category: user.category,
+        avatar: avatarId,
+      });
+      updateUser(savedUser);
+      setShowAvatarModal(false);
+    } catch (error) {
+      console.error('프로필 캐릭터 저장 실패:', error);
+    }
   };
 
   const closeSupport = () => {

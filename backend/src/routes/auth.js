@@ -106,7 +106,7 @@ router.get("/getUser/:id", async (req, res) => {
 
 router.put("/updateUser/:id", async (req, res) => {
   try {
-    const { name, title, category } = req.body;
+    const { name, title, category, avatar } = req.body;
 
     if (!name || !title || !category) {
       return res.status(400).json({ error: "이름, 호칭, 카테고리를 입력해주세요" });
@@ -127,9 +127,9 @@ router.put("/updateUser/:id", async (req, res) => {
 
     await pgDb.query(`
       UPDATE users
-      SET name = $2, title = $3, category = $4
+      SET name = $2, title = $3, category = $4, avatar = COALESCE($5, avatar)
       WHERE id = $1
-    `, [req.params.id, name, title, category]);
+    `, [req.params.id, name, title, category, avatar || null]);
 
     res.json(mapUserRowToUser(await fetchUserById(req.params.id)));
   } catch (error) {

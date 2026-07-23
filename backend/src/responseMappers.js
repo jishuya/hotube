@@ -38,15 +38,22 @@ const normalizeArray = (value) => {
   return [value];
 };
 
+const versionedMediaPath = (path, updatedAt) => {
+  if (!path || !updatedAt) return path;
+  return `${path}?v=${encodeURIComponent(toIsoString(updatedAt))}`;
+};
+
 const mapMediaRowToVideo = (row) => ({
   id: row.id,
   title: row.title,
   description: row.description,
   youtubeUrl: row.youtube_url,
   mediaType: row.media_type,
-  fileUrl: row.file_path ? `/mediaFile/${encodeURIComponent(row.id)}` : null,
+  fileUrl: row.file_path
+    ? versionedMediaPath(`/mediaFile/${encodeURIComponent(row.id)}`, row.updated_at)
+    : null,
   thumbnailUrl: row.thumbnail_path
-    ? `/mediaThumbnail/${encodeURIComponent(row.id)}`
+    ? versionedMediaPath(`/mediaThumbnail/${encodeURIComponent(row.id)}`, row.updated_at)
     : row.thumbnail_url,
   type: row.content_type ?? row.type,
   year: row.year,

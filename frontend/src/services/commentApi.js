@@ -27,8 +27,8 @@ export const createComment = async (videoId, userId, content) => {
 };
 
 // 댓글 조회 (같은 카테고리만, 관리자/부관리자는 모든 댓글 조회 가능)
-export const getComments = async (videoId, category, role) => {
-  const params = new URLSearchParams({ videoId, category, role });
+export const getComments = async (videoId, userId) => {
+  const params = new URLSearchParams({ videoId, userId });
   const response = await fetch(`${FUNCTIONS_URL.getComments}?${params}`);
 
   if (!response.ok) {

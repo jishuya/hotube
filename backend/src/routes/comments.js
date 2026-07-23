@@ -3,7 +3,7 @@ const { randomUUID } = require("crypto");
 const pgDb = require("../db");
 const { mapCommentRowToComment } = require("../responseMappers");
 const { fetchCommentById } = require("../services/commentService");
-const { mediaExists } = require("../services/mediaService");
+const { getMediaAccess, mediaExists } = require("../services/mediaService");
 const { fetchCommentAuthorById } = require("../services/userService");
 
 const router = express.Router();
@@ -26,6 +26,8 @@ router.post("/createComment", async (req, res) => {
     if (!(await mediaExists(pgDb, videoId))) {
       return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
     }
+    const access = await getMediaAccess(pgDb, videoId, userId);
+    if (!access?.can_view) return res.status(403).json({ error: '이 미디어에 댓글을 작성할 권한이 없습니다' });
 
     const created = await pgDb.query(`
       INSERT INTO comments (id, media_id, user_id, user_name, user_title, user_category, content, created_at, updated_at)
@@ -52,27 +54,24 @@ router.post("/createComment", async (req, res) => {
 router.get("/getComments", async (req, res) => {
   try {
     const videoId = req.query.videoId;
-    const userCategory = req.query.category;
-    const userRole = req.query.role;
+    const userId = req.query.userId;
 
     if (!videoId) {
       return res.status(400).json({ error: "videoId가 필요합니다" });
     }
 
+    const access = await getMediaAccess(pgDb, videoId, userId);
+    if (!access?.can_view) return res.status(403).json({ error: '이 미디어의 댓글을 볼 권한이 없습니다' });
     let result;
-    if (userRole === "admin" || userRole === "sub-admin") {
+    if (access.role === "admin" || access.role === "sub-admin") {
       result = await pgDb.query(
         "SELECT * FROM comments WHERE media_id = $1 ORDER BY created_at DESC",
         [videoId],
       );
     } else {
-      if (!userCategory) {
-        return res.status(400).json({ error: "category가 필요합니다" });
-      }
-
       result = await pgDb.query(
         "SELECT * FROM comments WHERE media_id = $1 AND user_category = $2 ORDER BY created_at DESC",
-        [videoId, userCategory],
+        [videoId, access.category],
       );
     }
 

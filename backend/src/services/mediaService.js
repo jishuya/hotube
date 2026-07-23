@@ -50,6 +50,9 @@ const listMedia = async ({
   dateTo = null,
   source = null,
   mediaType = null,
+  viewerCategory = null,
+  viewerRole = null,
+  viewerId = null,
 } = {}) => {
   const conditions = [];
   const params = [];
@@ -66,6 +69,14 @@ const listMedia = async ({
   if (source === 'file') conditions.push("m.media_type IN ('photo', 'video')");
   if (mediaType === 'photo') conditions.push("m.media_type = 'photo'");
   if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
+  if (viewerRole !== 'admin' && viewerRole !== 'sub-admin') {
+    if (!viewerCategory) conditions.push('FALSE');
+    else {
+      const categoryParam = addParam(viewerCategory);
+      const viewerParam = addParam(viewerId);
+      conditions.push(`(${categoryParam} = ANY(m.shared_with) OR m.uploaded_by = ${viewerParam})`);
+    }
+  }
   if (search) {
     const searchParam = addParam(`%${search}%`);
     conditions.push(`(
@@ -139,6 +150,19 @@ const getMediaDateRange = async () => {
 const mediaExists = async (db, id) => {
   const result = await db.query("SELECT 1 FROM media WHERE id = $1", [id]);
   return result.rows.length > 0;
+};
+
+const getMediaAccess = async (db, mediaId, userId) => {
+  if (!userId) return null;
+  const result = await db.query(`
+    SELECT m.id, m.uploaded_by, m.shared_with, u.category, u.role,
+      (u.role IN ('admin', 'sub-admin') OR u.category = ANY(m.shared_with) OR m.uploaded_by = u.id) AS can_view,
+      (u.role IN ('admin', 'sub-admin') OR m.uploaded_by = u.id) AS can_modify
+    FROM media m
+    JOIN users u ON u.id = $2
+    WHERE m.id = $1
+  `, [mediaId, userId]);
+  return result.rows[0] || null;
 };
 
 const createMedia = async ({
@@ -415,6 +439,7 @@ module.exports = {
   deleteMedia,
   getMedia,
   getMediaDateRange,
+  getMediaAccess,
   listMedia,
   mediaExists,
   updateMedia,

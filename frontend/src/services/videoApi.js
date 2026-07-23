@@ -12,6 +12,21 @@ const FUNCTIONS_URL = {
   toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
 };
 
+const getViewerId = () => {
+  try {
+    return JSON.parse(localStorage.getItem('hotube_user'))?.id || '';
+  } catch {
+    return '';
+  }
+};
+
+const addViewerQuery = (value) => {
+  if (!value || /^(data:|blob:)/.test(value)) return value;
+  const viewerId = getViewerId();
+  if (!viewerId || /^https?:/.test(value)) return value;
+  return `${value}${value.includes('?') ? '&' : '?'}viewerId=${encodeURIComponent(viewerId)}`;
+};
+
 const resolveApiUrl = (value) => {
   if (!value || /^(https?:|data:|blob:)/.test(value)) return value;
   return `${API_BASE_URL}${value}`;
@@ -19,8 +34,8 @@ const resolveApiUrl = (value) => {
 
 const resolveMediaUrls = (media) => ({
   ...media,
-  fileUrl: resolveApiUrl(media.fileUrl),
-  thumbnailUrl: resolveApiUrl(media.thumbnailUrl),
+  fileUrl: resolveApiUrl(addViewerQuery(media.fileUrl)),
+  thumbnailUrl: resolveApiUrl(addViewerQuery(media.thumbnailUrl)),
 });
 
 export const toMemoryMedia = (media) => ({
@@ -37,6 +52,7 @@ export const toMemoryMedia = (media) => ({
 export const getAllVideos = async (filters = null) => {
   const normalizedFilters = typeof filters === 'string' ? { contentType: filters } : (filters || {});
   const searchParams = new URLSearchParams();
+  searchParams.set('viewerId', getViewerId());
   Object.entries(normalizedFilters).forEach(([key, value]) => {
     if (value && value !== 'all') searchParams.set(key, value);
   });
@@ -58,7 +74,7 @@ export const getMediaDateRange = async () => {
 
 // 단일 비디오 조회
 export const getVideoById = async (id) => {
-  const response = await fetch(`${FUNCTIONS_URL.getVideo}/${id}`);
+  const response = await fetch(`${FUNCTIONS_URL.getVideo}/${id}?viewerId=${encodeURIComponent(getViewerId())}`);
 
   if (!response.ok) {
     throw new Error('비디오를 찾을 수 없습니다');
@@ -127,13 +143,13 @@ export const toggleFavorite = async (userId, videoId) => {
 };
 
 // 비디오 수정
-export const updateVideo = async (id, videoData) => {
+export const updateVideo = async (id, videoData, requesterId = getViewerId()) => {
   const response = await fetch(`${FUNCTIONS_URL.updateVideo}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(videoData),
+    body: JSON.stringify({ ...videoData, requesterId }),
   });
 
   if (!response.ok) {
@@ -145,8 +161,8 @@ export const updateVideo = async (id, videoData) => {
 };
 
 // 비디오 삭제
-export const deleteVideo = async (id) => {
-  const response = await fetch(`${FUNCTIONS_URL.deleteVideo}/${id}`, {
+export const deleteVideo = async (id, requesterId = getViewerId()) => {
+  const response = await fetch(`${FUNCTIONS_URL.deleteVideo}/${id}?requesterId=${encodeURIComponent(requesterId)}`, {
     method: 'DELETE',
   });
 

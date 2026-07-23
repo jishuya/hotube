@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CommentSection from '../components/video/CommentSection';
 import Modal from '../components/common/Modal';
+import ToastContainer from '../components/common/Toast';
 import {
   deleteVideo,
   getAllVideos,
@@ -14,7 +15,7 @@ import {
 import { markVideoWatched, toggleLike } from '../services/authApi';
 import { extractVideoId } from '../services/youtubeService';
 import { getChildProfile } from '../services/childProfileApi';
-import { addDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
+import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const avatarPositions = [
@@ -76,6 +77,63 @@ const ActionButton = ({ icon, label, active = false, count, onClick, href, disab
   );
 };
 
+const formatPlaybackTime = (seconds) => {
+  const safeSeconds = Number.isFinite(seconds) ? Math.floor(seconds) : 0;
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
+};
+
+const MediaVideoPlayer = ({ src, poster }) => {
+  const playerRef = useRef(null);
+  const videoRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = true;
+    video.play().catch(() => {});
+  }, [src]);
+
+  const togglePlayback = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) await video.play();
+    else video.pause();
+  };
+
+  return (
+    <div ref={playerRef} className="w-full self-center bg-black">
+      <div className="flex items-center justify-center bg-black">
+        <video
+          ref={videoRef}
+          src={src}
+          poster={poster}
+          autoPlay
+          muted={muted}
+          playsInline
+          preload="auto"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
+          className="max-h-[70vh] max-w-full object-contain"
+        />
+      </div>
+      <div className="flex h-11 items-center gap-2 bg-zinc-900 px-3 text-white">
+        <button type="button" onClick={togglePlayback} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
+        <span className="w-10 text-right text-[11px] tabular-nums">{formatPlaybackTime(currentTime)}</span>
+        <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
+        <span className="w-10 text-[11px] tabular-nums">{formatPlaybackTime(duration)}</span>
+        <button type="button" onClick={() => setMuted((value) => !value)} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
+        <button type="button" onClick={() => playerRef.current?.requestFullscreen?.()} className="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10" aria-label="전체 화면"><Icon icon="mdi:fullscreen" className="text-xl" /></button>
+      </div>
+    </div>
+  );
+};
+
 const MediaViewerPage = () => {
   const { mediaId } = useParams();
   const [searchParams] = useSearchParams();
@@ -96,7 +154,7 @@ const MediaViewerPage = () => {
   const [editDate, setEditDate] = useState('');
   const [sharedWith, setSharedWith] = useState(['dad', 'mom']);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [error, setError] = useState('');
+  const [toasts, setToasts] = useState([]);
 
   const requestedDate = searchParams.get('date');
   const returnTo = location.state?.returnTo === '/album' ? '/album' : '/calendar';
@@ -107,12 +165,24 @@ const MediaViewerPage = () => {
   const previous = currentIndex > 0 ? items[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
 
+  const removeToast = useCallback((id) => {
+    setToasts((value) => value.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback((type, message) => {
+    setToasts((value) => [...value.slice(-2), {
+      id: `${Date.now()}-${Math.random()}`,
+      type,
+      message,
+    }]);
+  }, []);
+
   const loadDetails = () => getMediaDetails(mediaId, user?.id)
     .then((data) => {
       setDetails(data);
       setSharedWith(data.sharedWith?.length ? data.sharedWith : ['dad', 'mom']);
     })
-    .catch((loadError) => setError(loadError.message));
+    .catch((loadError) => showToast('error', loadError.message));
 
   useEffect(() => {
     setLoading(true);
@@ -132,7 +202,7 @@ const MediaViewerPage = () => {
     if (!current?.date) return;
     getDateAlbumTags({ dateFrom: current.date, dateTo: getNextDate(current.date) })
       .then((tagsByDate) => setDateTags(tagsByDate[current.date] || []))
-      .catch((tagError) => setError(tagError.message));
+      .catch((tagError) => showToast('error', tagError.message));
   }, [current?.date]);
 
   useEffect(() => {
@@ -176,7 +246,7 @@ const MediaViewerPage = () => {
       toggleLikeLocal(mediaId);
       setDetails((value) => ({ ...value, likeCount: Math.max(0, value.likeCount + (wasLiked ? -1 : 1)) }));
     } catch (actionError) {
-      setError(actionError.message);
+      showToast('error', actionError.message);
     } finally {
       setBusyAction('');
     }
@@ -188,8 +258,9 @@ const MediaViewerPage = () => {
     try {
       const result = await toggleFavorite(user.id, mediaId);
       setDetails((value) => ({ ...value, favorited: result.favorited }));
+      showToast('success', result.favorited ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.');
     } catch (actionError) {
-      setError(actionError.message);
+      showToast('error', actionError.message);
     } finally {
       setBusyAction('');
     }
@@ -217,16 +288,28 @@ const MediaViewerPage = () => {
       setTagDraft('');
       setAddingTag(false);
       window.dispatchEvent(new Event('hotube:media-updated'));
+      showToast('success', '태그를 추가했습니다.');
     } catch (tagError) {
-      setError(tagError.message);
+      showToast('error', tagError.message);
     } finally {
       tagSavingRef.current = false;
     }
   };
 
+  const removeTag = async (tag) => {
+    try {
+      await deleteDateAlbumTag(current.date, tag);
+      setDateTags((value) => value.filter((item) => item !== tag));
+      window.dispatchEvent(new Event('hotube:media-updated'));
+      showToast('success', '태그를 삭제했습니다.');
+    } catch (tagError) {
+      showToast('error', tagError.message);
+    }
+  };
+
   const saveMetadata = async () => {
     if (!editDate || sharedWith.length === 0) {
-      setError('날짜와 공유할 가족을 한 명 이상 선택해 주세요.');
+      showToast('warning', '날짜와 공유할 가족을 한 명 이상 선택해 주세요.');
       return;
     }
     setBusyAction('save');
@@ -235,10 +318,11 @@ const MediaViewerPage = () => {
       setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
       setDetails((value) => ({ ...value, sharedWith }));
       setEditing(false);
+      showToast('success', '미디어 정보를 저장했습니다.');
       window.dispatchEvent(new Event('hotube:media-updated'));
-      if (editDate !== date) navigate(`/media/${mediaId}?date=${editDate}`, { replace: true });
+      if (editDate !== date) navigate(`/media/${mediaId}?date=${editDate}`, { replace: true, state: { returnTo } });
     } catch (actionError) {
-      setError(actionError.message);
+      showToast('error', actionError.message);
     } finally {
       setBusyAction('');
     }
@@ -246,17 +330,17 @@ const MediaViewerPage = () => {
 
   const confirmDelete = async () => {
     try {
-      await deleteVideo(mediaId);
+      await deleteVideo(mediaId, user?.id);
       window.dispatchEvent(new Event('hotube:media-updated'));
       navigate(`/calendar/${date}`, { replace: true, state: { returnTo } });
     } catch (actionError) {
-      setError(actionError.message);
+      showToast('error', actionError.message);
     }
   };
 
   const shareLabel = sharedWith.length > 1
-    ? '여러 가족 공유'
-    : sharedWith[0] === 'mom' ? '엄마가족만 공유' : '아빠가족만 공유';
+    ? '모든가족'
+    : sharedWith[0] === 'mom' ? '엄마가족' : '아빠가족';
 
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center bg-background"><Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" /></main>;
@@ -283,9 +367,11 @@ const MediaViewerPage = () => {
             <p className="text-sm font-bold">추억 보기</p>
             <p className="text-xs text-text-secondary">{currentIndex + 1} / {items.length}</p>
           </div>
-          <button type="button" onClick={() => setEditing((value) => !value)} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="미디어 정보 수정">
-            <Icon icon="mdi:dots-horizontal" className="text-2xl" />
-          </button>
+          {details?.canModify ? (
+            <button type="button" onClick={() => setEditing((value) => !value)} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="미디어 정보 수정">
+              <Icon icon="mdi:dots-horizontal" className="text-2xl" />
+            </button>
+          ) : <span className="size-10" />}
         </div>
       </header>
 
@@ -299,9 +385,9 @@ const MediaViewerPage = () => {
             </div>
             <div className={`relative flex items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}>
               {current.source === 'youtube' ? (
-                <iframe src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1`} title={current.title} allowFullScreen className="aspect-video w-full" />
+                <iframe src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1&mute=1&playsinline=1`} title={current.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full" />
               ) : current.type === 'video' ? (
-                <video src={current.src} poster={current.thumbnail} controls autoPlay className="max-h-[75vh] max-w-full object-contain" />
+                <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} />
               ) : (
                 <img src={current.src} alt={current.title} className="block max-h-[75vh] w-full object-contain" />
               )}
@@ -320,23 +406,31 @@ const MediaViewerPage = () => {
 
             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text-secondary">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="inline-flex items-center gap-1.5"><FamilyAvatar person={details?.uploader} className="size-6" />by {details?.uploader?.title || details?.uploader?.name || '가족'}</span>
                 {details?.viewers?.length > 0 && (
-                  <><span>·</span><span className="inline-flex items-center gap-1.5"><span className="flex -space-x-1">{details.viewers.slice(0, 4).map((viewer) => <FamilyAvatar key={viewer.id} person={viewer} className="size-6" />)}</span>{details.viewers.length}명 조회</span></>
+                  <span className="flex -space-x-1">{details.viewers.slice(0, 6).map((viewer) => <FamilyAvatar key={viewer.id} person={viewer} className="size-6" />)}</span>
                 )}
               </div>
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold"><Icon icon="mdi:account-group-outline" />{shareLabel}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="inline-flex items-center gap-1 font-semibold"><Icon icon="mdi:account-group-outline" />{shareLabel}</span>
+                <span>·</span>
+                <span>by {details?.uploader?.title || details?.uploader?.name || '가족'}</span>
+              </div>
             </div>
 
             <div className="mt-2 flex items-center justify-between">
               <ActionButton icon={isLiked(mediaId) ? 'mdi:heart' : 'mdi:heart-outline'} label="좋아요" count={details?.likeCount || 0} active={isLiked(mediaId)} onClick={handleLike} />
               <ActionButton icon={details?.favorited ? 'mdi:bookmark' : 'mdi:bookmark-outline'} label="즐겨찾기" active={details?.favorited} onClick={handleFavorite} />
               <ActionButton icon="mdi:comment-outline" label="댓글" count={details?.commentCount || 0} onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
-              <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' ? current.src : undefined} disabled={current.source !== 'file'} />
+              <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' ? `${current.src}&download=1` : undefined} disabled={current.source !== 'file'} />
             </div>
 
             <div className="mt-2 flex min-h-6 flex-wrap items-center gap-1.5 text-xs">
-              {[...new Set([...(current.tags || []), ...dateTags])].map((tag) => <span key={tag} className="text-text-secondary">#{tag}</span>)}
+              {[...new Set([...(current.tags || []), ...dateTags])].map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-0.5 text-text-secondary">
+                  #{tag}
+                  {dateTags.includes(tag) && <button type="button" onClick={() => removeTag(tag)} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>}
+                </span>
+              ))}
               {addingTag ? (
                 <form onSubmit={submitTag} className="flex items-center gap-1">
                   <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} onBlur={submitTag} onKeyDown={(event) => { if (event.key === 'Escape') { setTagDraft(''); setAddingTag(false); } }} placeholder="태그" className="h-6 w-24 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary" />
@@ -383,7 +477,7 @@ const MediaViewerPage = () => {
         </div>
       )}
 
-      {error && <button type="button" onClick={() => setError('')} className="fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full bg-error px-4 py-2 text-sm font-semibold text-white shadow-lg">{error}</button>}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Modal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={confirmDelete} title="미디어 삭제" message="이 사진 또는 영상을 삭제할까요? 삭제한 파일은 복구할 수 없습니다." type="confirm" confirmText="삭제" />
     </main>
   );

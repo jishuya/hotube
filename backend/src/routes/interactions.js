@@ -1,6 +1,6 @@
 const express = require("express");
 const pgDb = require("../db");
-const { mediaExists } = require("../services/mediaService");
+const { getMediaAccess, mediaExists } = require("../services/mediaService");
 const { userExists } = require("../services/userService");
 
 const router = express.Router();
@@ -27,6 +27,12 @@ router.post("/toggleLike", async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
     }
+    const access = await getMediaAccess(client, videoId, userId);
+    if (!access?.can_view) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
+    }
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [userId, videoId]);
 
     const existingLike = await client.query(
       "SELECT 1 FROM user_liked_media WHERE user_id = $1 AND media_id = $2",
@@ -75,6 +81,8 @@ router.post("/markVideoWatched", async (req, res) => {
     if (!(await mediaExists(pgDb, videoId))) {
       return res.status(404).json({ error: "비디오를 찾을 수 없습니다" });
     }
+    const access = await getMediaAccess(pgDb, videoId, userId);
+    if (!access?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
 
     await pgDb.query(`
       INSERT INTO user_watched_media (user_id, media_id)
@@ -93,6 +101,8 @@ router.get('/getMediaDetails/:id', async (req, res) => {
   try {
     const mediaId = req.params.id;
     const userId = req.query.userId || null;
+    const access = await getMediaAccess(pgDb, mediaId, userId);
+    if (!access?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     const [mediaResult, viewersResult, countsResult, favoriteResult] = await Promise.all([
       pgDb.query(`
         SELECT m.uploaded_by, m.shared_with, u.name AS uploader_name,
@@ -126,6 +136,7 @@ router.get('/getMediaDetails/:id', async (req, res) => {
       commentCount: countsResult.rows[0].comment_count,
       likeCount: countsResult.rows[0].like_count,
       favorited: favoriteResult.rows.length > 0,
+      canModify: access.can_modify,
     });
   } catch (error) {
     console.error('미디어 상세 정보 조회 오류:', error);
@@ -134,22 +145,36 @@ router.get('/getMediaDetails/:id', async (req, res) => {
 });
 
 router.post('/toggleFavorite', async (req, res) => {
+  let client;
   try {
     const { userId, videoId } = req.body;
     if (!userId || !videoId) return res.status(400).json({ error: 'userId와 videoId가 필요합니다' });
-    const existing = await pgDb.query(
+    client = await pgDb.getClient();
+    await client.query('BEGIN');
+    const access = await getMediaAccess(client, videoId, userId);
+    if (!access?.can_view) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
+    }
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [userId, videoId]);
+    const existing = await client.query(
       'SELECT 1 FROM user_favorite_media WHERE user_id = $1 AND media_id = $2',
       [userId, videoId],
     );
     if (existing.rows.length) {
-      await pgDb.query('DELETE FROM user_favorite_media WHERE user_id = $1 AND media_id = $2', [userId, videoId]);
+      await client.query('DELETE FROM user_favorite_media WHERE user_id = $1 AND media_id = $2', [userId, videoId]);
+      await client.query('COMMIT');
       return res.json({ favorited: false, videoId });
     }
-    await pgDb.query('INSERT INTO user_favorite_media (user_id, media_id) VALUES ($1, $2)', [userId, videoId]);
+    await client.query('INSERT INTO user_favorite_media (user_id, media_id) VALUES ($1, $2)', [userId, videoId]);
+    await client.query('COMMIT');
     return res.json({ favorited: true, videoId });
   } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('즐겨찾기 토글 오류:', error);
     return res.status(500).json({ error: '즐겨찾기 처리 실패' });
+  } finally {
+    client?.release();
   }
 });
 
