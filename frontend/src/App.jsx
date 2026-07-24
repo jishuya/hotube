@@ -14,6 +14,7 @@ import {
   MyPage,
   DayAlbumPage,
   MediaViewerPage,
+  SupportManagementPage,
 } from './pages';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -66,6 +67,14 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
+            <Navigate to="/calendar" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home"
+        element={
+          <ProtectedRoute>
             <HomePage />
           </ProtectedRoute>
         }
@@ -84,6 +93,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <AdminPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support-management"
+        element={
+          <AdminRoute>
+            <SupportManagementPage />
+          </AdminRoute>
         }
       />
       <Route

@@ -7,6 +7,7 @@ import PasswordChangeModal from '../components/common/PasswordChangeModal';
 import ProfileEditModal from '../components/common/ProfileEditModal';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, updateUser as updateUserApi } from '../services/authApi';
+import { createSupportRequest } from '../services/supportApi';
 
 const roleLabels = {
   admin: '관리자',
@@ -45,6 +46,9 @@ const MyPage = () => {
   const [supportMessage, setSupportMessage] = useState('');
   const [supportSent, setSupportSent] = useState(false);
   const [supportFiles, setSupportFiles] = useState([]);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [supportReceipt, setSupportReceipt] = useState(null);
 
   const categoryLabel = CATEGORIES.find((item) => item.value === user?.category)?.label || '미설정';
   const displayName = user?.name || user?.title || 'HoTube 가족';
@@ -75,13 +79,52 @@ const MyPage = () => {
     setSupportMessage('');
     setSupportSent(false);
     setSupportFiles([]);
+    setSupportBusy(false);
+    setSupportError('');
+    setSupportReceipt(null);
   };
 
-  const submitSupport = (event) => {
+  const submitSupport = async (event) => {
     event.preventDefault();
-    if (!supportMessage.trim()) return;
-    setSupportSent(true);
-    setSupportMessage('');
+    if (!supportMessage.trim() || supportBusy) return;
+    setSupportBusy(true);
+    setSupportError('');
+    try {
+      const receipt = await createSupportRequest({
+        userId: user.id,
+        requestType: supportType,
+        message: supportMessage.trim(),
+        files: supportFiles,
+      });
+      setSupportReceipt(receipt);
+      setSupportSent(true);
+      setSupportMessage('');
+      setSupportFiles([]);
+    } catch (error) {
+      setSupportError(error.message || '문의를 접수하지 못했습니다');
+    } finally {
+      setSupportBusy(false);
+    }
+  };
+
+  const addSupportFiles = (fileList) => {
+    const selectedFiles = Array.from(fileList || []);
+    if (supportFiles.length + selectedFiles.length > 5) {
+      setSupportError('이미지는 최대 5장까지 첨부할 수 있습니다.');
+      return;
+    }
+    const invalidFile = selectedFiles.find((file) => !file.type.startsWith('image/'));
+    if (invalidFile) {
+      setSupportError('이미지 파일만 첨부할 수 있습니다.');
+      return;
+    }
+    const oversizedFile = selectedFiles.find((file) => file.size > 5 * 1024 * 1024);
+    if (oversizedFile) {
+      setSupportError('첨부 이미지는 한 장당 5MB 이하여야 합니다.');
+      return;
+    }
+    setSupportError('');
+    setSupportFiles((current) => [...current, ...selectedFiles]);
   };
 
   return (
@@ -215,6 +258,18 @@ const MyPage = () => {
                   <Icon icon="mdi:chevron-right" className="text-xl text-text-secondary" />
                 </button>
               ))}
+              {isAdmin && (
+                <button type="button" onClick={() => navigate('/support-management')} className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-primary/5">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon icon="mdi:message-cog-outline" className="text-xl" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">고객의 소리 관리</span>
+                    <span className="mt-0.5 block text-xs text-text-secondary">접수된 문의와 오류 리포트를 확인하고 관리해요.</span>
+                  </span>
+                  <Icon icon="mdi:chevron-right" className="text-xl text-text-secondary" />
+                </button>
+              )}
             </div>
           </section>
         </div>
@@ -250,50 +305,81 @@ const MyPage = () => {
       {supportType && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           <button type="button" className="absolute inset-0 bg-black/50" onClick={closeSupport} aria-label="닫기" />
-          <section className="relative w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+          <section className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">{supportType === 'bug' ? '오류 리포트' : '문의하기'}</h2>
               <button type="button" onClick={closeSupport} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10" aria-label="닫기"><Icon icon="mdi:close" className="text-xl" /></button>
             </div>
             {supportSent ? (
-              <div className="py-8 text-center"><Icon icon="mdi:check-circle" className="mx-auto text-5xl text-success" /><p className="mt-3 font-bold">소중한 의견이 접수되었습니다.</p><button type="button" onClick={closeSupport} className="mt-5 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white">확인</button></div>
+              <div className="py-8 text-center">
+                <Icon icon="mdi:check-circle" className="mx-auto text-5xl text-success" />
+                <p className="mt-3 font-bold">소중한 의견이 접수되었습니다.</p>
+                <p className="mt-1 text-xs text-text-secondary">
+                  {supportReceipt?.emailSent
+                    ? '관리자에게 메일 알림도 전송했어요.'
+                    : '접수 내용은 안전하게 저장되었어요.'}
+                </p>
+                <button type="button" onClick={closeSupport} className="mt-5 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white">확인</button>
+              </div>
             ) : (
               <form onSubmit={submitSupport}>
-                <label className="text-sm font-semibold">내용<textarea value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} required rows="6" className="mt-2 w-full resize-none rounded-xl border border-border bg-background p-3 focus:border-primary focus:ring-primary/30" placeholder={supportType === 'bug' ? '오류가 발생한 화면과 상황을 자세히 적어주세요.' : '궁금한 점이나 의견을 적어주세요.'} /></label>
-                {supportType === 'bug' && (
-                  <div className="mt-4">
-                    <p className="mb-2 text-sm font-semibold">사진 첨부 <span className="font-normal text-text-secondary">(최대 5장)</span></p>
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/35 bg-primary/5 px-4 py-4 text-sm font-bold text-primary transition hover:border-primary hover:bg-primary/10">
-                      <Icon icon="mdi:image-plus-outline" className="text-xl" />
-                      사진 선택
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="sr-only"
-                        onChange={(event) => {
-                          const selectedFiles = Array.from(event.target.files || []);
-                          setSupportFiles((current) => [...current, ...selectedFiles].slice(0, 5));
-                          event.target.value = '';
-                        }}
-                      />
-                    </label>
-                    {supportFiles.length > 0 && (
-                      <ul className="mt-2 space-y-2">
-                        {supportFiles.map((file, index) => (
-                          <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs">
-                            <Icon icon="mdi:image-outline" className="shrink-0 text-lg text-primary" />
-                            <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                            <button type="button" onClick={() => setSupportFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-error/10 hover:text-error" aria-label={`${file.name} 삭제`}>
-                              <Icon icon="mdi:close" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                <label className="text-sm font-semibold">
+                  내용
+                  <textarea
+                    value={supportMessage}
+                    onChange={(event) => {
+                      setSupportMessage(event.target.value);
+                      setSupportError('');
+                    }}
+                    required
+                    maxLength="5000"
+                    rows="6"
+                    disabled={supportBusy}
+                    className="mt-2 w-full resize-none rounded-xl border border-border bg-background p-3 focus:border-primary focus:ring-primary/30 disabled:opacity-60"
+                    placeholder={supportType === 'bug' ? '오류가 발생한 화면과 상황을 자세히 적어주세요.' : '궁금한 점이나 의견을 적어주세요.'}
+                  />
+                </label>
+                <div className="mt-4">
+                  <p className="mb-2 text-sm font-semibold">사진 첨부 <span className="font-normal text-text-secondary">(선택, 최대 5장·장당 5MB)</span></p>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/35 bg-primary/5 px-4 py-4 text-sm font-bold text-primary transition hover:border-primary hover:bg-primary/10">
+                    <Icon icon="mdi:image-plus-outline" className="text-xl" />
+                    사진 선택
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={supportBusy}
+                      className="sr-only"
+                      onChange={(event) => {
+                        addSupportFiles(event.target.files);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {supportFiles.length > 0 && (
+                    <ul className="mt-2 space-y-2">
+                      {supportFiles.map((file, index) => (
+                        <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs">
+                          <Icon icon="mdi:image-outline" className="shrink-0 text-lg text-primary" />
+                          <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                          <button type="button" disabled={supportBusy} onClick={() => setSupportFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-error/10 hover:text-error disabled:opacity-50" aria-label={`${file.name} 삭제`}>
+                            <Icon icon="mdi:close" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {supportError && (
+                  <p role="alert" className="mt-3 flex items-start gap-1.5 text-sm font-semibold text-error">
+                    <Icon icon="mdi:alert-circle-outline" className="mt-0.5 shrink-0 text-lg" />
+                    {supportError}
+                  </p>
                 )}
-                <button type="submit" className="mt-4 h-11 w-full rounded-xl bg-primary font-bold text-white">접수하기</button>
+                <button type="submit" disabled={supportBusy || !supportMessage.trim()} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  {supportBusy && <Icon icon="mdi:loading" className="animate-spin text-xl" />}
+                  {supportBusy ? '접수 중...' : '접수하기'}
+                </button>
               </form>
             )}
           </section>

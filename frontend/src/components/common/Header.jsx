@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import ChildInfoModal from './ChildInfoModal';
 import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
+import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 
 const DEFAULT_CHILD = {
   name: '김수호',
@@ -46,8 +47,16 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [searchQuery, setSearchQuery] = useState('');
   const [child, setChild] = useState(DEFAULT_CHILD);
   const [showChildInfoModal, setShowChildInfoModal] = useState(false);
-  const { user } = useAuth();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [supportRequests, setSupportRequests] = useState([]);
+  const [notificationError, setNotificationError] = useState('');
+  const [selectedSupport, setSelectedSupport] = useState(null);
+  const [supportDetailLoading, setSupportDetailLoading] = useState(false);
+  const { user, isAdmin: authIsAdmin } = useAuth();
   const selectedAvatar = PROFILE_AVATARS.find((avatar) => avatar.id === user?.avatar) || PROFILE_AVATARS[2];
+  const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
+  const unreadSupportCount = unreadSupportRequests.length;
+  const hasUnreadSupport = unreadSupportCount > 0;
 
   // URL의 검색어와 input 동기화
   useEffect(() => {
@@ -67,23 +76,76 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     };
   }, []);
 
+  useEffect(() => {
+    if (!authIsAdmin || !user?.id) {
+      setSupportRequests([]);
+      return undefined;
+    }
+    let active = true;
+    const loadNotifications = () => {
+      getSupportRequests(user.id)
+        .then((requests) => {
+          if (active) {
+            setSupportRequests(requests);
+            setNotificationError('');
+          }
+        })
+        .catch((error) => {
+          if (active) setNotificationError(error.message);
+        });
+    };
+    loadNotifications();
+    const intervalId = window.setInterval(loadNotifications, 15000);
+    window.addEventListener('focus', loadNotifications);
+    window.addEventListener('support-status-changed', loadNotifications);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', loadNotifications);
+      window.removeEventListener('support-status-changed', loadNotifications);
+    };
+  }, [authIsAdmin, user?.id]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/?q=${encodeURIComponent(searchQuery.trim())}`);
+      navigate(`/home?q=${encodeURIComponent(searchQuery.trim())}`);
     } else {
-      navigate('/');
+      navigate('/home');
     }
   };
 
   const handleClear = () => {
     setSearchQuery('');
-    navigate('/');
+    navigate('/home');
   };
 
   const handleChildSave = async (updatedChild) => {
     const savedChild = await saveChildProfile(updatedChild, user?.id);
     setChild({ ...DEFAULT_CHILD, ...savedChild });
+  };
+
+  const handleNotificationClick = async (request) => {
+    setShowNotifications(false);
+    setSupportDetailLoading(true);
+    setNotificationError('');
+    try {
+      const [detail, updated] = await Promise.all([
+        getSupportRequest(request.id, user.id),
+        request.status === 'received'
+          ? markSupportRequestRead(request.id, user.id)
+          : Promise.resolve({ status: request.status }),
+      ]);
+      setSelectedSupport({ ...detail, status: updated.status });
+      setSupportRequests((current) => current.map((item) => (
+        item.id === request.id ? { ...item, status: updated.status } : item
+      )));
+    } catch (error) {
+      setNotificationError(error.message);
+      setShowNotifications(true);
+    } finally {
+      setSupportDetailLoading(false);
+    }
   };
 
   return (
@@ -128,7 +190,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
             </div>
           )}
 
-          <div className="flex gap-2 sm:gap-4 shrink-0 items-center">
+          <div className="relative flex gap-2 sm:gap-4 shrink-0 items-center">
             {isAdmin ? (
               <Link
                 to="/"
@@ -137,6 +199,65 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                 <Icon icon="lucide:home" className="text-xl" />
               </Link>
             ) : null}
+            {authIsAdmin && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((current) => !current)}
+                  className="relative flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+                  aria-label="문의 알림"
+                  aria-expanded={showNotifications}
+                  title="문의 알림"
+                >
+                  <Icon icon={hasUnreadSupport ? 'mdi:bell-ring-outline' : 'mdi:bell-outline'} className="text-xl" />
+                  {hasUnreadSupport && (
+                    <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-error text-[11px] font-extrabold leading-none text-white ring-2 ring-background">
+                      N
+                    </span>
+                  )}
+                </button>
+                {showNotifications && (
+                  <section className="fixed left-4 right-4 top-16 z-30 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[22rem]" aria-label="문의 알림 목록">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                      <div>
+                        <h2 className="font-bold">문의 알림</h2>
+                        <p className="text-xs text-text-secondary">
+                          {hasUnreadSupport ? `미확인 ${unreadSupportCount}건` : '새로운 알림이 없어요'}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setShowNotifications(false)} className="flex size-8 items-center justify-center rounded-full hover:bg-primary/10" aria-label="알림 닫기">
+                        <Icon icon="mdi:close" className="text-lg" />
+                      </button>
+                    </div>
+                    <div className="max-h-[min(65vh,32rem)] overflow-y-auto">
+                      {notificationError && (
+                        <p className="m-3 rounded-xl bg-error/10 px-3 py-2 text-sm font-semibold text-error">{notificationError}</p>
+                      )}
+                      {!notificationError && unreadSupportRequests.length === 0 && (
+                        <div className="px-4 py-10 text-center text-sm text-text-secondary">
+                          <Icon icon="mdi:bell-check-outline" className="mx-auto mb-2 text-4xl text-primary/50" />
+                          확인하지 않은 문의가 없어요.
+                        </div>
+                      )}
+                      {unreadSupportRequests.map((request) => (
+                        <button
+                          key={request.id}
+                          type="button"
+                          onClick={() => handleNotificationClick(request)}
+                          className="flex w-full items-center gap-2 border-b border-border bg-primary/5 px-4 py-3 text-left transition last:border-b-0 hover:bg-primary/10"
+                        >
+                          <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                            {request.message.split(/\r?\n/)[0]}
+                          </span>
+                          <Icon icon="mdi:chevron-right" className="shrink-0 text-lg text-text-secondary" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
             <Link
               to="/mypage"
               className="size-10 overflow-hidden rounded-full border-2 border-white bg-primary/10 shadow-sm ring-1 ring-primary/20 transition hover:scale-105 hover:ring-primary/50 dark:border-surface"
@@ -211,6 +332,56 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
         </div>
       )}
       </div>
+      {supportDetailLoading && (
+        <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/50 p-4" role="status" aria-label="접수 내용 불러오는 중">
+          <div className="flex items-center gap-2 rounded-2xl bg-surface px-5 py-4 font-bold shadow-xl">
+            <Icon icon="mdi:loading" className="animate-spin text-2xl text-primary" />
+            접수 내용을 불러오는 중...
+          </div>
+        </div>
+      )}
+      {selectedSupport && !supportDetailLoading && (
+        <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          <button type="button" className="absolute inset-0 bg-black/50" onClick={() => setSelectedSupport(null)} aria-label="상세 내용 닫기" />
+          <section className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface p-5 shadow-xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="support-detail-title">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${selectedSupport.request_type === 'bug' ? 'bg-error/10 text-error' : 'bg-primary/15 text-primary'}`}>
+                  {selectedSupport.request_type === 'bug' ? '오류 리포트' : '문의사항'}
+                </span>
+                <h2 id="support-detail-title" className="mt-2 text-xl font-bold">접수 내용</h2>
+              </div>
+              <button type="button" onClick={() => setSelectedSupport(null)} className="flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-primary/10" aria-label="상세 내용 닫기">
+                <Icon icon="mdi:close" className="text-xl" />
+              </button>
+            </div>
+            <dl className="mt-4 grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-2 rounded-xl bg-background p-4 text-sm">
+              <dt className="font-semibold text-text-secondary">작성자</dt>
+              <dd className="font-bold">{selectedSupport.user_name || selectedSupport.user_title || selectedSupport.login_id || '알 수 없는 사용자'}</dd>
+              <dt className="font-semibold text-text-secondary">접수일</dt>
+              <dd>{new Date(selectedSupport.created_at).toLocaleString('ko-KR')}</dd>
+            </dl>
+            <div className="mt-5">
+              <h3 className="text-sm font-bold">내용</h3>
+              <p className="mt-2 whitespace-pre-wrap break-words rounded-xl border border-border bg-background p-4 text-sm leading-6">{selectedSupport.message}</p>
+            </div>
+            {selectedSupport.attachments?.length > 0 && (
+              <div className="mt-5">
+                <h3 className="text-sm font-bold">첨부 사진 <span className="font-normal text-text-secondary">{selectedSupport.attachments.length}장</span></h3>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {selectedSupport.attachments.map((attachment) => (
+                    <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-border bg-background">
+                      <img src={attachment.url} alt={attachment.original_name} className="aspect-square w-full object-cover transition group-hover:scale-105" />
+                      <span className="block truncate px-2 py-2 text-xs text-text-secondary">{attachment.original_name}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button type="button" onClick={() => setSelectedSupport(null)} className="mt-6 h-11 w-full rounded-xl bg-primary font-bold text-white">확인</button>
+          </section>
+        </div>
+      )}
       {showChildBanner && showChildInfoModal && (
         <ChildInfoModal
           isOpen
