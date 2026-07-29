@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 const videoRoutes = require("./routes/videos");
 const authRoutes = require("./routes/auth");
 const interactionRoutes = require("./routes/interactions");
@@ -26,5 +28,18 @@ app.use(childProfileRoutes);
 app.use(dateAlbumTagRoutes);
 app.use(userAlbumRoutes);
 app.use(supportRoutes);
+
+const frontendDist = path.resolve(__dirname, "../../frontend/dist");
+
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get("*", (req, res, next) => {
+    if (!req.accepts("html")) {
+      return next();
+    }
+
+    return res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
 
 module.exports = app;

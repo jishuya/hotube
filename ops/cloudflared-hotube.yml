@@ -1,0 +1,9 @@
+tunnel: a068eda7-dc14-4cc4-be3a-cc8444f88704
+credentials-file: /home/jishu/.cloudflared/a068eda7-dc14-4cc4-be3a-cc8444f88704.json
+
+ingress:
+  - hostname: hotube.net
+    service: http://localhost:5001
+  - hostname: www.hotube.net
+    service: http://localhost:5001
+  - service: http_status:404

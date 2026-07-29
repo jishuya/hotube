@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloudflare Tunnel for HoTube
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=jishu
+TimeoutStartSec=15
+ExecStart=/usr/bin/cloudflared --no-autoupdate --config /home/jishu/workspace/lab/hotube/ops/cloudflared-hotube.yml tunnel run
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
