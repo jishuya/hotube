@@ -5,6 +5,7 @@ import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
 import PasswordChangeModal from '../components/common/PasswordChangeModal';
 import ProfileEditModal from '../components/common/ProfileEditModal';
+import PushNotificationSettings from '../components/common/PushNotificationSettings';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, updateUser as updateUserApi } from '../services/authApi';
 import { createSupportRequest } from '../services/supportApi';
@@ -184,6 +185,7 @@ const MyPage = () => {
           <section className="mt-6" aria-labelledby="settings-title">
             <h2 id="settings-title" className="mb-3 text-xl font-bold">설정</h2>
             <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+              <PushNotificationSettings userId={user.id} />
               <button
                 type="button"
                 onClick={() => setShowProfileModal(true)}

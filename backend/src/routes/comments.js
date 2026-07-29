@@ -5,6 +5,7 @@ const { mapCommentRowToComment } = require("../responseMappers");
 const { fetchCommentById } = require("../services/commentService");
 const { getMediaAccess, mediaExists } = require("../services/mediaService");
 const { fetchCommentAuthorById } = require("../services/userService");
+const { notifyNewComment } = require("../services/pushNotificationService");
 
 const router = express.Router();
 
@@ -43,6 +44,14 @@ router.post("/createComment", async (req, res) => {
       normalizedContent,
       new Date().toISOString(),
     ]);
+
+    void notifyNewComment({
+      mediaId: videoId,
+      commenter: userData,
+      content: normalizedContent,
+    }).catch((error) => {
+      console.error("새 댓글 푸시 알림 오류:", error);
+    });
 
     res.status(201).json(mapCommentRowToComment(created.rows[0]));
   } catch (error) {

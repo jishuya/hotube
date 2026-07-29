@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "HoTube",
+  "short_name": "HoTube",
+  "description": "가족의 소중한 추억을 담은 개인 영상 보관소",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fffaf5",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

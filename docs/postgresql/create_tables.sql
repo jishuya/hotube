@@ -244,6 +244,20 @@ CREATE TABLE IF NOT EXISTS support_request_attachments (
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id UUID PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_push_subscriptions_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_comments_media_id ON comments (media_id);
 CREATE INDEX IF NOT EXISTS idx_child_profiles_birth_date ON child_profiles (birth_date);
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments (user_id);
@@ -258,6 +272,7 @@ CREATE INDEX IF NOT EXISTS idx_user_watched_media_media_id ON user_watched_media
 CREATE INDEX IF NOT EXISTS idx_user_liked_media_media_id ON user_liked_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_user_favorite_media_media_id ON user_favorite_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_user_albums_user_updated ON user_albums (user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_album_media_album_position ON user_album_media (album_id, position, created_at);
 CREATE INDEX IF NOT EXISTS idx_user_album_media_media_id ON user_album_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_support_requests_created ON support_requests (created_at DESC);

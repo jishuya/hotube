@@ -10,6 +10,7 @@ const childProfileRoutes = require("./routes/childProfiles");
 const dateAlbumTagRoutes = require('./routes/dateAlbumTags');
 const userAlbumRoutes = require('./routes/userAlbums');
 const supportRoutes = require('./routes/support');
+const pushNotificationRoutes = require('./routes/pushNotifications');
 
 const app = express();
 
@@ -28,10 +29,23 @@ app.use(childProfileRoutes);
 app.use(dateAlbumTagRoutes);
 app.use(userAlbumRoutes);
 app.use(supportRoutes);
+app.use(pushNotificationRoutes);
 
 const frontendDist = path.resolve(__dirname, "../../frontend/dist");
 
 if (fs.existsSync(frontendDist)) {
+  const sendPwaFile = (filename, contentType) => (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
+    res.type(contentType);
+    return res.sendFile(path.join(frontendDist, filename));
+  };
+
+  app.get("/sw.js", sendPwaFile("sw.js", "application/javascript"));
+  app.get(
+    "/manifest.webmanifest",
+    sendPwaFile("manifest.webmanifest", "application/manifest+json"),
+  );
   app.use(express.static(frontendDist));
   app.get("*", (req, res, next) => {
     if (!req.accepts("html")) {

@@ -14,6 +14,10 @@ const {
   updateSupportRequestStatus,
   updateEmailResult,
 } = require('../services/supportService');
+const {
+  notifySupportCreated,
+  notifySupportStatus,
+} = require('../services/pushNotificationService');
 
 const router = express.Router();
 ensureSupportDirectory();
@@ -54,6 +58,9 @@ router.post('/createSupportRequest', upload.array('files', 5), async (req, res) 
       console.error('문의 메일 발송 오류:', emailError);
       await updateEmailResult(result.request.id, false, emailError).catch(() => {});
     }
+    void notifySupportCreated(result).catch((error) => {
+      console.error('문의 접수 푸시 알림 오류:', error);
+    });
     return res.status(201).json({
       id: result.request.id,
       status: result.request.status,
@@ -122,6 +129,12 @@ router.patch('/supportRequests/:id/read', async (req, res) => {
 router.patch('/supportRequests/:id/status', async (req, res) => {
   try {
     const request = await updateSupportRequestStatus(req.params.id, req.body.status, req.body.adminId);
+    void notifySupportStatus({
+      requestId: req.params.id,
+      status: request.status,
+    }).catch((error) => {
+      console.error('문의 상태 푸시 알림 오류:', error);
+    });
     return res.json(request);
   } catch (error) {
     return res.status(error.status || 500).json({

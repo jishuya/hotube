@@ -18,6 +18,7 @@ const {
   updateMedia,
 } = require("../services/mediaService");
 const { fetchUserById } = require('../services/userService');
+const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
 
@@ -121,6 +122,9 @@ router.post("/createVideo", async (req, res) => {
     const uploader = req.body.uploadedBy ? await fetchUserById(req.body.uploadedBy) : null;
     if (!uploader) return res.status(401).json({ error: '업로드할 로그인 사용자 정보가 필요합니다' });
     const createdVideo = await createMedia(req.body);
+    void notifyNewMedia({ media: createdVideo, uploader }).catch((error) => {
+      console.error('새 미디어 푸시 알림 오류:', error);
+    });
     res.status(201).json(mapMediaRowToVideo(createdVideo));
   } catch (error) {
     console.error("비디오 등록 오류:", error);
@@ -163,6 +167,9 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
     });
     if (browserVideoPath) await fs.unlink(req.file.path).catch(() => {});
+    void notifyNewMedia({ media: createdMedia, uploader }).catch((error) => {
+      console.error('새 미디어 푸시 알림 오류:', error);
+    });
     return res.status(201).json(mapMediaRowToVideo(createdMedia));
   } catch (error) {
     await fs.unlink(req.file.path).catch(() => {});
