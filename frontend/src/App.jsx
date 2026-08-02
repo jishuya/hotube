@@ -142,7 +142,7 @@ function AppRoutes() {
           path="/upload"
           element={(
             <ProtectedRoute>
-              <UploadOverlay initialDate={location.state?.uploadDate} />
+              <UploadOverlay targetDate={location.state?.uploadDate} />
             </ProtectedRoute>
           )}
         />
@@ -152,7 +152,7 @@ function AppRoutes() {
   );
 }
 
-const UploadOverlay = ({ initialDate }) => {
+const UploadOverlay = ({ targetDate }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -179,7 +179,7 @@ const UploadOverlay = ({ initialDate }) => {
           </button>
         </div>
         <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <UploadPage embedded initialDate={initialDate} />
+          <UploadPage embedded initialDate={targetDate} targetDate={targetDate} />
         </div>
       </div>
     </div>

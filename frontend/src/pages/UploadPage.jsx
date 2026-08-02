@@ -66,7 +66,7 @@ const extractYouTubeId = (url) => {
   return match?.[1] || '';
 };
 
-const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnly = false }) => {
+const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetDate = '', listOnly = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [uploads, setUploads] = useState([]);
@@ -137,7 +137,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
           name: file.name,
           type: 'video',
           preview: null,
-          date: mediaDate,
+          date: targetDate || mediaDate,
           tags: '',
         }));
         return;
@@ -150,7 +150,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
           name: file.name,
           type: file.type.startsWith('video/') ? 'video' : 'photo',
           preview: reader.result,
-          date: mediaDate,
+          date: targetDate || mediaDate,
           tags: '',
         });
       };
@@ -218,7 +218,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
       const videoInfo = await fetchVideoInfoByUrl(youtubeUrl.trim());
       setYoutubeInfo(videoInfo);
       setTitle(videoInfo.title);
-      setDate(videoInfo.uploadedAt);
+      setDate(targetDate || videoInfo.uploadedAt);
       if (videoInfo.tags?.length) setTags(videoInfo.tags.join(', '));
     } catch (error) {
       setYoutubeInfo(null);
@@ -247,7 +247,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
             .filter(Boolean);
           const saved = await uploadMediaFile(item.file, {
             title: item.name,
-            uploadedAt: item.date || date,
+            uploadedAt: targetDate || item.date || date,
             tags: itemTags,
             dateTags: normalizedTags,
             uploadedBy: user?.id,
@@ -264,7 +264,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
           type: youtubeInfo.type,
           year: Number(date.slice(0, 4)),
           tags: normalizedTags,
-          uploadedAt: date,
+          uploadedAt: targetDate || date,
           durationSeconds: youtubeInfo.durationInSeconds,
           viewCount: youtubeInfo.viewCount,
           likeCount: youtubeInfo.likeCount,
@@ -334,6 +334,12 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
         <div className="mx-auto max-w-4xl bg-transparent">
           {!listOnly ? (
             <form onSubmit={handleUpload} className="space-y-5">
+              {targetDate && (
+                <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-3 text-sm font-bold text-primary">
+                  <Icon icon="mdi:calendar-check" className="text-xl" />
+                  {targetDate} 날짜에 추가됩니다.
+                </div>
+              )}
               <section className="rounded-xl bg-transparent p-5 sm:p-6">
                 <div className="rounded-xl border border-border p-4 sm:p-5">
                   <fieldset className="mb-4 flex w-full rounded-full bg-gray-100 p-1 shadow-inner">
@@ -470,7 +476,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="제목을 입력하세요" />
                   </label>
                 )}
-                {uploadSource === 'youtube' && (
+                {uploadSource === 'youtube' && !targetDate && (
                   <DatePickerField
                     label="날짜"
                     value={date}
