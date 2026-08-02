@@ -153,6 +153,107 @@ const MediaVideoPlayer = ({ src, poster }) => {
   );
 };
 
+const PhotoLightbox = ({ src, alt, onClose }) => {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const pointersRef = useRef(new Map());
+  const gestureRef = useRef(null);
+
+  const applyScale = useCallback((nextScale) => {
+    const normalizedScale = Math.min(5, Math.max(1, nextScale));
+    setScale(normalizedScale);
+    if (normalizedScale === 1) setOffset({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === '+' || event.key === '=') applyScale(scale + 0.5);
+      if (event.key === '-') applyScale(scale - 0.5);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [applyScale, onClose, scale]);
+
+  const getPointerDistance = () => {
+    const points = [...pointersRef.current.values()];
+    return points.length === 2 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
+  };
+
+  const handlePointerDown = (event) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointersRef.current.size === 2) {
+      gestureRef.current = { distance: getPointerDistance(), scale };
+    } else {
+      gestureRef.current = { x: event.clientX, y: event.clientY, offset };
+    }
+  };
+
+  const handlePointerMove = (event) => {
+    if (!pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointersRef.current.size === 2) {
+      const distance = getPointerDistance();
+      if (gestureRef.current?.distance) applyScale(gestureRef.current.scale * (distance / gestureRef.current.distance));
+    } else if (scale > 1 && gestureRef.current?.x !== undefined) {
+      setOffset({
+        x: gestureRef.current.offset.x + event.clientX - gestureRef.current.x,
+        y: gestureRef.current.offset.y + event.clientY - gestureRef.current.y,
+      });
+    }
+  };
+
+  const handlePointerEnd = (event) => {
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size === 1) {
+      const point = [...pointersRef.current.values()][0];
+      gestureRef.current = { x: point.x, y: point.y, offset };
+    } else if (pointersRef.current.size === 0) {
+      gestureRef.current = null;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/95" role="dialog" aria-modal="true" aria-label="사진 크게 보기">
+      <button type="button" onClick={onClose} className="absolute right-4 top-4 z-20 flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="사진 크게 보기 닫기">
+        <Icon icon="mdi:close" />
+      </button>
+      <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/55 p-2 text-white backdrop-blur">
+        <button type="button" onClick={() => applyScale(scale - 0.5)} disabled={scale <= 1} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-35" aria-label="축소"><Icon icon="mdi:minus" /></button>
+        <span className="w-14 text-center text-sm font-bold tabular-nums">{Math.round(scale * 100)}%</span>
+        <button type="button" onClick={() => applyScale(scale + 0.5)} disabled={scale >= 5} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-35" aria-label="확대"><Icon icon="mdi:plus" /></button>
+        <button type="button" onClick={() => applyScale(1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" aria-label="원래 크기"><Icon icon="mdi:restore" /></button>
+      </div>
+      <div
+        className={`flex h-full w-full items-center justify-center overflow-hidden touch-none ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+        onWheel={(event) => {
+          event.preventDefault();
+          applyScale(scale + (event.deltaY < 0 ? 0.25 : -0.25));
+        }}
+        onDoubleClick={() => applyScale(scale > 1 ? 1 : 2)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable="false"
+          className="max-h-full max-w-full select-none object-contain will-change-transform"
+          style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` }}
+        />
+      </div>
+    </div>
+  );
+};
+
 const MediaViewerPage = () => {
   const { mediaId } = useParams();
   const [searchParams] = useSearchParams();
@@ -175,6 +276,7 @@ const MediaViewerPage = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [uploadSuccessOpen, setUploadSuccessOpen] = useState(Boolean(location.state?.uploadSuccessMessage));
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const requestedDate = searchParams.get('date');
   const requestedReturnTo = location.state?.returnTo;
@@ -263,7 +365,8 @@ const MediaViewerPage = () => {
       if (event.key === 'ArrowLeft' && previous) moveTo(previous);
       if (event.key === 'ArrowRight' && next) moveTo(next);
       if (event.key === 'Escape') {
-        if (editing) setEditing(false);
+        if (photoOpen) setPhotoOpen(false);
+        else if (editing) setEditing(false);
         else if (returnTo.startsWith('/my-album/')) navigate(returnTo, { replace: true });
         else navigate(`/calendar/${date}`, { state: { returnTo } });
       }
@@ -445,7 +548,10 @@ const MediaViewerPage = () => {
               ) : current.type === 'video' ? (
                 <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} />
               ) : (
-                <img src={current.src} alt={current.title} className="block max-h-[75vh] w-full object-contain" />
+                <button type="button" onClick={() => setPhotoOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
+                  <img src={current.src} alt={current.title} className="block max-h-[75vh] w-full object-contain" />
+                  <span className="absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/55 text-xl text-white opacity-90 shadow-lg backdrop-blur transition group-hover:scale-105" aria-hidden="true"><Icon icon="mdi:magnify-plus-outline" /></span>
+                </button>
               )}
               <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className="absolute left-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
               <button type="button" onClick={() => moveTo(next)} disabled={!next} className="absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
@@ -534,6 +640,9 @@ const MediaViewerPage = () => {
       )}
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      {photoOpen && current.type === 'photo' && (
+        <PhotoLightbox src={current.src} alt={current.title} onClose={() => setPhotoOpen(false)} />
+      )}
       <Modal
         isOpen={uploadSuccessOpen}
         onClose={() => setUploadSuccessOpen(false)}
