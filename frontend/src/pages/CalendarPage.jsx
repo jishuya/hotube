@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
@@ -23,6 +23,14 @@ const parseDateKey = (dateString) => {
   return new Date(year, month - 1, day);
 };
 
+const parseMonthKey = (value) => {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value || '')) return null;
+  const [year, month] = value.split('-').map(Number);
+  return new Date(year, month - 1, 1);
+};
+
+const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
 const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
   const dateKey = formatDateKey(day.date);
   const hasMedia = Boolean(modifiers.hasMedia);
@@ -43,10 +51,12 @@ const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
 
 const CalendarPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const [month, setMonth] = useState(new Date(2026, 6, 1));
+  const monthParam = searchParams.get('month');
+  const month = useMemo(() => parseMonthKey(monthParam) || new Date(), [monthParam]);
   const [mediaItems, setMediaItems] = useState([]);
-  const selectedMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+  const selectedMonth = formatMonthKey(month);
   const mediaByDate = useMemo(() => mediaItems.reduce((groups, item) => {
     if (item.date) {
       if (!groups[item.date]) groups[item.date] = [];
@@ -68,6 +78,17 @@ const CalendarPage = () => {
     return () => window.removeEventListener('hotube:media-updated', loadMedia);
   }, []);
 
+  const handleMonthChange = (nextMonth) => {
+    setSearchParams({ month: formatMonthKey(nextMonth) }, { replace: true });
+  };
+
+  const openDate = (date) => {
+    const dateKey = formatDateKey(date);
+    navigate(`/calendar/${dateKey}`, {
+      state: { returnTo: `/calendar?month=${dateKey.slice(0, 7)}` },
+    });
+  };
+
   return (
     <>
       <Header showSearch={false} showChildBanner />
@@ -77,8 +98,8 @@ const CalendarPage = () => {
           <DayPicker
             locale={ko}
             month={month}
-            onMonthChange={setMonth}
-            onDayClick={(date) => navigate(`/calendar/${formatDateKey(date)}`, { state: { returnTo: '/calendar' } })}
+            onMonthChange={handleMonthChange}
+            onDayClick={openDate}
             startMonth={new Date(2000, 0)}
             endMonth={new Date(2035, 11)}
             captionLayout="dropdown"
@@ -104,7 +125,7 @@ const CalendarPage = () => {
                       <h3 className="font-bold">{formatRecentDate(date)}</h3>
                       <Link
                         to={`/calendar/${date}`}
-                        state={{ returnTo: '/calendar' }}
+                        state={{ returnTo: `/calendar?month=${date.slice(0, 7)}` }}
                         className="flex shrink-0 items-center gap-0.5 text-sm font-bold text-primary hover:underline"
                       >
                         더보기
@@ -116,6 +137,7 @@ const CalendarPage = () => {
                         <Link
                           key={item.id}
                           to={`/media/${item.id}?date=${date}`}
+                          state={{ returnTo: `/calendar?month=${date.slice(0, 7)}` }}
                           className={`group relative min-w-0 overflow-hidden rounded-lg bg-black/5 ${index === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`}
                           aria-label={item.title}
                         >

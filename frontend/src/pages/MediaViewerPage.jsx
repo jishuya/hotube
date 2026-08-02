@@ -174,14 +174,19 @@ const MediaViewerPage = () => {
   const [sharedWith, setSharedWith] = useState(['dad', 'mom']);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [uploadSuccessOpen, setUploadSuccessOpen] = useState(Boolean(location.state?.uploadSuccessMessage));
 
   const requestedDate = searchParams.get('date');
   const requestedReturnTo = location.state?.returnTo;
-  const returnTo = requestedReturnTo === '/album' || requestedReturnTo?.startsWith('/my-album/')
+  const returnTo = requestedReturnTo === '/album'
+    || requestedReturnTo?.startsWith('/my-album/')
+    || requestedReturnTo?.startsWith('/calendar?month=')
     ? requestedReturnTo
     : '/calendar';
   const albumMediaIds = location.state?.albumMediaIds;
   const current = mediaItems.find((item) => item.id === mediaId);
+  const isYoutubeShort = current?.source === 'youtube'
+    && (current.videoType === 'short' || current.src?.includes('/shorts/'));
   const date = requestedDate || current?.date;
   const items = useMemo(() => {
     if (Array.isArray(albumMediaIds)) {
@@ -426,7 +431,17 @@ const MediaViewerPage = () => {
             </div>
             <div className={`relative flex items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}>
               {current.source === 'youtube' ? (
-                <iframe src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1&mute=1&playsinline=1`} title={current.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full" />
+                <div className={`flex w-full justify-center bg-black ${isYoutubeShort ? 'py-2 sm:py-4' : ''}`}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1&mute=0&playsinline=1`}
+                    title={current.title}
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    className={isYoutubeShort
+                      ? 'aspect-[9/16] h-[70vh] max-h-[800px] max-w-full bg-black'
+                      : 'aspect-video w-full'}
+                  />
+                </div>
               ) : current.type === 'video' ? (
                 <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} />
               ) : (
@@ -519,6 +534,13 @@ const MediaViewerPage = () => {
       )}
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <Modal
+        isOpen={uploadSuccessOpen}
+        onClose={() => setUploadSuccessOpen(false)}
+        title="업로드 완료"
+        message={location.state?.uploadSuccessMessage || '미디어가 업로드되었습니다.'}
+        confirmText="확인"
+      />
       <Modal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={confirmDelete} title="미디어 삭제" message="이 사진 또는 영상을 삭제할까요? 삭제한 파일은 복구할 수 없습니다." type="confirm" confirmText="삭제" />
     </main>
   );

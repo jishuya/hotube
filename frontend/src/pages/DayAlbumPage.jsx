@@ -22,16 +22,31 @@ const DayAlbumPage = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [media, setMedia] = useState([]);
+  const [loadedDate, setLoadedDate] = useState(null);
+  const loading = loadedDate !== date;
   const viewedMediaIds = user?.watchedVideos || [];
-  const returnTo = location.state?.returnTo === '/album' ? '/album' : '/calendar';
+  const requestedReturnTo = location.state?.returnTo;
+  const returnTo = requestedReturnTo === '/album' || requestedReturnTo?.startsWith('/calendar?month=')
+    ? requestedReturnTo
+    : `/calendar?month=${date.slice(0, 7)}`;
 
   useEffect(() => {
-    const loadMedia = () => getAllVideos()
-      .then((items) => setMedia(items.map(toMemoryMedia).filter((item) => item.date === date)))
-      .catch((error) => console.error('날짜별 미디어 조회 실패:', error));
-    loadMedia();
-    window.addEventListener('hotube:media-updated', loadMedia);
-    return () => window.removeEventListener('hotube:media-updated', loadMedia);
+    let active = true;
+    const loadMedia = (markAsLoaded = false) => getAllVideos()
+      .then((items) => {
+        if (active) setMedia(items.map(toMemoryMedia).filter((item) => item.date === date));
+      })
+      .catch((error) => console.error('날짜별 미디어 조회 실패:', error))
+      .finally(() => {
+        if (active && markAsLoaded) setLoadedDate(date);
+      });
+    const refreshMedia = () => loadMedia(false);
+    loadMedia(true);
+    window.addEventListener('hotube:media-updated', refreshMedia);
+    return () => {
+      active = false;
+      window.removeEventListener('hotube:media-updated', refreshMedia);
+    };
   }, [date]);
 
   const moveDate = (amount) => {
@@ -85,7 +100,11 @@ const DayAlbumPage = () => {
         </div>
 
         <div className="mx-auto max-w-container px-4 pt-6">
-          {media.length > 0 ? (
+          {loading ? (
+            <section className="flex min-h-[58vh] items-center justify-center" aria-label="미디어 불러오는 중">
+              <Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" />
+            </section>
+          ) : media.length > 0 ? (
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="해당 날의 사진과 영상">
               {media.map((item) => (
                 <Link

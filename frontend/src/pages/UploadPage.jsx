@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
+import { useNavigate } from 'react-router-dom';
 import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
@@ -67,6 +68,7 @@ const extractYouTubeId = (url) => {
 
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnly = false }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [uploads, setUploads] = useState([]);
   const [totalUploadCount, setTotalUploadCount] = useState(0);
   const [availableDates, setAvailableDates] = useState([]);
@@ -89,7 +91,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState(false);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
   const totalPages = Math.max(1, Math.ceil(uploads.length / ITEMS_PER_PAGE));
   const paginatedUploads = useMemo(() => uploads.slice(
@@ -277,8 +278,19 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
       setUploads((current) => [...created, ...current]);
       resetForm();
       setPage(1);
-      setUploadSuccess(true);
       window.dispatchEvent(new Event('hotube:media-updated'));
+      const uploadedMedia = created[0];
+      const uploadedMonth = uploadedMedia.date?.slice(0, 7);
+      const returnTo = uploadedMonth ? `/calendar?month=${uploadedMonth}` : '/calendar';
+      navigate(`/media/${uploadedMedia.id}?date=${encodeURIComponent(uploadedMedia.date || '')}`, {
+        replace: true,
+        state: {
+          returnTo,
+          uploadSuccessMessage: created.length > 1
+            ? `${created.length}개의 미디어가 업로드되었습니다.`
+            : '미디어가 업로드되었습니다.',
+        },
+      });
     } catch (error) {
       setUploadError(error.message);
     } finally {
@@ -641,14 +653,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), listOnl
           </form>
         </div>
       ), document.body)}
-
-      <Modal
-        isOpen={uploadSuccess}
-        onClose={() => setUploadSuccess(false)}
-        title="업로드 완료"
-        message="업로드가 완료되었습니다."
-        confirmText="확인"
-      />
 
       <Modal
         isOpen={Boolean(deleteTarget)}
