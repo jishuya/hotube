@@ -34,11 +34,36 @@ const getAvatarStyle = (avatar) => ({
   backgroundRepeat: 'no-repeat',
 });
 
-const getDaysSinceBirth = (birthday) => {
+const getAgeSinceBirth = (birthday) => {
   const today = new Date();
   const birthDate = new Date(`${birthday}T00:00:00`);
   const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  return Math.max(1, Math.floor((currentDate - birthDate) / 86400000) + 1);
+
+  if (Number.isNaN(birthDate.getTime()) || birthDate > currentDate) {
+    return { months: 0, days: 0 };
+  }
+
+  let months = (currentDate.getFullYear() - birthDate.getFullYear()) * 12
+    + currentDate.getMonth() - birthDate.getMonth();
+  const getMonthAnniversary = (monthCount) => {
+    const anniversary = new Date(birthDate.getFullYear(), birthDate.getMonth() + monthCount, 1);
+    const lastDayOfMonth = new Date(
+      anniversary.getFullYear(),
+      anniversary.getMonth() + 1,
+      0,
+    ).getDate();
+    anniversary.setDate(Math.min(birthDate.getDate(), lastDayOfMonth));
+    return anniversary;
+  };
+
+  let monthAnniversary = getMonthAnniversary(months);
+  if (monthAnniversary > currentDate) {
+    months -= 1;
+    monthAnniversary = getMonthAnniversary(months);
+  }
+
+  const days = Math.floor((currentDate - monthAnniversary) / 86400000);
+  return { months, days };
 };
 
 const getChildGivenName = (name, nickname) => {
@@ -63,6 +88,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
   const unreadSupportCount = unreadSupportRequests.length;
   const hasUnreadSupport = unreadSupportCount > 0;
+  const childAge = getAgeSinceBirth(child.birthday);
 
   // URL의 검색어와 input 동기화
   useEffect(() => {
@@ -296,9 +322,12 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-text-secondary">{getChildGivenName(child.name, child.nickname)}와 함께한 시간</p>
-              <p className="truncate text-lg font-extrabold leading-tight text-text-primary sm:text-xl">
-                태어난 지 <span className="text-primary">{getDaysSinceBirth(child.birthday)}일째</span>
+              <p className="truncate text-xs font-semibold text-text-secondary">
+                {getChildGivenName(child.name, child.nickname)}와 함께한{' '}
+                <span className="text-orange-500">{childAge.months}개월 {childAge.days}일</span>
+              </p>
+              <p className="whitespace-nowrap text-base font-extrabold leading-tight text-text-primary sm:text-[22px]">
+                모든 순간이 선물이야
               </p>
             </div>
             <button type="button" onClick={() => setShowChildInfoModal(true)} className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-white/70 hover:text-primary" aria-label="아이 정보 수정" title="아이 정보 수정">

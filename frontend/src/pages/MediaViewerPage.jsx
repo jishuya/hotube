@@ -48,12 +48,15 @@ const FamilyAvatar = ({ person, className = 'size-8' }) => {
 };
 
 const formatChildDay = (birthday, mediaDate) => {
-  if (!birthday || !mediaDate) return mediaDate;
+  if (!birthday || !mediaDate) return { day: null, date: mediaDate };
   const birth = new Date(`${birthday}T00:00:00Z`);
   const captured = new Date(`${mediaDate}T00:00:00Z`);
   const days = Math.round((captured - birth) / 86400000);
   const sign = days >= 0 ? '+' : '-';
-  return `D${sign}${String(Math.abs(days)).padStart(2, '0')} (${mediaDate})`;
+  return {
+    day: `D${sign}${String(Math.abs(days)).padStart(2, '0')}`,
+    date: mediaDate,
+  };
 };
 
 const getNextDate = (date) => {
@@ -153,11 +156,12 @@ const MediaVideoPlayer = ({ src, poster }) => {
   );
 };
 
-const PhotoLightbox = ({ src, alt, onClose }) => {
+const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
+  const swipeRef = useRef(null);
 
   const applyScale = useCallback((nextScale) => {
     const normalizedScale = Math.min(5, Math.max(1, nextScale));
@@ -172,13 +176,15 @@ const PhotoLightbox = ({ src, alt, onClose }) => {
       if (event.key === 'Escape') onClose();
       if (event.key === '+' || event.key === '=') applyScale(scale + 0.5);
       if (event.key === '-') applyScale(scale - 0.5);
+      if (scale === 1 && event.key === 'ArrowLeft') onPrevious?.();
+      if (scale === 1 && event.key === 'ArrowRight') onNext?.();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [applyScale, onClose, scale]);
+  }, [applyScale, onClose, onNext, onPrevious, scale]);
 
   const getPointerDistance = () => {
     const points = [...pointersRef.current.values()];
@@ -189,8 +195,12 @@ const PhotoLightbox = ({ src, alt, onClose }) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointersRef.current.size === 2) {
+      swipeRef.current = null;
       gestureRef.current = { distance: getPointerDistance(), scale };
     } else {
+      swipeRef.current = scale === 1
+        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+        : null;
       gestureRef.current = { x: event.clientX, y: event.clientY, offset };
     }
   };
@@ -210,6 +220,7 @@ const PhotoLightbox = ({ src, alt, onClose }) => {
   };
 
   const handlePointerEnd = (event) => {
+    const swipe = swipeRef.current;
     pointersRef.current.delete(event.pointerId);
     if (pointersRef.current.size === 1) {
       const point = [...pointersRef.current.values()][0];
@@ -217,6 +228,21 @@ const PhotoLightbox = ({ src, alt, onClose }) => {
     } else if (pointersRef.current.size === 0) {
       gestureRef.current = null;
     }
+    if (swipe?.pointerId === event.pointerId && scale === 1) {
+      const deltaX = event.clientX - swipe.x;
+      const deltaY = event.clientY - swipe.y;
+      if (Math.abs(deltaX) >= 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX < 0) onNext?.();
+        else onPrevious?.();
+      }
+    }
+    swipeRef.current = null;
+  };
+
+  const handlePointerCancel = (event) => {
+    pointersRef.current.delete(event.pointerId);
+    gestureRef.current = null;
+    swipeRef.current = null;
   };
 
   return (
@@ -240,7 +266,7 @@ const PhotoLightbox = ({ src, alt, onClose }) => {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
+        onPointerCancel={handlePointerCancel}
       >
         <img
           src={src}
@@ -494,6 +520,8 @@ const MediaViewerPage = () => {
     );
   }
 
+  const childDay = formatChildDay(child?.birthday, current.date);
+
   return (
     <main className="min-h-screen bg-background pb-16 text-text-primary">
       <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
@@ -513,7 +541,7 @@ const MediaViewerPage = () => {
             </Link>
           )}
           <div className="text-center">
-            <p className="text-sm font-bold">추억 보기</p>
+            <p className="text-base font-bold tabular-nums">{current.date}</p>
             <p className="text-xs text-text-secondary">{currentIndex + 1} / {items.length}</p>
           </div>
           {details?.canModify ? (
@@ -527,11 +555,13 @@ const MediaViewerPage = () => {
       <div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
         <div className="min-w-0">
           <section className="overflow-hidden rounded-2xl bg-surface shadow-sm">
-            <div className="flex justify-center bg-surface px-4 py-2">
-              <span className="rounded-xl bg-orange-50 px-5 py-1.5 text-center text-xs font-bold text-orange-700">
-                {formatChildDay(child?.birthday, current.date)}
-              </span>
-            </div>
+            {childDay.day && (
+              <div className="flex justify-center bg-surface px-4 py-2.5">
+                <span className="rounded-full bg-background px-4 py-1 text-sm font-bold text-text-secondary">
+                  {childDay.day}
+                </span>
+              </div>
+            )}
             <div className={`relative flex items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}>
               {current.source === 'youtube' ? (
                 <div className={`flex w-full justify-center bg-black ${isYoutubeShort ? 'py-2 sm:py-4' : ''}`}>
@@ -641,7 +671,19 @@ const MediaViewerPage = () => {
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       {photoOpen && current.type === 'photo' && (
-        <PhotoLightbox src={current.src} alt={current.title} onClose={() => setPhotoOpen(false)} />
+        <PhotoLightbox
+          src={current.src}
+          alt={current.title}
+          onClose={() => setPhotoOpen(false)}
+          onPrevious={previous ? () => {
+            if (previous.type !== 'photo') setPhotoOpen(false);
+            moveTo(previous);
+          } : undefined}
+          onNext={next ? () => {
+            if (next.type !== 'photo') setPhotoOpen(false);
+            moveTo(next);
+          } : undefined}
+        />
       )}
       <Modal
         isOpen={uploadSuccessOpen}
