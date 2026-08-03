@@ -4,6 +4,7 @@ import Cropper from 'react-easy-crop';
 import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
+import { DayPickerDropdown } from './CustomSelect';
 
 const parseLocalDate = (value) => {
   if (!value) return undefined;
@@ -213,6 +214,7 @@ const ChildInfoModal = ({ isOpen, onClose, child, onSave }) => {
                     startMonth={new Date(1990, 0)}
                     endMonth={new Date()}
                     captionLayout="dropdown"
+                    components={{ Dropdown: DayPickerDropdown }}
                     reverseYears
                     className="child-birthday-picker"
                   />

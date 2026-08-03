@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import CustomSelect from './CustomSelect';
 
 const Input = forwardRef(({
   label,
@@ -47,7 +48,6 @@ const Select = forwardRef(({
   helperText,
   options = [],
   className = '',
-  children,
   ...props
 }, ref) => {
   return (
@@ -58,7 +58,7 @@ const Select = forwardRef(({
           {props.required && <span className="text-error ml-0.5">*</span>}
         </label>
       )}
-      <select
+      <CustomSelect
         ref={ref}
         className={`
           w-full h-10 px-3
@@ -70,14 +70,9 @@ const Select = forwardRef(({
           ${error ? 'border-error focus:ring-error/50 focus:border-error' : ''}
           ${className}
         `}
+        options={options}
         {...props}
-      >
-        {children || options.map(opt => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      />
       {(error || helperText) && (
         <p className={`text-xs ${error ? 'text-error' : 'text-text-secondary'}`}>
           {error || helperText}

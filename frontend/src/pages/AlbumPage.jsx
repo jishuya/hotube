@@ -6,6 +6,7 @@ import { deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../
 import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
+import CustomSelect from '../components/common/CustomSelect';
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const currentMonthKey = formatMonthKey(new Date());
@@ -331,18 +332,21 @@ const AlbumPage = () => {
 
         <div className="mx-auto max-w-4xl px-4 pt-2">
           <section className="mb-2 flex items-center gap-3 py-1" aria-label="앨범 검색과 필터">
-            <label className="shrink-0">
+            <div className="w-24 shrink-0">
               <span className="sr-only">미디어 종류</span>
-              <select
+              <CustomSelect
                 value={mediaType}
                 onChange={(event) => setMediaType(event.target.value)}
-                className="h-10 w-20 rounded-full border-none bg-primary/10 py-2 pl-3 pr-7 text-sm font-bold text-text-primary focus:ring-2 focus:ring-primary/50"
-              >
-                <option value="all">모두</option>
-                <option value="photo">사진</option>
-                <option value="video">영상</option>
-              </select>
-            </label>
+                aria-label="미디어 종류"
+                className="h-10 rounded-full border-none bg-primary/10 px-3 font-bold"
+                menuClassName="rounded-xl"
+                options={[
+                  { value: 'all', label: '모두' },
+                  { value: 'photo', label: '사진' },
+                  { value: 'video', label: '영상' },
+                ]}
+              />
+            </div>
             <form onSubmit={(event) => event.preventDefault()} className="flex h-10 min-w-0 flex-1">
               <div className="relative flex h-full w-full items-stretch rounded-full">
                 <input

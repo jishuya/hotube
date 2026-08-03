@@ -7,6 +7,7 @@ import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
 import { getAllVideos, toMemoryMedia } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
+import { DayPickerDropdown } from '../components/common/CustomSelect';
 
 const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric', weekday: 'short',
@@ -110,7 +111,7 @@ const CalendarPage = () => {
               hasMedia: Object.keys(mediaByDate).map(parseDateKey),
               unread: unreadDates.map(parseDateKey),
             }}
-            components={{ DayButton: CalendarDayButton }}
+            components={{ DayButton: CalendarDayButton, Dropdown: DayPickerDropdown }}
             className="memory-calendar"
           />
         </section>

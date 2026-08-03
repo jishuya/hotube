@@ -4,6 +4,36 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
 import Modal from '../common/Modal';
 
+const AVATAR_POSITIONS = {
+  grandfather: [0, 9],
+  'grandmother-curly': [25, 9],
+  'woman-long': [50, 9],
+  'woman-short': [75, 9],
+  'woman-glasses': [100, 9],
+  man: [0, 89],
+  'man-glasses': [25, 89],
+  'grandmother-bob': [50, 89],
+  'woman-ponytail': [75, 89],
+  'man-short': [100, 89],
+};
+
+const CommentAvatar = ({ comment }) => {
+  const [x, y] = AVATAR_POSITIONS[comment.userAvatar] || AVATAR_POSITIONS['woman-long'];
+  return (
+    <span
+      role="img"
+      aria-label={`${comment.userName || comment.userTitle || '사용자'} 프로필`}
+      className="block size-8 rounded-full border border-white bg-primary/10 shadow-sm"
+      style={{
+        backgroundImage: "url('/avatars/hotube-family-avatars.png')",
+        backgroundPosition: `${x}% ${y}%`,
+        backgroundSize: '500% auto',
+        backgroundRepeat: 'no-repeat',
+      }}
+    />
+  );
+};
+
 const CommentSection = ({ videoId, onCountChange }) => {
   const { user } = useAuth();
   const [comments, setComments] = useState([]);
@@ -164,9 +194,7 @@ const CommentSection = ({ videoId, onCountChange }) => {
           {comments.map((comment) => (
             <div key={comment.id} className="flex gap-2">
               <div className="shrink-0">
-                <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-600 flex items-center justify-center">
-                  <Icon icon="mdi:account" className="text-sm text-zinc-500 dark:text-zinc-400" />
-                </div>
+                <CommentAvatar comment={comment} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap text-xs">

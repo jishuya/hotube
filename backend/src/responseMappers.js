@@ -89,6 +89,7 @@ const mapCommentRowToComment = (row) => ({
   userName: row.user_name,
   userTitle: row.user_title,
   userCategory: row.user_category,
+  userAvatar: row.user_avatar || row.avatar || null,
   content: row.content,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),

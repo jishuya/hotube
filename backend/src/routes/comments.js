@@ -53,7 +53,10 @@ router.post("/createComment", async (req, res) => {
       console.error("새 댓글 푸시 알림 오류:", error);
     });
 
-    res.status(201).json(mapCommentRowToComment(created.rows[0]));
+    res.status(201).json(mapCommentRowToComment({
+      ...created.rows[0],
+      user_avatar: userData.avatar,
+    }));
   } catch (error) {
     console.error("댓글 작성 오류:", error);
     res.status(500).json({ error: "댓글 작성 실패" });
@@ -74,12 +77,20 @@ router.get("/getComments", async (req, res) => {
     let result;
     if (access.role === "admin" || access.role === "sub-admin") {
       result = await pgDb.query(
-        "SELECT * FROM comments WHERE media_id = $1 ORDER BY created_at DESC",
+        `SELECT c.*, u.avatar AS user_avatar
+         FROM comments c
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.media_id = $1
+         ORDER BY c.created_at DESC`,
         [videoId],
       );
     } else {
       result = await pgDb.query(
-        "SELECT * FROM comments WHERE media_id = $1 AND user_category = $2 ORDER BY created_at DESC",
+        `SELECT c.*, u.avatar AS user_avatar
+         FROM comments c
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.media_id = $1 AND c.user_category = $2
+         ORDER BY c.created_at DESC`,
         [videoId, access.category],
       );
     }

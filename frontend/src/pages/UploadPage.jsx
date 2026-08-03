@@ -6,6 +6,7 @@ import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
 import DatePickerField from '../components/common/DatePickerField';
+import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -537,50 +538,56 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     <Icon icon="mdi:refresh" className="text-lg" />
                   </button>
                 </div>
-                <label className="min-w-0">
+                <div className="min-w-0">
                   <span className="sr-only">날짜 선택</span>
-                  <select
+                  <CustomSelect
                     value={filterDate}
                     onChange={(event) => {
                       setFilterDate(event.target.value);
                       setPage(1);
                     }}
+                    aria-label="날짜 선택"
                     className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
-                  >
-                    <option value="">전체 날짜</option>
-                    {availableDates.map((uploadDate) => <option key={uploadDate} value={uploadDate}>{uploadDate}</option>)}
-                  </select>
-                </label>
-                <label className="min-w-0">
+                    options={[
+                      { value: '', label: '전체 날짜' },
+                      ...availableDates.map((uploadDate) => ({ value: uploadDate, label: uploadDate })),
+                    ]}
+                  />
+                </div>
+                <div className="min-w-0">
                   <span className="sr-only">업로드 출처</span>
-                  <select
+                  <CustomSelect
                     value={filterSource}
                     onChange={(event) => {
                       setFilterSource(event.target.value);
                       setPage(1);
                     }}
+                    aria-label="업로드 출처"
                     className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
-                  >
-                    <option value="all">전체 출처</option>
-                    <option value="file">내 기기</option>
-                    <option value="youtube">유투브</option>
-                  </select>
-                </label>
-                <label className="min-w-0">
+                    options={[
+                      { value: 'all', label: '전체 출처' },
+                      { value: 'file', label: '내 기기' },
+                      { value: 'youtube', label: '유투브' },
+                    ]}
+                  />
+                </div>
+                <div className="min-w-0">
                   <span className="sr-only">미디어 종류</span>
-                  <select
+                  <CustomSelect
                     value={filterMediaType}
                     onChange={(event) => {
                       setFilterMediaType(event.target.value);
                       setPage(1);
                     }}
+                    aria-label="미디어 종류"
                     className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
-                  >
-                    <option value="all">전체 종류</option>
-                    <option value="photo">사진</option>
-                    <option value="video">영상</option>
-                  </select>
-                </label>
+                    options={[
+                      { value: 'all', label: '전체 종류' },
+                      { value: 'photo', label: '사진' },
+                      { value: 'video', label: '영상' },
+                    ]}
+                  />
+                </div>
               </div>
 
               {paginatedUploads.length > 0 ? (

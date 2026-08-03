@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../contexts/AuthContext';
 import { registerUser, TITLES, CATEGORIES } from '../services/authApi';
+import CustomSelect from '../components/common/CustomSelect';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ const RegisterPage = () => {
     }
 
     // 비밀번호 검증: 8자 이상, 영문+숫자+특수문자 포함
-    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$/;
     if (!passwordRegex.test(formData.password)) {
       setError('비밀번호는 8자 이상, 영문+숫자+특수문자를 포함해야 합니다');
       return;
@@ -51,7 +52,13 @@ const RegisterPage = () => {
     setLoading(true);
 
     try {
-      const { confirmPassword, ...userData } = formData;
+      const userData = {
+        userId: formData.userId,
+        name: formData.name,
+        title: formData.title,
+        category: formData.category,
+        password: formData.password,
+      };
       const user = await registerUser(userData);
       login(user);
       navigate('/');
@@ -120,18 +127,15 @@ const RegisterPage = () => {
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   호칭
                 </label>
-                <select
+                <CustomSelect
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
                   className="w-full h-11 px-4 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white"
                   required
-                >
-                  <option value="">호칭을 선택하세요</option>
-                  {TITLES.map(title => (
-                    <option key={title} value={title}>{title}</option>
-                  ))}
-                </select>
+                  placeholder="호칭을 선택하세요"
+                  options={TITLES.map((title) => ({ value: title, label: title }))}
+                />
               </div>
 
               {/* 카테고리 */}

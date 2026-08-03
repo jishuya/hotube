@@ -5,7 +5,13 @@ const { randomUUID } = require('crypto');
 const multer = require('multer');
 const pgDb = require('../db');
 const { mapMediaRowToVideo } = require("../responseMappers");
-const { ensureMediaDirectory, mediaDirectory } = require('../mediaStorage');
+const {
+  ensureMediaDateDirectory,
+  ensureMediaDirectory,
+  mediaDirectory,
+  resolveMediaPath,
+  toStoredMediaPath,
+} = require('../mediaStorage');
 const { createBrowserCompatibleVideo, createVideoThumbnail } = require('../videoThumbnail');
 const {
   createFileMedia,
@@ -136,10 +142,12 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '업로드할 파일이 없습니다' });
   let thumbnailPath = null;
   let browserVideoPath = null;
+  let storedFilePath = null;
   try {
     const tags = JSON.parse(req.body.tags || '[]');
     const dateTags = JSON.parse(req.body.dateTags || '[]');
     const isVideo = req.file.mimetype.startsWith('video/');
+    const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(req.body.uploadedAt);
     const uploader = req.body.uploadedBy ? await fetchUserById(req.body.uploadedBy) : null;
     if (!uploader) {
       const error = new Error('업로드할 로그인 사용자 정보가 필요합니다');
@@ -148,16 +156,22 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
     }
 
     if (isVideo) {
-      thumbnailPath = `${randomUUID()}.jpg`;
-      await createVideoThumbnail(req.file.path, path.join(mediaDirectory, thumbnailPath));
-      browserVideoPath = `${randomUUID()}.mp4`;
-      await createBrowserCompatibleVideo(req.file.path, path.join(mediaDirectory, browserVideoPath));
+      const thumbnailFilename = `${randomUUID()}.jpg`;
+      thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
+      await createVideoThumbnail(req.file.path, path.join(absoluteDirectory, thumbnailFilename));
+      const browserVideoFilename = `${randomUUID()}.mp4`;
+      browserVideoPath = toStoredMediaPath(relativeDirectory, browserVideoFilename);
+      await createBrowserCompatibleVideo(req.file.path, path.join(absoluteDirectory, browserVideoFilename));
+      storedFilePath = browserVideoPath;
+    } else {
+      storedFilePath = toStoredMediaPath(relativeDirectory, req.file.filename);
+      await fs.rename(req.file.path, resolveMediaPath(storedFilePath));
     }
 
     const createdMedia = await createFileMedia({
       id: randomUUID(),
       title: req.body.title?.trim() || req.file.originalname,
-      filePath: browserVideoPath || req.file.filename,
+      filePath: storedFilePath,
       thumbnailPath,
       mediaType: isVideo ? 'video' : 'photo',
       tags,
@@ -173,8 +187,9 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
     return res.status(201).json(mapMediaRowToVideo(createdMedia));
   } catch (error) {
     await fs.unlink(req.file.path).catch(() => {});
-    if (thumbnailPath) await fs.unlink(path.join(mediaDirectory, thumbnailPath)).catch(() => {});
-    if (browserVideoPath) await fs.unlink(path.join(mediaDirectory, browserVideoPath)).catch(() => {});
+    if (thumbnailPath) await fs.unlink(resolveMediaPath(thumbnailPath)).catch(() => {});
+    if (browserVideoPath) await fs.unlink(resolveMediaPath(browserVideoPath)).catch(() => {});
+    if (storedFilePath && !browserVideoPath) await fs.unlink(resolveMediaPath(storedFilePath)).catch(() => {});
     console.error('미디어 파일 업로드 오류:', error);
     return sendRouteError(res, '미디어 업로드 실패', error);
   }
@@ -187,13 +202,13 @@ router.get('/mediaFile/:id', async (req, res) => {
     const media = await getMedia(req.params.id);
     if (!media.file_path) return res.status(404).json({ error: '파일을 찾을 수 없습니다' });
     const filename = path.basename(media.file_path);
-    if (filename !== media.file_path) return res.status(400).json({ error: '잘못된 파일 경로입니다' });
+    const absolutePath = resolveMediaPath(media.file_path);
     res.setHeader('Cache-Control', 'private, max-age=86400');
     if (req.query.download === '1') {
       const safeTitle = String(media.title || filename).replace(/[\r\n"\\/]/g, '_');
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeTitle)}`);
     }
-    return res.sendFile(filename, { root: mediaDirectory });
+    return res.sendFile(absolutePath);
   } catch (error) {
     console.error('미디어 파일 조회 오류:', error);
     return sendRouteError(res, '미디어 파일 조회 실패', error);
@@ -206,10 +221,9 @@ router.get('/mediaThumbnail/:id', async (req, res) => {
     if (!access?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     const media = await getMedia(req.params.id);
     if (!media.thumbnail_path) return res.status(404).json({ error: '썸네일을 찾을 수 없습니다' });
-    const filename = path.basename(media.thumbnail_path);
-    if (filename !== media.thumbnail_path) return res.status(400).json({ error: '잘못된 썸네일 경로입니다' });
+    const absolutePath = resolveMediaPath(media.thumbnail_path);
     res.setHeader('Cache-Control', 'private, max-age=86400');
-    return res.sendFile(filename, { root: mediaDirectory });
+    return res.sendFile(absolutePath);
   } catch (error) {
     console.error('미디어 썸네일 조회 오류:', error);
     return sendRouteError(res, '미디어 썸네일 조회 실패', error);
@@ -234,8 +248,7 @@ router.delete("/deleteVideo/:id", async (req, res) => {
     if (!access?.can_modify) return res.status(403).json({ error: '미디어 삭제 권한이 없습니다' });
     const deleted = await deleteMedia(req.params.id);
     for (const storedPath of [deleted.file_path, deleted.thumbnail_path].filter(Boolean)) {
-      const filename = path.basename(storedPath);
-      if (filename === storedPath) await fs.unlink(path.join(mediaDirectory, filename)).catch((error) => {
+      await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {
         if (error.code !== 'ENOENT') console.error('미디어 파일 삭제 오류:', error);
       });
     }

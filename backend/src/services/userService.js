@@ -31,7 +31,7 @@ const fetchUserByLoginId = async (userId) => {
 };
 
 const fetchCommentAuthorById = async (id) => {
-  const result = await pgDb.query("SELECT id, name, title, category FROM users WHERE id = $1", [id]);
+  const result = await pgDb.query("SELECT id, name, title, category, avatar FROM users WHERE id = $1", [id]);
   return result.rows[0] || null;
 };
 

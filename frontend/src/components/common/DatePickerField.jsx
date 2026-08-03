@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
+import { DayPickerDropdown } from './CustomSelect';
 
 const formatDateKey = (date) => [
   date.getFullYear(),
@@ -48,7 +49,7 @@ const DatePickerField = ({ label, value, onChange, placeholder = '날짜를 선�
         <Icon icon="mdi:calendar-month-outline" className="text-xl text-primary" />
       </button>
       {open && (
-        <div id={calendarId} className="mt-2 overflow-hidden rounded-xl border border-border bg-surface p-2 shadow-sm">
+        <div id={calendarId} className="mt-2 rounded-xl border border-border bg-surface p-2 shadow-sm">
           <DayPicker
             mode="single"
             locale={ko}
@@ -61,6 +62,7 @@ const DatePickerField = ({ label, value, onChange, placeholder = '날짜를 선�
             startMonth={new Date(2000, 0)}
             endMonth={new Date(2035, 11)}
             captionLayout="dropdown"
+            components={{ Dropdown: DayPickerDropdown }}
             reverseYears
             showOutsideDays
             className="upload-date-picker"

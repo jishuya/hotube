@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { TITLES, CATEGORIES, updateUser as updateUserApi } from '../../services/authApi';
+import CustomSelect from './CustomSelect';
 
 const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
   const [formData, setFormData] = useState({
@@ -131,18 +132,15 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
               호칭
             </label>
-            <select
+            <CustomSelect
               name="title"
               value={formData.title}
               onChange={handleChange}
               className="w-full h-11 px-4 rounded-lg border border-zinc-300 dark:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white"
               required
-            >
-              <option value="">호칭을 선택하세요</option>
-              {TITLES.map(title => (
-                <option key={title} value={title}>{title}</option>
-              ))}
-            </select>
+              placeholder="호칭을 선택하세요"
+              options={TITLES.map((title) => ({ value: title, label: title }))}
+            />
           </div>
 
           {/* 카테고리 */}

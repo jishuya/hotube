@@ -4,6 +4,7 @@ import { getAllVideos, addVideo, updateVideo, deleteVideo } from '../services/vi
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
 import ToastContainer from '../components/common/Toast';
+import CustomSelect from '../components/common/CustomSelect';
 
 const AdminPage = () => {
   const [videos, setVideos] = useState([]);
@@ -318,30 +319,28 @@ const AdminPage = () => {
                           <label className="block text-sm font-medium text-slate-700 mb-1.5">
                             타입 (자동 감지됨)
                           </label>
-                          <select
+                          <CustomSelect
                             name="type"
                             value={formData.type}
                             onChange={handleInputChange}
                             className="form-select flex w-full min-w-0 flex-1 overflow-hidden rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/80 border border-primary-200 bg-white h-10 px-3 text-sm font-normal leading-normal transition-colors"
-                          >
-                            <option value="long">Long</option>
-                            <option value="short">Short</option>
-                          </select>
+                            options={[{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }]}
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1.5">
                             연도 (자동 감지됨)
                           </label>
-                          <select
+                          <CustomSelect
                             name="year"
                             value={formData.year}
                             onChange={handleInputChange}
                             className="form-select flex w-full min-w-0 flex-1 overflow-hidden rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/80 border border-primary-200 bg-white h-10 px-3 text-sm font-normal leading-normal transition-colors"
-                          >
-                            {Array.from({ length: 20 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                              <option key={year} value={year}>{year}</option>
-                            ))}
-                          </select>
+                            options={Array.from({ length: 20 }, (_, i) => {
+                              const year = new Date().getFullYear() - i;
+                              return { value: year, label: String(year) };
+                            })}
+                          />
                         </div>
                       </div>
                     )}
