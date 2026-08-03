@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const { randomUUID } = require("crypto");
 const pgDb = require("../db");
 const { mapUserRowToUser } = require("../responseMappers");
+const { createAccessToken } = require("../authToken");
 const { fetchUserById, fetchUserByLoginId } = require("../services/userService");
 const {
   VALID_TITLES,
@@ -58,7 +59,8 @@ router.post("/registerUser", async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `, [id, userId, name, title, category, role, hashedPassword, new Date().toISOString()]);
 
-    res.status(201).json(mapUserRowToUser(await fetchUserById(id)));
+    const createdUser = mapUserRowToUser(await fetchUserById(id));
+    res.status(201).json({ ...createdUser, accessToken: createAccessToken(createdUser) });
   } catch (error) {
     console.error("회원가입 오류:", error);
     res.status(500).json({ error: "회원가입 실패" });
@@ -83,7 +85,8 @@ router.post("/loginUser", async (req, res) => {
       return res.status(401).json({ error: "아이디 또는 비밀번호가 일치하지 않습니다" });
     }
 
-    res.json(mapUserRowToUser(userData));
+    const user = mapUserRowToUser(userData);
+    res.json({ ...user, accessToken: createAccessToken(user) });
   } catch (error) {
     console.error("로그인 오류:", error);
     res.status(500).json({ error: "로그인 실패" });

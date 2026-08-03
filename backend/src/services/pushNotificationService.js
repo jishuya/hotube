@@ -13,6 +13,9 @@ const VAPID_KEYS_PATH = process.env.VAPID_KEYS_PATH || DEFAULT_VAPID_PATH;
 let configuredPublicKey = null;
 
 const loadVapidKeys = () => {
+  if (Boolean(process.env.VAPID_PUBLIC_KEY) !== Boolean(process.env.VAPID_PRIVATE_KEY)) {
+    throw new Error("VAPID_PUBLIC_KEY와 VAPID_PRIVATE_KEY를 함께 설정해야 합니다");
+  }
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     return {
       publicKey: process.env.VAPID_PUBLIC_KEY,
@@ -24,10 +27,33 @@ const loadVapidKeys = () => {
     return JSON.parse(fs.readFileSync(VAPID_KEYS_PATH, "utf8"));
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("운영 환경에는 고정된 VAPID_PUBLIC_KEY와 VAPID_PRIVATE_KEY가 필요합니다");
+  }
+
   const keys = webPush.generateVAPIDKeys();
   fs.mkdirSync(path.dirname(VAPID_KEYS_PATH), { recursive: true, mode: 0o700 });
   fs.writeFileSync(VAPID_KEYS_PATH, `${JSON.stringify(keys, null, 2)}\n`, { mode: 0o600 });
   return keys;
+};
+
+const ensurePushSubscriptionSchema = async () => {
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id UUID PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+    ON push_subscriptions (user_id)
+  `);
 };
 
 const configureWebPush = () => {
@@ -208,6 +234,7 @@ const notifySupportStatus = async ({ requestId, status }) => {
 };
 
 module.exports = {
+  ensurePushSubscriptionSchema,
   getPublicKey,
   getSubscriptionStatus,
   notifyNewComment,

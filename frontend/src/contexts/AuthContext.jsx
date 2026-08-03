@@ -16,10 +16,15 @@ export const AuthProvider = ({ children }) => {
         const storedUser = localStorage.getItem(STORAGE_KEY);
         if (storedUser) {
           const userData = JSON.parse(storedUser);
+          if (!userData.accessToken) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+          }
           // 서버에서 최신 정보 가져오기
           const freshUser = await getUser(userData.id);
-          setUser(freshUser);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
+          const authenticatedUser = { ...freshUser, accessToken: userData.accessToken };
+          setUser(authenticatedUser);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
         }
       } catch (error) {
         console.error('사용자 정보 로드 실패:', error);

@@ -1,25 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
 import {
-  getVapidPublicKey,
+  enablePushOnCurrentDevice,
   removePushSubscription,
-  savePushSubscription,
   sendTestPush,
 } from '../../services/pushApi';
-
-const urlBase64ToUint8Array = (value) => {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = window.atob(base64);
-  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
-};
 
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches
   || window.navigator.standalone === true;
 
 const isAppleMobile = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
-const PushNotificationSettings = ({ userId }) => {
+const PushNotificationSettings = () => {
   const supported = useMemo(
     () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
     [],
@@ -62,19 +54,8 @@ const PushNotificationSettings = ({ userId }) => {
       if (isAppleMobile() && !isStandalone()) {
         throw new Error('iPhone에서는 공유 버튼 → 홈 화면에 추가 후 HoTube 앱에서 알림을 켜주세요.');
       }
-      const nextPermission = await Notification.requestPermission();
-      setPermission(nextPermission);
-      if (nextPermission !== 'granted') {
-        throw new Error('알림 권한이 허용되지 않았습니다. 기기 설정에서 HoTube 알림을 허용해주세요.');
-      }
-      const registration = await navigator.serviceWorker.ready;
-      const existing = await registration.pushManager.getSubscription();
-      const { publicKey } = await getVapidPublicKey();
-      const nextSubscription = existing || await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-      await savePushSubscription(userId, nextSubscription.toJSON());
+      const nextSubscription = await enablePushOnCurrentDevice();
+      setPermission(Notification.permission);
       setSubscription(nextSubscription);
       setMessage('이 기기에서 HoTube 알림을 받을 수 있어요.');
     } catch (enableError) {
@@ -92,7 +73,7 @@ const PushNotificationSettings = ({ userId }) => {
       const current = subscription
         || await (await navigator.serviceWorker.ready).pushManager.getSubscription();
       if (current) {
-        await removePushSubscription(userId, current.endpoint);
+        await removePushSubscription(current.endpoint);
         await current.unsubscribe();
       }
       setSubscription(null);
@@ -109,7 +90,7 @@ const PushNotificationSettings = ({ userId }) => {
     setError('');
     setMessage('');
     try {
-      const result = await sendTestPush(userId);
+      const result = await sendTestPush();
       if (!result.sent) throw new Error('등록된 기기로 알림을 보내지 못했습니다.');
       setMessage('테스트 알림을 보냈습니다. 잠시 후 기기 알림을 확인해주세요.');
     } catch (testError) {

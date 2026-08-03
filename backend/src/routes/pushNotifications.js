@@ -1,4 +1,5 @@
 const express = require("express");
+const { requireAuth } = require("../authToken");
 const {
   getPublicKey,
   getSubscriptionStatus,
@@ -8,6 +9,7 @@ const {
 } = require("../services/pushNotificationService");
 
 const router = express.Router();
+router.use("/push", requireAuth);
 
 const sendError = (res, error, fallback) => res
   .status(error.status || 500)
@@ -24,8 +26,7 @@ router.get("/push/vapid-public-key", (req, res) => {
 
 router.get("/push/status", async (req, res) => {
   try {
-    if (!req.query.userId) return res.status(400).json({ error: "사용자 정보가 필요합니다" });
-    return res.json(await getSubscriptionStatus(req.query.userId));
+    return res.json(await getSubscriptionStatus(req.auth.userId));
   } catch (error) {
     return sendError(res, error, "알림 상태를 불러오지 못했습니다");
   }
@@ -34,7 +35,7 @@ router.get("/push/status", async (req, res) => {
 router.post("/push/subscribe", async (req, res) => {
   try {
     const result = await saveSubscription({
-      userId: req.body.userId,
+      userId: req.auth.userId,
       subscription: req.body.subscription,
       userAgent: req.get("user-agent"),
     });
@@ -47,11 +48,11 @@ router.post("/push/subscribe", async (req, res) => {
 
 router.delete("/push/unsubscribe", async (req, res) => {
   try {
-    if (!req.body.userId || !req.body.endpoint) {
+    if (!req.body.endpoint) {
       return res.status(400).json({ error: "구독 해제 정보가 필요합니다" });
     }
     return res.json(await removeSubscription({
-      userId: req.body.userId,
+      userId: req.auth.userId,
       endpoint: req.body.endpoint,
     }));
   } catch (error) {
@@ -61,12 +62,11 @@ router.delete("/push/unsubscribe", async (req, res) => {
 
 router.post("/push/test", async (req, res) => {
   try {
-    if (!req.body.userId) return res.status(400).json({ error: "사용자 정보가 필요합니다" });
-    const result = await sendToUserIds([req.body.userId], {
+    const result = await sendToUserIds([req.auth.userId], {
       title: "HoTube 알림 테스트",
       body: "푸시 알림이 정상적으로 연결되었습니다.",
       url: "/mypage",
-      tag: `test-${req.body.userId}`,
+      tag: `test-${req.auth.userId}`,
     });
     return res.json(result);
   } catch (error) {

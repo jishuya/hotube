@@ -185,7 +185,7 @@ const MyPage = () => {
           <section className="mt-6" aria-labelledby="settings-title">
             <h2 id="settings-title" className="mb-3 text-xl font-bold">설정</h2>
             <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
-              <PushNotificationSettings userId={user.id} />
+              <PushNotificationSettings />
               <button
                 type="button"
                 onClick={() => setShowProfileModal(true)}
