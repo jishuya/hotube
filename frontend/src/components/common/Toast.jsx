@@ -41,7 +41,7 @@ const ToastItem = ({ toast, onRemove }) => {
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${config.bg} animate-in slide-in-from-right fade-in duration-300`}
+      className={`flex w-full max-w-sm items-center gap-3 rounded-lg border px-4 py-3 shadow-lg ${config.bg} animate-in fade-in duration-300`}
     >
       <Icon icon={config.icon} className={`text-xl ${config.iconColor} shrink-0`} />
       <p className={`text-sm font-medium ${config.textColor}`}>{toast.message}</p>
@@ -59,7 +59,7 @@ const ToastContainer = ({ toasts, removeToast }) => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+    <div className="fixed inset-x-4 top-4 z-toast flex flex-col items-center gap-2">
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
       ))}

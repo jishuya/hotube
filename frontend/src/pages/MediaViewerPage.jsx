@@ -15,7 +15,6 @@ import {
 import { markVideoWatched, toggleLike } from '../services/authApi';
 import { extractVideoId } from '../services/youtubeService';
 import { getChildProfile } from '../services/childProfileApi';
-import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const avatarPositions = [
@@ -57,12 +56,6 @@ const formatChildDay = (birthday, mediaDate) => {
     day: `D${sign}${String(Math.abs(days)).padStart(2, '0')}`,
     date: mediaDate,
   };
-};
-
-const getNextDate = (date) => {
-  const value = new Date(`${date}T00:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + 1);
-  return value.toISOString().slice(0, 10);
 };
 
 const ActionButton = ({ icon, label, active = false, count, onClick, href, disabled = false }) => {
@@ -291,9 +284,11 @@ const MediaViewerPage = () => {
   const [mediaItems, setMediaItems] = useState([]);
   const [details, setDetails] = useState(null);
   const [child, setChild] = useState(null);
-  const [dateTags, setDateTags] = useState([]);
   const [tagDraft, setTagDraft] = useState('');
   const [addingTag, setAddingTag] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionDeleteOpen, setDescriptionDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState('');
   const [editing, setEditing] = useState(false);
@@ -361,15 +356,10 @@ const MediaViewerPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!current?.date) return;
-    getDateAlbumTags({ dateFrom: current.date, dateTo: getNextDate(current.date) })
-      .then((tagsByDate) => setDateTags(tagsByDate[current.date] || []))
-      .catch((tagError) => showToast('error', tagError.message));
-  }, [current?.date]);
-
-  useEffect(() => {
     if (!current) return;
     setEditDate(current.date || '');
+    setDescriptionDraft(current.description || '');
+    setEditingDescription(false);
   }, [current]);
 
   useEffect(() => {
@@ -440,15 +430,17 @@ const MediaViewerPage = () => {
     event.preventDefault();
     if (tagSavingRef.current) return;
     const tag = tagDraft.trim().replace(/^#/, '');
-    if (!tag || dateTags.includes(tag)) {
+    if (!tag || current.tags?.includes(tag)) {
       setTagDraft('');
       setAddingTag(false);
       return;
     }
     tagSavingRef.current = true;
     try {
-      await addDateAlbumTag(current.date, tag);
-      setDateTags((value) => [...value, tag]);
+      const saved = toMemoryMedia(await updateVideo(mediaId, {
+        tags: [...(current.tags || []), tag],
+      }, user?.id));
+      setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
       setTagDraft('');
       setAddingTag(false);
       window.dispatchEvent(new Event('hotube:media-updated'));
@@ -462,12 +454,51 @@ const MediaViewerPage = () => {
 
   const removeTag = async (tag) => {
     try {
-      await deleteDateAlbumTag(current.date, tag);
-      setDateTags((value) => value.filter((item) => item !== tag));
+      const saved = toMemoryMedia(await updateVideo(mediaId, {
+        tags: (current.tags || []).filter((item) => item !== tag),
+      }, user?.id));
+      setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
       window.dispatchEvent(new Event('hotube:media-updated'));
       showToast('success', '태그를 삭제했습니다.');
     } catch (tagError) {
       showToast('error', tagError.message);
+    }
+  };
+
+  const saveDescription = async () => {
+    if (busyAction) return;
+    setBusyAction('description');
+    try {
+      const saved = toMemoryMedia(await updateVideo(mediaId, {
+        description: descriptionDraft.trim(),
+      }, user?.id));
+      setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
+      setDescriptionDraft(saved.description || '');
+      setEditingDescription(false);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+      showToast('success', '한줄기록을 저장했습니다.');
+    } catch (actionError) {
+      showToast('error', actionError.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const deleteDescription = async () => {
+    if (busyAction) return;
+    setBusyAction('description-delete');
+    try {
+      const saved = toMemoryMedia(await updateVideo(mediaId, { description: '' }, user?.id));
+      setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
+      setDescriptionDraft('');
+      setEditingDescription(false);
+      setDescriptionDeleteOpen(false);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+      showToast('success', '한줄기록을 삭제했습니다.');
+    } catch (actionError) {
+      showToast('error', actionError.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -587,7 +618,7 @@ const MediaViewerPage = () => {
               <button type="button" onClick={() => moveTo(next)} disabled={!next} className="absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
             </div>
 
-            <div className="px-5 pb-3 pt-0">
+            <div className="px-5 pb-3 pt-2">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 {current.source === 'youtube' && (
@@ -616,20 +647,66 @@ const MediaViewerPage = () => {
               <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' ? `${current.src}&download=1` : undefined} disabled={current.source !== 'file'} />
             </div>
 
+            {(current.description || details?.canModify) && <div className="mt-3 border-t border-border pt-3">
+              {editingDescription ? (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-sm font-bold">한줄기록</span>
+                    <span className="text-[11px] text-text-secondary">{descriptionDraft.length}/5000</span>
+                  </div>
+                  <textarea
+                    autoFocus
+                    value={descriptionDraft}
+                    onChange={(event) => setDescriptionDraft(event.target.value)}
+                    rows={4}
+                    maxLength={5000}
+                    placeholder="이 순간을 기억할 한마디를 남겨보세요."
+                    className="w-full resize-y rounded-xl border-border bg-background px-3 py-2.5 text-sm leading-6 focus:border-primary focus:ring-primary/30"
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button type="button" onClick={() => { setDescriptionDraft(current.description || ''); setEditingDescription(false); }} disabled={busyAction === 'description'} className="rounded-lg px-3 py-1.5 text-xs font-bold text-text-secondary hover:bg-background disabled:opacity-50">취소</button>
+                    <button type="button" onClick={saveDescription} disabled={busyAction === 'description'} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{busyAction === 'description' ? '저장 중…' : '저장'}</button>
+                  </div>
+                </div>
+              ) : current.description ? (
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold">한줄기록</span>
+                    {details?.canModify && (
+                      <div className="flex items-center gap-0.5">
+                        <button type="button" onClick={() => { setDescriptionDraft(current.description || ''); setEditingDescription(true); }} className="p-0.5 text-text-secondary transition hover:text-primary" aria-label="한줄기록 수정">
+                          <Icon icon="mdi:pencil-outline" className="text-sm" />
+                        </button>
+                        <button type="button" onClick={() => setDescriptionDeleteOpen(true)} className="p-0.5 text-text-secondary transition hover:text-error" aria-label="한줄기록 삭제">
+                          <Icon icon="mdi:delete-outline" className="text-sm" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">{current.description}</p>
+                </div>
+              ) : details?.canModify ? (
+                <button type="button" onClick={() => { setDescriptionDraft(''); setEditingDescription(true); }} className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:opacity-70">
+                  <Icon icon="mdi:text-box-plus-outline" className="text-base" />
+                  한줄기록
+                </button>
+              ) : null}
+            </div>}
+
             <div className="mt-2 flex min-h-6 flex-wrap items-center gap-1.5 text-xs">
-              {[...new Set([...(current.tags || []), ...dateTags])].map((tag) => (
+              {[...new Set(current.tags || [])].map((tag) => (
                 <span key={tag} className="inline-flex items-center gap-0.5 text-text-secondary">
                   #{tag}
-                  {dateTags.includes(tag) && <button type="button" onClick={() => removeTag(tag)} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>}
+                  {details?.canModify && <button type="button" onClick={() => removeTag(tag)} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>}
                 </span>
               ))}
-              {addingTag ? (
+              {details?.canModify && (addingTag ? (
                 <form onSubmit={submitTag} className="flex items-center gap-1">
                   <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} onBlur={submitTag} onKeyDown={(event) => { if (event.key === 'Escape') { setTagDraft(''); setAddingTag(false); } }} placeholder="태그" className="h-6 w-24 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary" />
                 </form>
               ) : (
                 <button type="button" onClick={() => setAddingTag(true)} className="font-semibold text-primary hover:underline">+ 태그</button>
-              )}
+              ))}
             </div>
             </div>
           </section>
@@ -693,6 +770,7 @@ const MediaViewerPage = () => {
         confirmText="확인"
       />
       <Modal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={confirmDelete} title="미디어 삭제" message="이 사진 또는 영상을 삭제할까요? 삭제한 파일은 복구할 수 없습니다." type="confirm" confirmText="삭제" />
+      <Modal isOpen={descriptionDeleteOpen} onClose={() => setDescriptionDeleteOpen(false)} onConfirm={deleteDescription} title="한줄기록 삭제" message="이 한줄기록을 삭제할까요?" type="confirm" confirmText="삭제" cancelText="취소" />
     </main>
   );
 };

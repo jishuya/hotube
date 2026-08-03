@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
-import { addDateAlbumTag, deleteDateAlbumTag, getDateAlbumTags } from '../services/dateAlbumTagApi';
+import { addTagsToDateMedia, deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
 import CustomSelect from '../components/common/CustomSelect';
+import ToastContainer from '../components/common/Toast';
+import Modal from '../components/common/Modal';
+import DatePickerField from '../components/common/DatePickerField';
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const currentMonthKey = formatMonthKey(new Date());
@@ -54,6 +57,13 @@ const getMonthRange = (monthKey) => {
   };
 };
 
+const addOneDay = (dateKey) => {
+  if (!dateKey) return null;
+  const date = new Date(`${dateKey}T00:00:00`);
+  date.setDate(date.getDate() + 1);
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+};
+
 const NewMediaBadge = () => (
   <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
     N
@@ -63,18 +73,28 @@ const NewMediaBadge = () => (
 const AlbumPage = () => {
   const monthBarRef = useRef(null);
   const tagSavingRef = useRef(false);
+  const noteDraftRef = useRef('');
   const longPressTimerRef = useRef(null);
   const pointerStartRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [mediaDateRange, setMediaDateRange] = useState({ minDate: null, maxDate: null });
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [searchDateFrom, setSearchDateFrom] = useState('');
+  const [searchDateTo, setSearchDateTo] = useState('');
   const [mediaType, setMediaType] = useState('all');
   const [collapsedDates, setCollapsedDates] = useState([]);
-  const [dateTags, setDateTags] = useState({});
+  const [dateNotes, setDateNotes] = useState({});
   const [tagError, setTagError] = useState('');
   const [taggingDate, setTaggingDate] = useState(null);
   const [tagDraft, setTagDraft] = useState('');
+  const [editingNoteDate, setEditingNoteDate] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteDraftDirty, setNoteDraftDirty] = useState(false);
+  const [noteSaveStatus, setNoteSaveStatus] = useState('');
+  const [deletingNoteDate, setDeletingNoteDate] = useState(null);
   const [mediaItems, setMediaItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -85,6 +105,7 @@ const AlbumPage = () => {
   const [albumCreateOpen, setAlbumCreateOpen] = useState(false);
   const [albumTitleDraft, setAlbumTitleDraft] = useState('');
   const [albumCreateError, setAlbumCreateError] = useState('');
+  const [toasts, setToasts] = useState([]);
   const { user } = useAuth();
   const selectionMode = selectedMediaIds.length > 0;
   const viewedMediaIds = user?.watchedVideos || [];
@@ -94,6 +115,49 @@ const AlbumPage = () => {
   ), [mediaDateRange]);
 
   const [selectedYear, selectedMonth] = selectedMonthKey.split('-').map(Number);
+  const hasDateFilter = Boolean(searchDateFrom || searchDateTo);
+  const isSearchMode = Boolean(searchQuery.trim() || hasDateFilter);
+  const dateFilterError = searchDateFrom && searchDateTo && searchDateFrom > searchDateTo
+    ? '종료일은 시작일보다 빠를 수 없어요.'
+    : '';
+
+  const activeMediaRange = useMemo(() => {
+    if (hasDateFilter) {
+      return {
+        ...(searchDateFrom ? { dateFrom: searchDateFrom } : {}),
+        ...(searchDateTo ? { dateTo: addOneDay(searchDateTo) } : {}),
+      };
+    }
+    if (searchQuery.trim()) return {};
+    return getMonthRange(selectedMonthKey);
+  }, [hasDateFilter, searchDateFrom, searchDateTo, searchQuery, selectedMonthKey]);
+
+  const activeNotesRange = useMemo(() => {
+    if (hasDateFilter || searchQuery.trim()) {
+      const fallbackFrom = searchDateTo && mediaDateRange.minDate > searchDateTo
+        ? searchDateTo
+        : mediaDateRange.minDate;
+      const fallbackTo = searchDateFrom && mediaDateRange.maxDate < searchDateFrom
+        ? searchDateFrom
+        : mediaDateRange.maxDate;
+      const dateFrom = searchDateFrom || fallbackFrom;
+      const inclusiveDateTo = searchDateTo || fallbackTo;
+      return dateFrom && inclusiveDateTo ? { dateFrom, dateTo: addOneDay(inclusiveDateTo) } : null;
+    }
+    return getMonthRange(selectedMonthKey);
+  }, [hasDateFilter, mediaDateRange, searchDateFrom, searchDateTo, searchQuery, selectedMonthKey]);
+
+  const removeToast = useCallback((id) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback((type, message) => {
+    setToasts((current) => [...current.slice(-2), {
+      id: `${Date.now()}-${Math.random()}`,
+      type,
+      message,
+    }]);
+  }, []);
 
   const timeline = useMemo(() => {
     return Object.entries(mediaItems.reduce((groups, item) => {
@@ -108,8 +172,13 @@ const AlbumPage = () => {
     const loadMedia = () => {
       setLoading(true);
       setLoadError('');
+      if (dateFilterError) {
+        setMediaItems([]);
+        setLoading(false);
+        return;
+      }
       getAllVideos({
-        ...getMonthRange(selectedMonthKey),
+        ...activeMediaRange,
         search: searchQuery.trim().replace(/^#/, ''),
         mediaType,
       })
@@ -131,7 +200,7 @@ const AlbumPage = () => {
       window.clearTimeout(timer);
       window.removeEventListener('hotube:media-updated', loadMedia);
     };
-  }, [selectedMonthKey, searchQuery, mediaType, reloadKey]);
+  }, [activeMediaRange, dateFilterError, mediaType, reloadKey, searchQuery]);
 
   useEffect(() => {
     let active = true;
@@ -151,10 +220,11 @@ const AlbumPage = () => {
 
   useEffect(() => {
     let active = true;
-    getDateAlbumTags(getMonthRange(selectedMonthKey))
-      .then((tagsByDate) => {
+    if (!user?.id || !activeNotesRange || dateFilterError) return undefined;
+    getMemoryDateNotes(activeNotesRange, user.id)
+      .then((notesByDate) => {
         if (active) {
-          setDateTags(tagsByDate);
+          setDateNotes(notesByDate);
           setTagError('');
         }
       })
@@ -164,10 +234,14 @@ const AlbumPage = () => {
     return () => {
       active = false;
     };
-  }, [selectedMonthKey]);
+  }, [activeNotesRange, dateFilterError, user?.id]);
 
   const selectMonth = (key) => {
     setSelectedMonthKey(key);
+    setSearchQuery('');
+    setSearchDateFrom('');
+    setSearchDateTo('');
+    setDateFilterOpen(false);
     setCollapsedDates([]);
     setSelectedMediaIds([]);
     setSelectionError('');
@@ -188,33 +262,94 @@ const AlbumPage = () => {
 
   const addTag = async (date) => {
     if (tagSavingRef.current) return;
-    const normalizedTag = tagDraft.trim().replace(/^#/, '');
-    const currentTags = dateTags[date] || [];
+    const normalizedTags = [...new Set(tagDraft.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean))];
+    if (!normalizedTags.length || !user?.id) return;
     tagSavingRef.current = true;
-    if (normalizedTag && !currentTags.includes(normalizedTag)) {
-      try {
-        await addDateAlbumTag(date, normalizedTag);
-        setDateTags((current) => ({ ...current, [date]: [...(current[date] || []), normalizedTag] }));
+    try {
+      const result = await addTagsToDateMedia(date, normalizedTags, user.id);
+      if (result.addedCount > 0) {
         setTagError('');
-      } catch (error) {
-        setTagError(error.message);
+        showToast('success', '공통 태그를 사진에 예쁘게 붙였어요 ✨');
+      } else {
+        showToast('info', '이미 같은 태그가 붙어 있어요.');
       }
+      setReloadKey((current) => current + 1);
+      setTaggingDate(null);
+      setTagDraft('');
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      tagSavingRef.current = false;
     }
-    tagSavingRef.current = false;
-    setTaggingDate(null);
-    setTagDraft('');
   };
 
-  const removeTag = async (date, tag) => {
+  const saveNote = async (date) => {
+    if (noteSaving || !user?.id) return;
+    setNoteSaving(true);
     try {
-      await deleteDateAlbumTag(date, tag);
-      setDateTags((current) => ({
-        ...current,
-        [date]: (current[date] || []).filter((item) => item !== tag),
-      }));
+      const saved = await saveMemoryDateNote(date, noteDraft, user.id);
+      setDateNotes((current) => {
+        const next = { ...current };
+        if (saved.content) next[date] = { content: saved.content, createdBy: saved.createdBy };
+        else delete next[date];
+        return next;
+      });
+      setEditingNoteDate(null);
+      setNoteDraft('');
+      noteDraftRef.current = '';
+      setNoteDraftDirty(false);
+      setNoteSaveStatus('');
       setTagError('');
     } catch (error) {
       setTagError(error.message);
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!editingNoteDate || !noteDraftDirty || !user?.id) return undefined;
+    const date = editingNoteDate;
+    const content = noteDraft;
+    const timer = window.setTimeout(async () => {
+      setNoteSaving(true);
+      setNoteSaveStatus('saving');
+      try {
+        const saved = await saveMemoryDateNote(date, content, user.id);
+        setDateNotes((current) => {
+          const next = { ...current };
+          if (saved.content) next[date] = { content: saved.content, createdBy: saved.createdBy };
+          else delete next[date];
+          return next;
+        });
+        if (noteDraftRef.current === content) {
+          setNoteDraftDirty(false);
+          setNoteSaveStatus('saved');
+        }
+      } catch (error) {
+        setNoteSaveStatus('error');
+        showToast('error', error.message);
+      } finally {
+        setNoteSaving(false);
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [editingNoteDate, noteDraft, noteDraftDirty, showToast, user?.id]);
+
+  const deleteNote = async () => {
+    if (!deletingNoteDate || !user?.id) return;
+    try {
+      await deleteMemoryDateNote(deletingNoteDate, user.id);
+      setDateNotes((current) => {
+        const next = { ...current };
+        delete next[deletingNoteDate];
+        return next;
+      });
+      showToast('success', '메모를 삭제했어요.');
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setDeletingNoteDate(null);
     }
   };
 
@@ -310,7 +445,7 @@ const AlbumPage = () => {
             </button>
             <div ref={monthBarRef} className="scrollbar-hide flex flex-1 snap-x gap-1 overflow-x-auto py-1.5">
               {monthOptions.map((item) => {
-                const selected = item.key === selectedMonthKey;
+                const selected = !isSearchMode && item.key === selectedMonthKey;
                 const showYear = item.month === 1;
                 return (
                   <button
@@ -331,8 +466,9 @@ const AlbumPage = () => {
         </section>
 
         <div className="mx-auto max-w-4xl px-4 pt-2">
-          <section className="mb-2 flex items-center gap-3 py-1" aria-label="앨범 검색과 필터">
-            <div className="w-24 shrink-0">
+          <section className="mb-2 py-1" aria-label="앨범 검색과 필터">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-24 shrink-0">
               <span className="sr-only">미디어 종류</span>
               <CustomSelect
                 value={mediaType}
@@ -346,11 +482,12 @@ const AlbumPage = () => {
                   { value: 'video', label: '영상' },
                 ]}
               />
-            </div>
-            <form onSubmit={(event) => event.preventDefault()} className="flex h-10 min-w-0 flex-1">
+              </div>
+              <form onSubmit={(event) => event.preventDefault()} className="flex h-10 min-w-0 flex-1">
               <div className="relative flex h-full w-full items-stretch rounded-full">
                 <input
-                  type="search"
+                  type="text"
+                  inputMode="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   aria-label="앨범 검색"
@@ -374,8 +511,46 @@ const AlbumPage = () => {
                   <Icon icon="mdi:magnify" className="text-xl" />
                 </button>
               </div>
-            </form>
+              </form>
+              <button
+                type="button"
+                onClick={() => setDateFilterOpen((current) => !current)}
+                className={`flex size-10 shrink-0 items-center justify-center rounded-full transition ${hasDateFilter ? 'bg-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
+                aria-label="검색 기간 설정"
+                aria-expanded={dateFilterOpen}
+              >
+                <Icon icon="mdi:calendar-filter-outline" className="text-xl" />
+              </button>
+            </div>
+            {dateFilterOpen && (
+              <div className="mt-2 rounded-2xl border border-border bg-surface p-3 shadow-sm">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DatePickerField label="시작일" value={searchDateFrom} onChange={setSearchDateFrom} placeholder="시작일 선택" />
+                  <DatePickerField label="종료일" value={searchDateTo} onChange={setSearchDateTo} placeholder="종료일 선택" />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  {dateFilterError ? (
+                    <p className="text-xs font-semibold text-error">{dateFilterError}</p>
+                  ) : (
+                    <p className="text-xs text-text-secondary">기간을 비워두면 모든 날짜에서 검색해요.</p>
+                  )}
+                  {hasDateFilter && (
+                    <button type="button" onClick={() => { setSearchDateFrom(''); setSearchDateTo(''); }} className="shrink-0 px-1 py-1 text-xs font-bold text-primary" aria-label="검색 기간 초기화">
+                      초기화
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
+
+          {isSearchMode && (
+            <div className="mb-2 flex items-center gap-1.5 px-1 text-xs font-semibold text-primary">
+              <Icon icon="mdi:magnify" className="text-sm" />
+              <span>전체 검색 중</span>
+              <span className="font-normal text-text-secondary">· 월을 선택하면 검색이 종료돼요.</span>
+            </div>
+          )}
 
           {tagError && <p className="mb-2 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{tagError}</p>}
           {selectionError && <p className="mb-2 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{selectionError}</p>}
@@ -397,9 +572,12 @@ const AlbumPage = () => {
             <section aria-label={`${selectedYear}년 ${selectedMonth}월 타임라인`}>
               {timeline.map(([date, media]) => {
                 const collapsed = collapsedDates.includes(date);
+                const dateNote = dateNotes[date];
+                const canEditNote = dateNote?.createdBy === user?.id || ['admin', 'sub-admin'].includes(user?.role);
                 return (
                   <article key={date} className="group/timeline mt-3 first:mt-0">
-                    <div className="mb-3 flex items-center gap-3">
+                    <div className="mb-3">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => toggleDate(date)}
@@ -409,62 +587,100 @@ const AlbumPage = () => {
                       >
                         <Icon icon="mdi:chevron-down" className={`text-base transition-transform ${collapsed ? '-rotate-90' : ''}`} />
                       </button>
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          to={`/calendar/${date}`}
-                          state={{ returnTo: '/album' }}
-                          className="flex min-w-0 items-end gap-2 text-left"
+                      <Link
+                        to={`/calendar/${date}`}
+                        state={{ returnTo: '/album' }}
+                        className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left"
+                      >
+                        <span className="truncate text-xl font-bold sm:text-2xl">{formatDateTitle(date)}</span>
+                        <span className="shrink-0 text-sm font-medium text-text-secondary">{formatWeekday(date)}</span>
+                      </Link>
+                      {taggingDate === date ? (
+                        <form className="shrink-0" onSubmit={(event) => { event.preventDefault(); addTag(date); }}>
+                          <input
+                            autoFocus
+                            value={tagDraft}
+                            onChange={(event) => setTagDraft(event.target.value)}
+                            onBlur={() => { if (!tagSavingRef.current) { setTaggingDate(null); setTagDraft(''); } }}
+                            onKeyDown={(event) => { if (event.key === 'Escape') { setTaggingDate(null); setTagDraft(''); } }}
+                            placeholder="가족, 여행"
+                            className="h-8 w-28 rounded-full border-primary bg-surface px-3 text-xs focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
+                            aria-label="공통으로 추가할 태그"
+                          />
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setTaggingDate(date); setTagDraft(''); }}
+                          className="shrink-0 px-1 py-1.5 text-xs font-bold text-primary transition hover:opacity-70"
                         >
-                          <span className="text-xl font-bold sm:text-2xl">{formatDateTitle(date)}</span>
-                          <span className="mb-0.5 shrink-0 text-sm font-medium text-text-secondary">{formatWeekday(date)}</span>
-                        </Link>
-                        <div className="-mt-1 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-                          {(dateTags[date] || []).map((tag) => (
-                            <span key={tag} className="inline-flex items-center gap-0.5 text-text-secondary">
-                              #{tag}
-                              <button type="button" onClick={() => removeTag(date, tag)} className="rounded-full p-0.5 hover:bg-primary/10 hover:text-primary" aria-label={`${tag} 태그 삭제`}>
-                                <Icon icon="mdi:close" className="text-xs" />
-                              </button>
-                            </span>
-                          ))}
-                          {taggingDate === date ? (
-                            <form
-                              className="flex items-center gap-1"
-                              onSubmit={(event) => {
-                                event.preventDefault();
-                                addTag(date);
-                              }}
-                            >
-                              <input
-                                value={tagDraft}
-                                onChange={(event) => setTagDraft(event.target.value)}
-                                onBlur={() => addTag(date)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Escape') {
-                                    setTaggingDate(null);
-                                    setTagDraft('');
+                          +공통태그
+                        </button>
+                      )}
+                      </div>
+                      <div className="ml-8 mt-1 text-xs text-text-secondary sm:ml-9">
+                          {editingNoteDate === date ? (
+                            <div className="mt-2 space-y-1.5">
+                              <textarea
+                                autoFocus
+                                value={noteDraft}
+                                onChange={(event) => {
+                                  setNoteDraft(event.target.value);
+                                  noteDraftRef.current = event.target.value;
+                                  setNoteDraftDirty(true);
+                                  setNoteSaveStatus('pending');
+                                }}
+                                onBlur={() => {
+                                  if (noteDraftDirty) saveNote(date);
+                                  else {
+                                    setEditingNoteDate(null);
+                                    setNoteDraft('');
+                                    noteDraftRef.current = '';
+                                    setNoteSaveStatus('');
                                   }
                                 }}
-                                autoFocus
-                                placeholder="태그"
-                                className="h-6 w-24 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary"
-                                aria-label="태그 입력"
+                                rows={2}
+                                maxLength={1000}
+                                placeholder="오늘은 어떤 반짝이는 일이 있었나요? ✨"
+                                className="w-full resize-none rounded-xl border-warning/40 bg-warning/5 px-3 py-2 text-sm focus:border-warning focus:ring-warning/30"
                               />
-                            </form>
+                              <p className="min-h-4 px-1 text-[11px] font-medium text-text-secondary" aria-live="polite">
+                                {noteSaveStatus === 'saving' && '저장 중…'}
+                                {noteSaveStatus === 'saved' && '저장됨 ✓'}
+                                {noteSaveStatus === 'error' && '저장하지 못했어요'}
+                                {noteSaveStatus === 'pending' && '잠시 후 자동 저장돼요'}
+                              </p>
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTaggingDate(date);
-                                setTagDraft('');
-                              }}
-                              className="font-semibold text-primary hover:underline"
-                            >
-                              + 태그
-                            </button>
+                            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+                              {dateNote && (
+                                <div className="min-w-0 flex-1 rounded-2xl border border-warning/20 bg-warning/10 px-3.5 py-2.5 text-left text-sm leading-5 text-text-primary shadow-sm">
+                                  <span className="whitespace-pre-wrap">{dateNote.content}</span>
+                                </div>
+                              )}
+                              {dateNote && canEditNote && (
+                                <div className="flex shrink-0 items-center gap-0.5 pt-1">
+                                  <button type="button" onClick={() => { setEditingNoteDate(date); setNoteDraft(dateNote.content); noteDraftRef.current = dateNote.content; setNoteDraftDirty(false); setNoteSaveStatus(''); }} className="p-0.5 text-text-secondary transition hover:text-primary" aria-label="메모 수정">
+                                    <Icon icon="mdi:pencil-outline" className="text-sm" />
+                                  </button>
+                                  <button type="button" onClick={() => setDeletingNoteDate(date)} className="p-0.5 text-text-secondary transition hover:text-error" aria-label="메모 삭제">
+                                    <Icon icon="mdi:delete-outline" className="text-sm" />
+                                  </button>
+                                </div>
+                              )}
+                              {!dateNote && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingNoteDate(date); setNoteDraft(''); noteDraftRef.current = ''; setNoteDraftDirty(false); setNoteSaveStatus(''); }}
+                                  className="inline-flex shrink-0 items-center gap-1 font-bold text-warning transition hover:opacity-75"
+                                >
+                                  <Icon icon="mdi:note-plus-outline" className="text-base" />
+                                  메모 추가
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      </div>
                     </div>
 
                     <div className="ml-[11px] border-l-2 border-border pb-3 pl-4 group-last/timeline:border-transparent group-last/timeline:pb-0 sm:pl-5">
@@ -643,6 +859,17 @@ const AlbumPage = () => {
           </div>
         )}
       </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <Modal
+        isOpen={Boolean(deletingNoteDate)}
+        onClose={() => setDeletingNoteDate(null)}
+        onConfirm={deleteNote}
+        title="메모 삭제"
+        message="이날의 메모를 삭제할까요?"
+        type="confirm"
+        confirmText="삭제"
+        cancelText="취소"
+      />
     </>
   );
 };

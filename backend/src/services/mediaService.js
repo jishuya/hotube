@@ -15,7 +15,9 @@ const normalizeTags = (tags) => {
     return [];
   }
 
-  return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))];
+  return [...new Set(tags
+    .map((tag) => String(tag).trim().replace(/^#/, '').normalize('NFC'))
+    .filter(Boolean))];
 };
 
 const cleanupOrphanTags = async (client, tagIds) => {
@@ -25,7 +27,6 @@ const cleanupOrphanTags = async (client, tagIds) => {
     DELETE FROM tags t
     WHERE t.id = ANY($1::bigint[])
       AND NOT EXISTS (SELECT 1 FROM media_tags mt WHERE mt.tag_id = t.id)
-      AND NOT EXISTS (SELECT 1 FROM memory_date_tags mdt WHERE mdt.tag_id = t.id)
   `, [uniqueTagIds]);
 };
 
@@ -91,10 +92,9 @@ const listMedia = async ({
       )
       OR EXISTS (
         SELECT 1
-        FROM memory_date_tags search_dat
-        JOIN tags search_date_t ON search_date_t.id = search_dat.tag_id
-        WHERE search_dat.album_date = m.uploaded_at
-          AND search_date_t.name ILIKE ${searchParam}
+        FROM memory_date_notes search_note
+        WHERE search_note.album_date = m.uploaded_at
+          AND search_note.content ILIKE ${searchParam}
       )
     )`);
   }
@@ -268,7 +268,6 @@ const createFileMedia = async ({
   thumbnailPath = null,
   mediaType,
   tags,
-  dateTags,
   uploadedAt,
   uploadedBy = null,
   sharedWith = ['dad', 'mom'],
@@ -293,7 +292,6 @@ const createFileMedia = async ({
     `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, now]);
 
     await replaceMediaTags(client, id, tags);
-    await addDateAlbumTags(client, uploadedAt, dateTags);
     const createdMedia = await fetchMediaById(client, id);
     await client.query('COMMIT');
     return createdMedia;
@@ -435,22 +433,6 @@ const replaceMediaTags = async (client, mediaId, tags) => {
   }
 
   await cleanupOrphanTags(client, previousTags.rows.map((row) => row.tag_id));
-};
-
-const addDateAlbumTags = async (client, albumDate, tags) => {
-  for (const tag of normalizeTags(tags)) {
-    const tagResult = await client.query(`
-      INSERT INTO tags (name)
-      VALUES ($1)
-      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-      RETURNING id
-    `, [tag]);
-    await client.query(`
-      INSERT INTO memory_date_tags (album_date, tag_id)
-      VALUES ($1, $2)
-      ON CONFLICT (album_date, tag_id) DO NOTHING
-    `, [albumDate, tagResult.rows[0].id]);
-  }
 };
 
 module.exports = {

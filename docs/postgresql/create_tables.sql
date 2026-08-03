@@ -108,14 +108,15 @@ CREATE TABLE IF NOT EXISTS media_tags (
         ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS memory_date_tags (
-    album_date DATE NOT NULL,
-    tag_id BIGINT NOT NULL,
+CREATE TABLE IF NOT EXISTS memory_date_notes (
+    album_date DATE PRIMARY KEY,
+    content TEXT NOT NULL DEFAULT '',
+    created_by TEXT,
+    updated_by TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (album_date, tag_id),
-    CONSTRAINT fk_memory_date_tags_tag
-        FOREIGN KEY (tag_id) REFERENCES tags (id)
-        ON UPDATE CASCADE ON DELETE CASCADE
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_memory_date_notes_created_by FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_memory_date_notes_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS comments (
@@ -267,7 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_media_year ON media (year);
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags (name);
 CREATE INDEX IF NOT EXISTS idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_media_tags_tag_media ON media_tags (tag_id, media_id);
-CREATE INDEX IF NOT EXISTS idx_memory_date_tags_tag_date ON memory_date_tags (tag_id, album_date);
+CREATE INDEX IF NOT EXISTS idx_memory_date_notes_content_trgm ON memory_date_notes USING GIN (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_user_watched_media_media_id ON user_watched_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_user_liked_media_media_id ON user_liked_media (media_id);
 CREATE INDEX IF NOT EXISTS idx_user_favorite_media_media_id ON user_favorite_media (media_id);

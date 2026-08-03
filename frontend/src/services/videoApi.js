@@ -103,14 +103,13 @@ export const addVideo = async (videoData) => {
 };
 
 export const uploadMediaFile = async (file, {
-  title, uploadedAt, tags, dateTags = [], uploadedBy, sharedWith = ['dad', 'mom'],
+  title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'],
 }) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('title', title || file.name);
   formData.append('uploadedAt', uploadedAt);
   formData.append('tags', JSON.stringify(tags || []));
-  formData.append('dateTags', JSON.stringify(dateTags));
   if (uploadedBy) formData.append('uploadedBy', uploadedBy);
   formData.append('sharedWith', JSON.stringify(sharedWith));
 

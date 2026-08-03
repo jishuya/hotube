@@ -246,11 +246,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           const itemTags = item.tags.split(',')
             .map((tag) => tag.trim().replace(/^#/, ''))
             .filter(Boolean);
+          const mergedTags = [...new Set([...normalizedTags, ...itemTags])];
           const saved = await uploadMediaFile(item.file, {
             title: item.name,
             uploadedAt: targetDate || item.date || date,
-            tags: itemTags,
-            dateTags: normalizedTags,
+            tags: mergedTags,
             uploadedBy: user?.id,
           });
           created.push(toMemoryMedia(saved));
@@ -485,7 +485,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                   />
                 )}
                 <label className={uploadSource === 'device' ? 'sm:col-span-2' : ''}>
-                  <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '추억 태그' : '태그'}</span>
+                  <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '모든 파일에 적용할 태그' : '태그'}</span>
                   <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={uploadSource === 'device' ? '돌잔치, 수영장, 첫응가' : '가족, 여행, 생일'} />
                 </label>
               </section>

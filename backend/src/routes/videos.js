@@ -145,7 +145,6 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
   let storedFilePath = null;
   try {
     const tags = JSON.parse(req.body.tags || '[]');
-    const dateTags = JSON.parse(req.body.dateTags || '[]');
     const isVideo = req.file.mimetype.startsWith('video/');
     const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(req.body.uploadedAt);
     const uploader = req.body.uploadedBy ? await fetchUserById(req.body.uploadedBy) : null;
@@ -175,7 +174,6 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       thumbnailPath,
       mediaType: isVideo ? 'video' : 'photo',
       tags,
-      dateTags,
       uploadedAt: req.body.uploadedAt,
       uploadedBy: uploader.id,
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
