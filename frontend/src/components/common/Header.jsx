@@ -308,7 +308,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
 
         {showChildBanner && (
           <div
-            className="mx-4 mb-2 flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-3 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:mx-10 sm:px-4 dark:to-primary/5 md:mx-auto"
+            className="mx-auto mb-2 flex w-[calc(100%-2rem)] max-w-3xl items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-3 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:px-4 dark:to-primary/5"
           >
             <div className="relative shrink-0">
               <img

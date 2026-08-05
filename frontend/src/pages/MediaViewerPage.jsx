@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import CommentSection from '../components/video/CommentSection';
 import Modal from '../components/common/Modal';
 import ToastContainer from '../components/common/Toast';
+import DatePickerField from '../components/common/DatePickerField';
 import {
   deleteVideo,
   getAllVideos,
@@ -725,7 +726,7 @@ const MediaViewerPage = () => {
       {editing && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           <button type="button" className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" onClick={() => setEditing(false)} aria-label="미디어 수정 닫기" />
-          <section className="relative w-full max-w-sm rounded-2xl bg-surface p-5 shadow-xl" aria-labelledby="media-edit-title">
+          <section className="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-surface p-5 shadow-xl" aria-labelledby="media-edit-title">
             <div className="flex items-center justify-between">
               <div>
                 <h2 id="media-edit-title" className="text-lg font-bold">미디어 수정</h2>
@@ -733,7 +734,14 @@ const MediaViewerPage = () => {
               </div>
               <button type="button" onClick={() => setEditing(false)} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10" aria-label="닫기"><Icon icon="mdi:close" className="text-xl" /></button>
             </div>
-            <label className="mt-5 block text-sm font-semibold">날짜<input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 focus:border-primary focus:ring-primary/30" /></label>
+            <div className="mt-5">
+              <DatePickerField
+                label="날짜"
+                value={editDate}
+                onChange={setEditDate}
+                placeholder="날짜를 선택하세요"
+              />
+            </div>
             <fieldset className="mt-4">
               <legend className="text-sm font-semibold">공유 가족</legend>
               <div className="mt-2 grid grid-cols-2 gap-2">

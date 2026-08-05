@@ -11,6 +11,15 @@ const profileDirectory = process.env.CHILD_PROFILE_UPLOAD_DIR
   ? path.resolve(process.env.CHILD_PROFILE_UPLOAD_DIR.replace(/^~(?=$|\/)/, os.homedir()))
   : path.join(os.homedir(), 'workspace/lab/hotube_data/profile');
 
+const formatDateOnly = (value) => {
+  if (!(value instanceof Date)) return value;
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, '0'),
+    String(value.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
 const mapChildProfile = (row) => {
   if (!row) return null;
   return {
@@ -18,9 +27,7 @@ const mapChildProfile = (row) => {
     name: row.name,
     nickname: row.nickname,
     gender: row.gender,
-    birthday: row.birth_date instanceof Date
-      ? row.birth_date.toISOString().slice(0, 10)
-      : row.birth_date,
+    birthday: formatDateOnly(row.birth_date),
     profileImage: row.photo_path
       ? `/childProfile/photo/${encodeURIComponent(path.basename(row.photo_path))}`
       : null,

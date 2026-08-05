@@ -28,6 +28,36 @@ const formatDisplayDate = (value) => {
   }).format(date);
 };
 
+export const DateRangePicker = ({ from, to, onChange }) => {
+  const selected = {
+    from: parseDateKey(from),
+    to: parseDateKey(to),
+  };
+
+  return (
+    <DayPicker
+      mode="range"
+      resetOnSelect
+      locale={ko}
+      selected={selected.from ? selected : undefined}
+      defaultMonth={selected.from || selected.to || new Date()}
+      onSelect={(range) => {
+        onChange({
+          from: range?.from ? formatDateKey(range.from) : '',
+          to: range?.to ? formatDateKey(range.to) : '',
+        });
+      }}
+      startMonth={new Date(2000, 0)}
+      endMonth={new Date(2035, 11)}
+      captionLayout="dropdown"
+      components={{ Dropdown: DayPickerDropdown }}
+      reverseYears
+      showOutsideDays
+      className="upload-date-picker"
+    />
+  );
+};
+
 const DatePickerField = ({ label, value, onChange, placeholder = '날짜를 선택하세요' }) => {
   const [open, setOpen] = useState(false);
   const calendarId = useId();
@@ -53,6 +83,7 @@ const DatePickerField = ({ label, value, onChange, placeholder = '날짜를 선�
           <DayPicker
             mode="single"
             locale={ko}
+            selected={selected}
             defaultMonth={selected || new Date()}
             onSelect={(date) => {
               if (!date) return;

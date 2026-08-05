@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
-import DatePickerField from '../components/common/DatePickerField';
+import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
@@ -36,6 +36,18 @@ const getTodayDateKey = () => {
     today.getFullYear(),
     String(today.getMonth() + 1).padStart(2, '0'),
     String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const addOneDay = (dateKey) => {
+  if (!dateKey) return '';
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + 1);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
   ].join('-');
 };
 
@@ -72,7 +84,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const navigate = useNavigate();
   const [uploads, setUploads] = useState([]);
   const [totalUploadCount, setTotalUploadCount] = useState(0);
-  const [availableDates, setAvailableDates] = useState([]);
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(null);
@@ -84,7 +95,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [date, setDate] = useState(initialDate);
   const [tags, setTags] = useState('');
   const [page, setPage] = useState(1);
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [filterTag, setFilterTag] = useState('');
   const [filterSource, setFilterSource] = useState('all');
   const [filterMediaType, setFilterMediaType] = useState('all');
@@ -98,15 +111,24 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE,
   ), [uploads, page]);
-  const hasActiveFilters = Boolean(filterDate || filterTag.trim() || filterSource !== 'all' || filterMediaType !== 'all');
+  const hasDateFilter = Boolean(filterDateFrom || filterDateTo);
+  const dateFilterError = filterDateFrom && filterDateTo && filterDateFrom > filterDateTo
+    ? '종료일은 시작일보다 빠를 수 없어요.'
+    : '';
+  const hasActiveFilters = Boolean(hasDateFilter || filterTag.trim() || filterSource !== 'all' || filterMediaType !== 'all');
 
   useEffect(() => {
     if (!listOnly) return;
     let active = true;
+    if (dateFilterError) {
+      setUploads([]);
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       getAllVideos({
         search: filterTag.trim().replace(/^#/, ''),
-        uploadedAt: filterDate,
+        dateFrom: filterDateFrom,
+        dateTo: addOneDay(filterDateTo),
         source: filterSource,
         mediaType: filterMediaType,
       })
@@ -116,7 +138,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           setUploads(mappedItems);
           if (!hasActiveFilters) {
             setTotalUploadCount(mappedItems.length);
-            setAvailableDates(Array.from(new Set(mappedItems.map((item) => item.date).filter(Boolean))).sort((a, b) => b.localeCompare(a)));
           }
         })
         .catch((error) => {
@@ -127,7 +148,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       active = false;
       window.clearTimeout(timer);
     };
-  }, [listOnly, filterDate, filterTag, filterSource, filterMediaType, hasActiveFilters]);
+  }, [listOnly, filterDateFrom, filterDateTo, filterTag, filterSource, filterMediaType, hasActiveFilters, dateFilterError]);
 
   const addFiles = (files) => {
     const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
@@ -525,9 +546,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     type="button"
                     onClick={() => {
                       setFilterTag('');
-                      setFilterDate('');
+                      setFilterDateFrom('');
+                      setFilterDateTo('');
                       setFilterSource('all');
                       setFilterMediaType('all');
+                      setDateFilterOpen(false);
                       setPage(1);
                     }}
                     disabled={!hasActiveFilters}
@@ -538,23 +561,33 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     <Icon icon="mdi:refresh" className="text-lg" />
                   </button>
                 </div>
-                <div className="min-w-0">
-                  <span className="sr-only">날짜 선택</span>
-                  <CustomSelect
-                    value={filterDate}
-                    onChange={(event) => {
-                      setFilterDate(event.target.value);
-                      setPage(1);
-                    }}
-                    aria-label="날짜 선택"
-                    className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
-                    options={[
-                      { value: '', label: '전체 날짜' },
-                      ...availableDates.map((uploadDate) => ({ value: uploadDate, label: uploadDate })),
-                    ]}
-                  />
-                </div>
-                <div className="min-w-0">
+                <div className="col-span-3 grid grid-cols-2 gap-2">
+                  <div className="relative order-last col-span-2 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setDateFilterOpen((current) => !current)}
+                      className={`flex h-10 w-full items-center justify-between gap-1 rounded-lg border bg-white px-3 text-left text-sm transition ${dateFilterOpen ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50'} ${hasDateFilter ? 'pr-8' : ''}`}
+                      aria-label="검색 기간 설정"
+                      aria-expanded={dateFilterOpen}
+                    >
+                      <span className={`min-w-0 flex-1 truncate ${hasDateFilter ? 'text-text-primary' : 'text-text-secondary'}`}>
+                        {hasDateFilter ? `${filterDateFrom || '시작일'} ~ ${filterDateTo || '종료일'}` : '전체 날짜'}
+                      </span>
+                      {!hasDateFilter && <Icon icon={dateFilterOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'} className="shrink-0 text-xl text-text-secondary" />}
+                    </button>
+                    {hasDateFilter && (
+                      <button
+                        type="button"
+                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
+                        className="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
+                        aria-label="날짜 초기화"
+                        title="날짜 초기화"
+                      >
+                        <Icon icon="mdi:close" className="text-lg" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="min-w-0">
                   <span className="sr-only">업로드 출처</span>
                   <CustomSelect
                     value={filterSource}
@@ -570,8 +603,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       { value: 'youtube', label: '유투브' },
                     ]}
                   />
-                </div>
-                <div className="min-w-0">
+                  </div>
+                  <div className="min-w-0">
                   <span className="sr-only">미디어 종류</span>
                   <CustomSelect
                     value={filterMediaType}
@@ -587,8 +620,44 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       { value: 'video', label: '영상' },
                     ]}
                   />
+                  </div>
                 </div>
               </div>
+
+              {dateFilterOpen && (
+                <div className="mb-3 mt-2 rounded-2xl border border-border bg-surface p-3 shadow-sm">
+                  <div className="flex items-center gap-3 px-1 pb-2">
+                    <span className="text-sm font-bold text-text-primary">검색 기간</span>
+                    {hasDateFilter && (
+                      <span className="ml-auto truncate text-xs font-medium text-primary">
+                        {filterDateFrom || '시작일'} ~ {filterDateTo || '종료일'}
+                      </span>
+                    )}
+                    {hasDateFilter && (
+                      <button
+                        type="button"
+                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
+                        aria-label="날짜 초기화"
+                        title="날짜 초기화"
+                      >
+                        <Icon icon="mdi:close" className="text-lg" />
+                      </button>
+                    )}
+                  </div>
+                  <DateRangePicker
+                    from={filterDateFrom}
+                    to={filterDateTo}
+                    onChange={(range) => {
+                      setFilterDateFrom(range.from);
+                      setFilterDateTo(range.to);
+                      setPage(1);
+                      if (range.to) setDateFilterOpen(false);
+                    }}
+                  />
+                  {dateFilterError && <p className="mt-2 text-xs font-semibold text-error">{dateFilterError}</p>}
+                </div>
+              )}
 
               {paginatedUploads.length > 0 ? (
                 <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-sm">

@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CustomSelect from '../components/common/CustomSelect';
 import ToastContainer from '../components/common/Toast';
 import Modal from '../components/common/Modal';
-import DatePickerField from '../components/common/DatePickerField';
+import { DateRangePicker } from '../components/common/DatePickerField';
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const currentMonthKey = formatMonthKey(new Date());
@@ -524,22 +524,35 @@ const AlbumPage = () => {
             </div>
             {dateFilterOpen && (
               <div className="mt-2 rounded-2xl border border-border bg-surface p-3 shadow-sm">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DatePickerField label="시작일" value={searchDateFrom} onChange={setSearchDateFrom} placeholder="시작일 선택" />
-                  <DatePickerField label="종료일" value={searchDateTo} onChange={setSearchDateTo} placeholder="종료일 선택" />
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  {dateFilterError ? (
-                    <p className="text-xs font-semibold text-error">{dateFilterError}</p>
-                  ) : (
-                    <p className="text-xs text-text-secondary">기간을 비워두면 모든 날짜에서 검색해요.</p>
+                <div className="flex items-center gap-3 px-1 pb-2">
+                  <span className="text-sm font-bold text-text-primary">검색 기간</span>
+                  {hasDateFilter && (
+                    <span className="ml-auto truncate text-xs font-medium text-primary">
+                      {searchDateFrom || '시작일'} ~ {searchDateTo || '종료일'}
+                    </span>
                   )}
                   {hasDateFilter && (
-                    <button type="button" onClick={() => { setSearchDateFrom(''); setSearchDateTo(''); }} className="shrink-0 px-1 py-1 text-xs font-bold text-primary" aria-label="검색 기간 초기화">
-                      초기화
+                    <button
+                      type="button"
+                      onClick={() => { setSearchDateFrom(''); setSearchDateTo(''); }}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
+                      aria-label="검색 기간 초기화"
+                      title="검색 기간 초기화"
+                    >
+                      <Icon icon="mdi:close" className="text-lg" />
                     </button>
                   )}
                 </div>
+                <DateRangePicker
+                  from={searchDateFrom}
+                  to={searchDateTo}
+                  onChange={(range) => {
+                    setSearchDateFrom(range.from);
+                    setSearchDateTo(range.to);
+                    if (range.to) setDateFilterOpen(false);
+                  }}
+                />
+                {dateFilterError && <p className="mt-2 text-xs font-semibold text-error">{dateFilterError}</p>}
               </div>
             )}
           </section>
@@ -686,8 +699,10 @@ const AlbumPage = () => {
                     <div className="ml-[11px] border-l-2 border-border pb-3 pl-4 group-last/timeline:border-transparent group-last/timeline:pb-0 sm:pl-5">
                       {!collapsed && (
                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
-                          {media.map((item) => (
-                            <Link
+                          {media.map((item) => {
+                            const isFeaturedYoutube = item.source === 'youtube' && item.videoType === 'long';
+                            return (
+                              <Link
                               key={item.id}
                               to={`/media/${item.id}?date=${date}`}
                               state={{ returnTo: '/album' }}
@@ -703,7 +718,11 @@ const AlbumPage = () => {
                                 if (!longPressTriggeredRef.current) toggleMediaSelection(item.id);
                                 longPressTriggeredRef.current = false;
                               }}
-                              className={`group relative aspect-square select-none overflow-hidden rounded-lg bg-surface shadow-sm transition duration-200 ${
+                              className={`group relative select-none overflow-hidden bg-surface shadow-sm transition duration-200 ${
+                                isFeaturedYoutube
+                                  ? 'col-span-3 aspect-video rounded-xl sm:col-span-4'
+                                  : 'aspect-square rounded-lg'
+                              } ${
                                 selectedMediaIds.includes(item.id)
                                   ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background'
                                   : 'hover:-translate-y-1'
@@ -737,11 +756,21 @@ const AlbumPage = () => {
                               )}
                               {item.type === 'video' && (
                                 <span className="absolute inset-0 flex items-center justify-center bg-black/10">
-                                  <Icon icon="mdi:play-circle" className="text-4xl text-white drop-shadow" />
+                                  <Icon icon="mdi:play-circle" className={`${isFeaturedYoutube ? 'text-6xl sm:text-7xl' : 'text-4xl'} text-white drop-shadow`} />
                                 </span>
                               )}
-                            </Link>
-                          ))}
+                              {isFeaturedYoutube && (
+                                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-3 pt-12 text-white sm:px-5 sm:pb-4">
+                                  <span className="min-w-0 truncate text-sm font-bold sm:text-lg">{item.title}</span>
+                                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-error px-2.5 py-1 text-[11px] font-bold shadow-sm sm:text-xs">
+                                    <Icon icon="mdi:youtube" className="text-base" />
+                                    편집영상
+                                  </span>
+                                </span>
+                              )}
+                              </Link>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
