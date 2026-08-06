@@ -12,6 +12,11 @@ import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, upload
 import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 20;
+const SHARE_OPTIONS = [
+  { value: 'dad', label: '아빠가족' },
+  { value: 'mom', label: '엄마가족' },
+];
+const ALL_FAMILY_CATEGORIES = SHARE_OPTIONS.map((option) => option.value);
 
 const VideoFramePreview = ({ src, className }) => (
   <video
@@ -94,6 +99,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(initialDate);
   const [tags, setTags] = useState('');
+  const [sharedWith, setSharedWith] = useState(ALL_FAMILY_CATEGORIES);
   const [page, setPage] = useState(1);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -214,6 +220,15 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setYoutubeError('');
     setTitle('');
     setTags('');
+    setSharedWith(ALL_FAMILY_CATEGORIES);
+  };
+
+  const toggleSharedFamily = (category) => {
+    setSharedWith((current) => {
+      if (!current.includes(category)) return [...current, category];
+      const next = current.filter((value) => value !== category);
+      return next.length > 0 ? next : ALL_FAMILY_CATEGORIES;
+    });
   };
 
   const changeUploadSource = (source) => {
@@ -273,6 +288,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             uploadedAt: targetDate || item.date || date,
             tags: mergedTags,
             uploadedBy: user?.id,
+            sharedWith,
           });
           created.push(toMemoryMedia(saved));
         }
@@ -292,7 +308,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           likeCount: youtubeInfo.likeCount,
           channelTitle: youtubeInfo.channelTitle,
           uploadedBy: user?.id,
-          sharedWith: ['dad', 'mom'],
+          sharedWith,
         });
         created.push(toMemoryMedia(saved));
       }
@@ -509,6 +525,35 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                   <span className="mb-2 block text-sm font-bold">{uploadSource === 'device' ? '모든 파일에 적용할 태그' : '태그'}</span>
                   <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={uploadSource === 'device' ? '돌잔치, 수영장, 첫응가' : '가족, 여행, 생일'} />
                 </label>
+                <fieldset className="sm:col-span-2">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <legend className="text-sm font-bold">공유 가족</legend>
+                    <button
+                      type="button"
+                      onClick={() => setSharedWith(ALL_FAMILY_CATEGORIES)}
+                      className="text-xs font-bold text-primary hover:underline"
+                    >
+                      모두 선택
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SHARE_OPTIONS.map(({ value, label }) => {
+                      const selected = sharedWith.includes(value);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => toggleSharedFamily(value)}
+                          aria-pressed={selected}
+                          className={`flex min-h-11 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-bold transition sm:text-sm ${selected ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-text-secondary hover:border-primary/40'}`}
+                        >
+                          <Icon icon={selected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="shrink-0 text-lg" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
               </section>
 
               {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}

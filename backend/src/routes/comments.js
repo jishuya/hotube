@@ -74,26 +74,14 @@ router.get("/getComments", async (req, res) => {
 
     const access = await getMediaAccess(pgDb, videoId, userId);
     if (!access?.can_view) return res.status(403).json({ error: '이 미디어의 댓글을 볼 권한이 없습니다' });
-    let result;
-    if (access.role === "admin" || access.role === "sub-admin") {
-      result = await pgDb.query(
-        `SELECT c.*, u.avatar AS user_avatar
-         FROM comments c
-         LEFT JOIN users u ON u.id = c.user_id
-         WHERE c.media_id = $1
-         ORDER BY c.created_at DESC`,
-        [videoId],
-      );
-    } else {
-      result = await pgDb.query(
-        `SELECT c.*, u.avatar AS user_avatar
-         FROM comments c
-         LEFT JOIN users u ON u.id = c.user_id
-         WHERE c.media_id = $1 AND c.user_category = $2
-         ORDER BY c.created_at DESC`,
-        [videoId, access.category],
-      );
-    }
+    const result = await pgDb.query(
+      `SELECT c.*, u.avatar AS user_avatar
+       FROM comments c
+       LEFT JOIN users u ON u.id = c.user_id
+       WHERE c.media_id = $1
+       ORDER BY c.created_at DESC`,
+      [videoId],
+    );
 
     res.json(result.rows.map(mapCommentRowToComment));
   } catch (error) {

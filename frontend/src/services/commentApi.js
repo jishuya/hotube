@@ -26,7 +26,7 @@ export const createComment = async (videoId, userId, content) => {
   return data;
 };
 
-// 댓글 조회 (같은 카테고리만, 관리자/부관리자는 모든 댓글 조회 가능)
+// 미디어를 공유받은 모든 가족의 댓글 조회
 export const getComments = async (videoId, userId) => {
   const params = new URLSearchParams({ videoId, userId });
   const response = await fetch(`${FUNCTIONS_URL.getComments}?${params}`);

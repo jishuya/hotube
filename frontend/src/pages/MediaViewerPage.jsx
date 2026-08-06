@@ -89,6 +89,24 @@ const MediaVideoPlayer = ({ src, poster }) => {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      const playerIsFullscreen = fullscreenElement === playerRef.current;
+      setIsFullscreen(playerIsFullscreen);
+      if (!playerIsFullscreen) setRotation(0);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!playing || !controlsVisible) return undefined;
@@ -103,17 +121,56 @@ const MediaVideoPlayer = ({ src, poster }) => {
     else video.pause();
   };
 
+  const toggleFullscreen = async () => {
+    const player = playerRef.current;
+    const video = videoRef.current;
+    if (!player || !video) return;
+
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fullscreenElement) {
+      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+      await exitFullscreen?.call(document);
+      return;
+    }
+
+    const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
+    if (requestFullscreen) {
+      await requestFullscreen.call(player);
+    } else {
+      video.webkitEnterFullscreen?.();
+    }
+  };
+
+  const rotateVideo = async () => {
+    const player = playerRef.current;
+    const video = videoRef.current;
+    if (!player || !video) return;
+
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fullscreenElement !== player) {
+      const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
+      if (requestFullscreen) {
+        await requestFullscreen.call(player);
+      } else {
+        video.webkitEnterFullscreen?.();
+      }
+    }
+    setRotation((value) => (value + 90) % 360);
+  };
+
+  const isSideways = rotation % 180 !== 0;
+
   return (
     <div
       ref={playerRef}
-      className="relative w-full self-center overflow-hidden bg-black"
+      className={`relative w-full overflow-hidden bg-black ${isFullscreen ? 'flex h-screen items-center justify-center' : 'self-center'}`}
       onMouseMove={() => setControlsVisible(true)}
       onMouseLeave={() => {
         if (playing) setControlsVisible(false);
       }}
       onTouchStart={() => setControlsVisible(true)}
     >
-      <div className="flex items-center justify-center bg-black">
+      <div className={`flex w-full items-center justify-center bg-black ${isFullscreen ? 'h-full' : ''}`}>
         <video
           ref={videoRef}
           src={src}
@@ -132,7 +189,17 @@ const MediaVideoPlayer = ({ src, poster }) => {
           }}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
-          className="max-h-[70vh] max-w-full object-contain"
+          className={`${isFullscreen ? 'h-full w-full' : 'max-h-[70vh] max-w-full'} object-contain`}
+          style={{
+            transform: `rotate(${rotation}deg)`,
+            transition: 'transform 200ms ease',
+            ...(isFullscreen && isSideways ? {
+              width: '100dvh',
+              height: '100dvw',
+              maxWidth: '100dvh',
+              maxHeight: '100dvw',
+            } : {}),
+          }}
         />
       </div>
       <div className={`absolute inset-x-2 bottom-1.5 flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-zinc-950/75 px-2.5 text-white shadow-2xl backdrop-blur-md transition-all duration-300 sm:inset-x-3 sm:px-3 ${
@@ -144,7 +211,8 @@ const MediaVideoPlayer = ({ src, poster }) => {
         </span>
         <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
         <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
-        <button type="button" onClick={() => playerRef.current?.requestFullscreen?.()} className={playerControlButtonClass} aria-label="전체 화면"><Icon icon="mdi:fullscreen" className="text-xl" /></button>
+        <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>
+        <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>
       </div>
     </div>
   );
@@ -534,9 +602,9 @@ const MediaViewerPage = () => {
     }
   };
 
-  const shareLabel = sharedWith.length > 1
+  const shareLabel = ['dad', 'mom'].every((category) => sharedWith.includes(category))
     ? '모든가족'
-    : sharedWith[0] === 'mom' ? '엄마가족' : '아빠가족';
+    : sharedWith.map((category) => ({ dad: '아빠가족', mom: '엄마가족', etc: '기타' })[category]).filter(Boolean).join(' · ');
 
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center bg-background"><Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" /></main>;
