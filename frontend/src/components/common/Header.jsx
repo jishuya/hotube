@@ -64,6 +64,8 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [showNotifications, setShowNotifications] = useState(false);
   const [supportRequests, setSupportRequests] = useState([]);
   const [mediaNotifications, setMediaNotifications] = useState([]);
+  const [supportNotificationsLoadedFor, setSupportNotificationsLoadedFor] = useState(null);
+  const [mediaNotificationsLoadedFor, setMediaNotificationsLoadedFor] = useState(null);
   const [notificationError, setNotificationError] = useState('');
   const [mediaNotificationError, setMediaNotificationError] = useState('');
   const [markingAllMedia, setMarkingAllMedia] = useState(false);
@@ -76,7 +78,25 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const unreadMedia = mediaNotifications.filter((media) => !user?.watchedVideos?.includes(media.id));
   const unreadNotificationCount = unreadSupportCount + unreadMedia.length;
   const hasUnreadNotifications = unreadNotificationCount > 0;
+  const notificationCountsLoaded = mediaNotificationsLoadedFor === user?.id
+    && (!authIsAdmin || supportNotificationsLoadedFor === user?.id);
   const childAge = getAgeSinceBirth(child.birthday);
+
+  useEffect(() => {
+    if (!user?.id || !notificationCountsLoaded) return;
+    const syncAppBadge = async () => {
+      try {
+        if (unreadNotificationCount > 0 && 'setAppBadge' in navigator) {
+          await navigator.setAppBadge(unreadNotificationCount);
+        } else if (unreadNotificationCount === 0 && 'clearAppBadge' in navigator) {
+          await navigator.clearAppBadge();
+        }
+      } catch (error) {
+        console.error('홈 화면 앱 배지 동기화 실패:', error);
+      }
+    };
+    syncAppBadge();
+  }, [notificationCountsLoaded, unreadNotificationCount, user?.id]);
 
   // URL의 검색어와 input 동기화
   useEffect(() => {
@@ -99,6 +119,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   useEffect(() => {
     if (!authIsAdmin || !user?.id) {
       setSupportRequests([]);
+      setSupportNotificationsLoadedFor(null);
       return undefined;
     }
     let active = true;
@@ -107,6 +128,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
         .then((requests) => {
           if (active) {
             setSupportRequests(requests);
+            setSupportNotificationsLoadedFor(user.id);
             setNotificationError('');
           }
         })
@@ -129,6 +151,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   useEffect(() => {
     if (!user?.id) {
       setMediaNotifications([]);
+      setMediaNotificationsLoadedFor(null);
       return undefined;
     }
     let active = true;
@@ -137,6 +160,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
         .then((items) => {
           if (active) {
             setMediaNotifications(items.map(toMemoryMedia));
+            setMediaNotificationsLoadedFor(user.id);
             setMediaNotificationError('');
           }
         })
