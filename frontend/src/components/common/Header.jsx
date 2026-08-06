@@ -5,6 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import ChildInfoModal from './ChildInfoModal';
 import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
+import { getAllVideos, toMemoryMedia } from '../../services/videoApi';
+import { markAllVideosWatched } from '../../services/authApi';
+import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const DEFAULT_CHILD = {
   name: '김수호',
@@ -13,26 +16,6 @@ const DEFAULT_CHILD = {
   birthday: '2023-10-16',
   profileImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBl38ACm_2q5uSKmstxSAhb8ggchgHK9DuZDHXNj_64EA5Ob1jJaP5M0oQ4GX8BlEUYwrsFj6Le0AuBKKslmIeaHS3k0Jh0yolYS1LjHCwu2xPzrolE-8aRgDMgJtwKQT1CwNibs0mSPlzfIjpF-rojpH1M0PatvSF5Xot8sH70No4nr8N4JBgi17ZXeQqrtek5YGP-eug77bmEtgbrjFGfDT9siZ4rCxYKg9BK1UDifS0zQ_2F1hCTDsyvMoLXWvp85bAzDuRla4fy',
 };
-
-const PROFILE_AVATARS = [
-  { id: 'grandfather', x: 0, y: 9, label: '할아버지' },
-  { id: 'grandmother-curly', x: 25, y: 9, label: '곱슬머리 할머니' },
-  { id: 'woman-long', x: 50, y: 9, label: '긴 머리 여성' },
-  { id: 'woman-short', x: 75, y: 9, label: '짧은 머리 여성' },
-  { id: 'woman-glasses', x: 100, y: 9, label: '안경 쓴 여성' },
-  { id: 'man', x: 0, y: 89, label: '성인 남성' },
-  { id: 'man-glasses', x: 25, y: 89, label: '안경 쓴 남성' },
-  { id: 'grandmother-bob', x: 50, y: 89, label: '단발머리 할머니' },
-  { id: 'woman-ponytail', x: 75, y: 89, label: '머리 묶은 여성' },
-  { id: 'man-short', x: 100, y: 89, label: '짧은 머리 남성' },
-];
-
-const getAvatarStyle = (avatar) => ({
-  backgroundImage: "url('/avatars/hotube-family-avatars.png')",
-  backgroundPosition: `${avatar.x}% ${avatar.y}%`,
-  backgroundSize: '500% auto',
-  backgroundRepeat: 'no-repeat',
-});
 
 const getAgeSinceBirth = (birthday) => {
   const today = new Date();
@@ -80,14 +63,19 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [showChildInfoModal, setShowChildInfoModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [supportRequests, setSupportRequests] = useState([]);
+  const [mediaNotifications, setMediaNotifications] = useState([]);
   const [notificationError, setNotificationError] = useState('');
+  const [mediaNotificationError, setMediaNotificationError] = useState('');
+  const [markingAllMedia, setMarkingAllMedia] = useState(false);
   const [selectedSupport, setSelectedSupport] = useState(null);
   const [supportDetailLoading, setSupportDetailLoading] = useState(false);
-  const { user, isAdmin: authIsAdmin } = useAuth();
+  const { user, isAdmin: authIsAdmin, markAllWatchedLocal } = useAuth();
   const selectedAvatar = PROFILE_AVATARS.find((avatar) => avatar.id === user?.avatar) || PROFILE_AVATARS[2];
   const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
   const unreadSupportCount = unreadSupportRequests.length;
-  const hasUnreadSupport = unreadSupportCount > 0;
+  const unreadMedia = mediaNotifications.filter((media) => !user?.watchedVideos?.includes(media.id));
+  const unreadNotificationCount = unreadSupportCount + unreadMedia.length;
+  const hasUnreadNotifications = unreadNotificationCount > 0;
   const childAge = getAgeSinceBirth(child.birthday);
 
   // URL의 검색어와 input 동기화
@@ -138,6 +126,36 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     };
   }, [authIsAdmin, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setMediaNotifications([]);
+      return undefined;
+    }
+    let active = true;
+    const loadMediaNotifications = () => {
+      getAllVideos()
+        .then((items) => {
+          if (active) {
+            setMediaNotifications(items.map(toMemoryMedia));
+            setMediaNotificationError('');
+          }
+        })
+        .catch((error) => {
+          if (active) setMediaNotificationError(error.message || '미디어 알림을 불러오지 못했습니다');
+        });
+    };
+    loadMediaNotifications();
+    const intervalId = window.setInterval(loadMediaNotifications, 15000);
+    window.addEventListener('focus', loadMediaNotifications);
+    window.addEventListener('hotube:media-updated', loadMediaNotifications);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', loadMediaNotifications);
+      window.removeEventListener('hotube:media-updated', loadMediaNotifications);
+    };
+  }, [user?.id]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -177,6 +195,28 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
       setShowNotifications(true);
     } finally {
       setSupportDetailLoading(false);
+    }
+  };
+
+  const handleMediaNotificationClick = (media) => {
+    setShowNotifications(false);
+    const dateQuery = media.date ? `?date=${encodeURIComponent(media.date)}` : '';
+    navigate(`/media/${encodeURIComponent(media.id)}${dateQuery}`, {
+      state: { returnTo: media.date ? `/calendar?month=${media.date.slice(0, 7)}` : '/calendar' },
+    });
+  };
+
+  const handleMarkAllMediaRead = async () => {
+    if (!user?.id || unreadMedia.length === 0 || markingAllMedia) return;
+    setMarkingAllMedia(true);
+    setMediaNotificationError('');
+    try {
+      await markAllVideosWatched(user.id);
+      markAllWatchedLocal(unreadMedia.map((media) => media.id));
+    } catch (error) {
+      setMediaNotificationError(error.message || '전체 미디어 확인 처리에 실패했습니다');
+    } finally {
+      setMarkingAllMedia(false);
     }
   };
 
@@ -231,30 +271,30 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                 <Icon icon="lucide:home" className="text-xl" />
               </Link>
             ) : null}
-            {authIsAdmin && (
+            {user && (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowNotifications((current) => !current)}
                   className="relative flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
-                  aria-label="문의 알림"
+                  aria-label="알림"
                   aria-expanded={showNotifications}
-                  title="문의 알림"
+                  title="알림"
                 >
-                  <Icon icon={hasUnreadSupport ? 'mdi:bell-ring-outline' : 'mdi:bell-outline'} className="text-xl" />
-                  {hasUnreadSupport && (
-                    <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-error text-[11px] font-extrabold leading-none text-white ring-2 ring-background">
-                      N
+                  <Icon icon={hasUnreadNotifications ? 'mdi:bell-ring-outline' : 'mdi:bell-outline'} className="text-xl" />
+                  {hasUnreadNotifications && (
+                    <span className="absolute -right-1.5 -top-1.5 flex min-w-5 items-center justify-center rounded-full bg-error px-1 text-[10px] font-extrabold leading-5 text-white ring-2 ring-background">
+                      {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                     </span>
                   )}
                 </button>
                 {showNotifications && (
-                  <section className="fixed left-4 right-4 top-16 z-30 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[22rem]" aria-label="문의 알림 목록">
+                  <section className="fixed left-4 right-4 top-16 z-30 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[22rem]" aria-label="알림 목록">
                     <div className="flex items-center justify-between border-b border-border px-4 py-3">
                       <div>
-                        <h2 className="font-bold">문의 알림</h2>
+                        <h2 className="font-bold">알림</h2>
                         <p className="text-xs text-text-secondary">
-                          {hasUnreadSupport ? `미확인 ${unreadSupportCount}건` : '새로운 알림이 없어요'}
+                          {hasUnreadNotifications ? `미확인 ${unreadNotificationCount}건` : '새로운 알림이 없어요'}
                         </p>
                       </div>
                       <button type="button" onClick={() => setShowNotifications(false)} className="flex size-8 items-center justify-center rounded-full hover:bg-primary/10" aria-label="알림 닫기">
@@ -265,26 +305,71 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                       {notificationError && (
                         <p className="m-3 rounded-xl bg-error/10 px-3 py-2 text-sm font-semibold text-error">{notificationError}</p>
                       )}
-                      {!notificationError && unreadSupportRequests.length === 0 && (
+                      {mediaNotificationError && (
+                        <p className="m-3 rounded-xl bg-error/10 px-3 py-2 text-sm font-semibold text-error">{mediaNotificationError}</p>
+                      )}
+                      {!notificationError && !mediaNotificationError && !hasUnreadNotifications && (
                         <div className="px-4 py-10 text-center text-sm text-text-secondary">
                           <Icon icon="mdi:bell-check-outline" className="mx-auto mb-2 text-4xl text-primary/50" />
-                          확인하지 않은 문의가 없어요.
+                          확인하지 않은 알림이 없어요.
                         </div>
                       )}
-                      {unreadSupportRequests.map((request) => (
-                        <button
-                          key={request.id}
-                          type="button"
-                          onClick={() => handleNotificationClick(request)}
-                          className="flex w-full items-center gap-2 border-b border-border bg-primary/5 px-4 py-3 text-left transition last:border-b-0 hover:bg-primary/10"
-                        >
-                          <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
-                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-                            {request.message.split(/\r?\n/)[0]}
-                          </span>
-                          <Icon icon="mdi:chevron-right" className="shrink-0 text-lg text-text-secondary" />
-                        </button>
-                      ))}
+                      {unreadMedia.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between border-b border-border bg-background px-4 py-2">
+                            <h3 className="text-xs font-bold text-text-secondary">새 미디어</h3>
+                            <button
+                              type="button"
+                              onClick={handleMarkAllMediaRead}
+                              disabled={markingAllMedia}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline disabled:opacity-50"
+                            >
+                              {markingAllMedia && <Icon icon="mdi:loading" className="animate-spin text-sm" />}
+                              {markingAllMedia ? '처리 중' : '모두 확인'}
+                            </button>
+                          </div>
+                          {unreadMedia.map((media) => (
+                            <button
+                              key={`media-${media.id}`}
+                              type="button"
+                              onClick={() => handleMediaNotificationClick(media)}
+                              className="flex w-full items-center gap-3 border-b border-border bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10"
+                            >
+                              <span className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                                {media.thumbnail || media.type === 'photo' ? (
+                                  <img src={media.thumbnail || media.src} alt="" className="size-full object-cover" />
+                                ) : (
+                                  <Icon icon="mdi:video-outline" className="absolute inset-0 m-auto text-2xl text-primary" />
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold">{media.title}</span>
+                                {media.date && <span className="mt-0.5 block text-xs text-text-secondary">{media.date}</span>}
+                              </span>
+                              <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {authIsAdmin && unreadSupportRequests.length > 0 && (
+                        <div>
+                          <h3 className="border-b border-border bg-background px-4 py-2 text-xs font-bold text-text-secondary">고객의 소리</h3>
+                          {unreadSupportRequests.map((request) => (
+                            <button
+                              key={`support-${request.id}`}
+                              type="button"
+                              onClick={() => handleNotificationClick(request)}
+                              className="flex w-full items-center gap-2 border-b border-border bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10"
+                            >
+                              <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                                {request.message.split(/\r?\n/)[0]}
+                              </span>
+                              <Icon icon="mdi:chevron-right" className="shrink-0 text-lg text-text-secondary" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </section>
                 )}

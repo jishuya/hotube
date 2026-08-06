@@ -3,19 +3,7 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
 import Modal from '../common/Modal';
-
-const AVATAR_POSITIONS = {
-  grandfather: [0, 9],
-  'grandmother-curly': [25, 9],
-  'woman-long': [50, 9],
-  'woman-short': [75, 9],
-  'woman-glasses': [100, 9],
-  man: [0, 89],
-  'man-glasses': [25, 89],
-  'grandmother-bob': [50, 89],
-  'woman-ponytail': [75, 89],
-  'man-short': [100, 89],
-};
+import { AVATAR_POSITIONS } from '../../constants/profileAvatars';
 
 const CommentAvatar = ({ comment }) => {
   const [x, y] = AVATAR_POSITIONS[comment.userAvatar] || AVATAR_POSITIONS['woman-long'];
@@ -25,9 +13,9 @@ const CommentAvatar = ({ comment }) => {
       aria-label={`${comment.userName || comment.userTitle || '사용자'} 프로필`}
       className="block size-8 rounded-full border border-white bg-primary/10 shadow-sm"
       style={{
-        backgroundImage: "url('/avatars/hotube-family-avatars.png')",
+        backgroundImage: "url('/avatars/hotube-family-avatars-v2.png')",
         backgroundPosition: `${x}% ${y}%`,
-        backgroundSize: '500% auto',
+        backgroundSize: '500% 480%',
         backgroundRepeat: 'no-repeat',
       }}
     />

@@ -8,6 +8,7 @@ const FUNCTIONS_URL = {
   changePassword: `${API_BASE_URL}/changePassword`,
   toggleLike: `${API_BASE_URL}/toggleLike`,
   markWatched: `${API_BASE_URL}/markVideoWatched`,
+  markAllWatched: `${API_BASE_URL}/markAllVideosWatched`,
 };
 
 // 사용자 목록 (userId: 영문ID, label: 호칭)
@@ -159,5 +160,22 @@ export const markVideoWatched = async (userId, videoId) => {
     throw new Error(data.error || '시청 기록 추가에 실패했습니다');
   }
 
+  return data;
+};
+
+// 접근 가능한 모든 미디어를 확인 처리
+export const markAllVideosWatched = async (userId) => {
+  const response = await fetch(FUNCTIONS_URL.markAllWatched, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || '전체 미디어 확인 처리에 실패했습니다');
+  }
   return data;
 };

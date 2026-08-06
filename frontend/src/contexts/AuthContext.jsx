@@ -88,6 +88,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const markAllWatchedLocal = (videoIds) => {
+    if (!user) return;
+    const watchedVideos = [...new Set([...(user.watchedVideos || []), ...(videoIds || [])])];
+    updateUser({ watchedVideos });
+  };
+
   const value = {
     user,
     loading,
@@ -98,6 +104,7 @@ export const AuthProvider = ({ children }) => {
     isWatched,
     toggleLikeLocal,
     markWatchedLocal,
+    markAllWatchedLocal,
     isAdmin: user?.role === 'admin',
     isLoggedIn: !!user,
   };

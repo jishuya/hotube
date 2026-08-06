@@ -110,6 +110,36 @@ router.post("/markVideoWatched", async (req, res) => {
   }
 });
 
+router.post("/markAllVideosWatched", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId가 필요합니다" });
+    if (!(await userExists(pgDb, userId))) {
+      return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
+    }
+
+    const result = await pgDb.query(`
+      INSERT INTO user_watched_media (user_id, media_id)
+      SELECT $1, m.id
+      FROM media m
+      JOIN users u ON u.id = $1
+      WHERE u.role IN ('admin', 'sub-admin')
+        OR u.category = ANY(m.shared_with)
+        OR m.uploaded_by = u.id
+      ON CONFLICT DO NOTHING
+      RETURNING media_id
+    `, [userId]);
+
+    return res.json({
+      success: true,
+      markedVideoIds: result.rows.map((row) => row.media_id),
+    });
+  } catch (error) {
+    console.error("전체 미디어 시청 처리 오류:", error);
+    return res.status(500).json({ error: "전체 미디어 확인 처리 실패" });
+  }
+});
+
 router.get('/getMediaDetails/:id', async (req, res) => {
   try {
     const mediaId = req.params.id;

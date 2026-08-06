@@ -17,11 +17,9 @@ import { markVideoWatched, toggleLike } from '../services/authApi';
 import { extractVideoId } from '../services/youtubeService';
 import { getChildProfile } from '../services/childProfileApi';
 import { useAuth } from '../contexts/AuthContext';
+import { PROFILE_AVATARS } from '../constants/profileAvatars';
 
-const avatarPositions = [
-  [0, 9], [25, 9], [50, 9], [75, 9], [100, 9],
-  [0, 89], [25, 89], [50, 89], [75, 89], [100, 89],
-];
+const avatarPositions = PROFILE_AVATARS.map(({ x, y }) => [x, y]);
 
 const getAvatarPosition = (person) => {
   const source = person?.avatar || person?.id || person?.title || 'family';
@@ -38,9 +36,9 @@ const FamilyAvatar = ({ person, className = 'size-8' }) => {
       title={person?.title || person?.name || '가족'}
       className={`inline-block shrink-0 rounded-full border-2 border-white bg-primary/10 shadow-sm ${className}`}
       style={{
-        backgroundImage: "url('/avatars/hotube-family-avatars.png')",
+        backgroundImage: "url('/avatars/hotube-family-avatars-v2.png')",
         backgroundPosition: `${x}% ${y}%`,
-        backgroundSize: '500% auto',
+        backgroundSize: '500% 480%',
         backgroundRepeat: 'no-repeat',
       }}
     />

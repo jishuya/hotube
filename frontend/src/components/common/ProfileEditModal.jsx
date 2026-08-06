@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { TITLES, CATEGORIES, updateUser as updateUserApi } from '../../services/authApi';
 import CustomSelect from './CustomSelect';
+import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
   const [formData, setFormData] = useState({
     name: '',
     title: '',
     category: '',
+    avatar: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,6 +22,7 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
         name: user.name || '',
         title: user.title || '',
         category: user.category || '',
+        avatar: user.avatar || PROFILE_AVATARS[2].id,
       });
     }
   }, [user]);
@@ -111,6 +114,30 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              프로필 캐릭터
+            </legend>
+            <div className="grid grid-cols-5 gap-2">
+              {PROFILE_AVATARS.map((avatar) => {
+                const selected = formData.avatar === avatar.id;
+                return (
+                  <button
+                    key={avatar.id}
+                    type="button"
+                    onClick={() => setFormData((current) => ({ ...current, avatar: avatar.id }))}
+                    className={`aspect-square overflow-hidden rounded-xl bg-zinc-100 transition hover:ring-2 hover:ring-primary/40 ${selected ? 'ring-2 ring-primary' : ''}`}
+                    aria-label={avatar.label}
+                    aria-pressed={selected}
+                    title={avatar.label}
+                  >
+                    <span className="block size-full" aria-hidden="true" style={getAvatarStyle(avatar)} />
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           {/* 이름 */}
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">

@@ -9,32 +9,13 @@ import PushNotificationSettings from '../components/common/PushNotificationSetti
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, updateUser as updateUserApi } from '../services/authApi';
 import { createSupportRequest } from '../services/supportApi';
+import { getAvatarStyle, PROFILE_AVATARS } from '../constants/profileAvatars';
 
 const roleLabels = {
   admin: '관리자',
   'sub-admin': '부관리자',
   user: '일반 회원',
 };
-
-const avatars = [
-  { id: 'grandfather', x: 0, y: 9, label: '할아버지' },
-  { id: 'grandmother-curly', x: 25, y: 9, label: '곱슬머리 할머니' },
-  { id: 'woman-long', x: 50, y: 9, label: '긴 머리 여성' },
-  { id: 'woman-short', x: 75, y: 9, label: '짧은 머리 여성' },
-  { id: 'woman-glasses', x: 100, y: 9, label: '안경 쓴 여성' },
-  { id: 'man', x: 0, y: 89, label: '성인 남성' },
-  { id: 'man-glasses', x: 25, y: 89, label: '안경 쓴 남성' },
-  { id: 'grandmother-bob', x: 50, y: 89, label: '단발머리 할머니' },
-  { id: 'woman-ponytail', x: 75, y: 89, label: '머리 묶은 여성' },
-  { id: 'man-short', x: 100, y: 89, label: '짧은 머리 남성' },
-];
-
-const getAvatarStyle = (avatar) => ({
-  backgroundImage: "url('/avatars/hotube-family-avatars.png')",
-  backgroundPosition: `${avatar.x}% ${avatar.y}%`,
-  backgroundSize: '500% auto',
-  backgroundRepeat: 'no-repeat',
-});
 
 const MyPage = () => {
   const navigate = useNavigate();
@@ -53,7 +34,7 @@ const MyPage = () => {
 
   const categoryLabel = CATEGORIES.find((item) => item.value === user?.category)?.label || '미설정';
   const displayName = user?.name || user?.title || 'HoTube 가족';
-  const selectedAvatar = avatars.find((item) => item.id === user?.avatar) || avatars[2];
+  const selectedAvatar = PROFILE_AVATARS.find((item) => item.id === user?.avatar) || PROFILE_AVATARS[2];
 
   const handleLogout = () => {
     logout();
@@ -294,7 +275,7 @@ const MyPage = () => {
               <button type="button" onClick={() => setShowAvatarModal(false)} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10" aria-label="닫기"><Icon icon="mdi:close" className="text-xl" /></button>
             </div>
             <div className="grid grid-cols-5 gap-3">
-              {avatars.map((avatar) => (
+              {PROFILE_AVATARS.map((avatar) => (
                 <button key={avatar.id} type="button" onClick={() => selectAvatar(avatar.id)} className={`flex aspect-square items-center justify-center overflow-hidden rounded-xl transition hover:bg-primary/10 ${selectedAvatar.id === avatar.id ? 'bg-primary/10 ring-2 ring-primary' : 'bg-background'}`} title={avatar.label} aria-label={avatar.label}>
                   <span className="size-full" aria-hidden="true" style={getAvatarStyle(avatar)} />
                 </button>
