@@ -1,7 +1,7 @@
 const express = require("express");
 const pgDb = require("../db");
 const { mapMediaRowToVideo } = require('../responseMappers');
-const { getMediaAccess, listFavoriteMedia, mediaExists } = require("../services/mediaService");
+const { getMediaAccess, listFavoriteMedia, listLikedMedia, mediaExists } = require("../services/mediaService");
 const { userExists } = require("../services/userService");
 
 const router = express.Router();
@@ -14,6 +14,18 @@ router.get('/getFavoriteMedia', async (req, res) => {
     console.error('즐겨찾기 목록 조회 오류:', error);
     return res.status(error.status || 500).json({
       error: error.status ? error.message : '즐겨찾기 목록 조회 실패',
+    });
+  }
+});
+
+router.get('/getLikedMedia', async (req, res) => {
+  try {
+    const media = await listLikedMedia(req.query.userId);
+    return res.json(media.map(mapMediaRowToVideo));
+  } catch (error) {
+    console.error('좋아요 목록 조회 오류:', error);
+    return res.status(error.status || 500).json({
+      error: error.status ? error.message : '좋아요 목록 조회 실패',
     });
   }
 });

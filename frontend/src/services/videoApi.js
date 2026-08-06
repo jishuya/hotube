@@ -10,6 +10,7 @@ const FUNCTIONS_URL = {
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
   getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
   getFavoriteMedia: `${API_BASE_URL}/getFavoriteMedia`,
+  getLikedMedia: `${API_BASE_URL}/getLikedMedia`,
   toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
 };
 
@@ -137,6 +138,16 @@ export const getFavoriteMedia = async (userId = getViewerId()) => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || '즐겨찾기 목록을 가져오지 못했습니다');
+  }
+  return (await response.json()).map(resolveMediaUrls);
+};
+
+export const getLikedMedia = async (userId = getViewerId()) => {
+  if (!userId) throw new Error('로그인 정보가 필요합니다');
+  const response = await fetch(`${FUNCTIONS_URL.getLikedMedia}?userId=${encodeURIComponent(userId)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || '좋아요 목록을 가져오지 못했습니다');
   }
   return (await response.json()).map(resolveMediaUrls);
 };

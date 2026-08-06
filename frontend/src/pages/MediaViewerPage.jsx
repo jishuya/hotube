@@ -394,12 +394,16 @@ const MediaViewerPage = () => {
   }, []);
 
   const showToast = useCallback((type, message) => {
-    setToasts((value) => [...value.slice(-2), {
+    setToasts([{
       id: `${Date.now()}-${Math.random()}`,
       type,
       message,
     }]);
   }, []);
+
+  useEffect(() => {
+    setToasts([]);
+  }, [mediaId]);
 
   const loadDetails = () => getMediaDetails(mediaId, user?.id)
     .then((data) => {
@@ -479,7 +483,6 @@ const MediaViewerPage = () => {
     try {
       const result = await toggleFavorite(user.id, mediaId);
       setDetails((value) => ({ ...value, favorited: result.favorited }));
-      showToast('success', result.favorited ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.');
     } catch (actionError) {
       showToast('error', actionError.message);
     } finally {

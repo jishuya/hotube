@@ -4,12 +4,59 @@ import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { useAuth } from '../contexts/AuthContext';
 import { createMyAlbum, deleteMyAlbum, getMyAlbums, updateMyAlbum } from '../services/myAlbumApi';
-import { getFavoriteMedia, toMemoryMedia } from '../services/videoApi';
+import { getFavoriteMedia, getLikedMedia, toMemoryMedia } from '../services/videoApi';
+
+const SavedMediaSection = ({ id, title, media, loading, icon, emptyIcon, description }) => (
+  <section aria-labelledby={`${id}-title`}>
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Icon icon={icon} className="text-xl" />
+        </span>
+        <h2 id={`${id}-title`} className="text-xl font-bold">{title}</h2>
+      </div>
+      <Link to={`/my-album/${id}`} className="shrink-0 text-sm font-bold text-primary hover:underline">
+        더보기
+      </Link>
+    </div>
+
+    {loading ? (
+      <div className="flex h-32 items-center justify-center"><Icon icon="mdi:loading" className="animate-spin text-3xl text-primary" /></div>
+    ) : media.length > 0 ? (
+      <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-label={`${title} 미리보기`}>
+        {media.slice(0, 6).map((item) => (
+          <Link
+            key={item.id}
+            to={`/my-album/${id}`}
+            className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
+            aria-label={`${item.title}, ${title} 전체 보기`}
+          >
+            <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm backdrop-blur-sm">
+              <Icon icon={icon} className="text-base" />
+            </span>
+            {item.type === 'video' && (
+              <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-lg">
+                <Icon icon="mdi:play-circle" className="text-4xl" />
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+    ) : (
+      <div className="flex h-32 flex-col items-center justify-center rounded-2xl bg-surface text-center text-text-secondary">
+        <Icon icon={emptyIcon} className="mb-2 text-3xl text-primary/40" />
+        <p className="text-sm font-semibold">{description}</p>
+      </div>
+    )}
+  </section>
+);
 
 const MyAlbumPage = () => {
   const { user } = useAuth();
   const [albums, setAlbums] = useState([]);
   const [favoriteMedia, setFavoriteMedia] = useState([]);
+  const [likedMedia, setLikedMedia] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [loadedUserId, setLoadedUserId] = useState(null);
   const [error, setError] = useState('');
@@ -29,15 +76,21 @@ const MyAlbumPage = () => {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
-    Promise.all([getMyAlbums(user.id), getFavoriteMedia(user.id)])
-      .then(([albumItems, favorites]) => {
+    Promise.allSettled([getMyAlbums(user.id), getFavoriteMedia(user.id), getLikedMedia(user.id)])
+      .then(([albumsResult, favoritesResult, likesResult]) => {
         if (!active) return;
-        setAlbums(albumItems);
-        setFavoriteMedia(favorites.map(toMemoryMedia));
-        setError('');
-      })
-      .catch((loadError) => {
-        if (active) setError(loadError.message);
+        if (albumsResult.status === 'fulfilled') setAlbums(albumsResult.value);
+        if (favoritesResult.status === 'fulfilled') {
+          setFavoriteMedia(favoritesResult.value.map(toMemoryMedia));
+        }
+        if (likesResult.status === 'fulfilled') {
+          setLikedMedia(likesResult.value.map(toMemoryMedia));
+        }
+        const failedRequests = [albumsResult, favoritesResult, likesResult]
+          .filter((result) => result.status === 'rejected');
+        setError(failedRequests.length > 0
+          ? failedRequests.map((result) => result.reason.message).join(' · ')
+          : '');
       })
       .finally(() => {
         if (active) setLoadedUserId(user.id);
@@ -149,49 +202,10 @@ const MyAlbumPage = () => {
     <Header showSearch={false} />
     <main className="min-h-screen bg-background px-4 pb-16 text-text-primary">
       <div className="mx-auto max-w-container">
-        <section aria-labelledby="favorites-title">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Icon icon="mdi:heart" className="text-xl" />
-              </span>
-              <h2 id="favorites-title" className="text-xl font-bold">즐겨찾기</h2>
-            </div>
-            <Link to="/my-album/favorites" className="shrink-0 text-sm font-bold text-primary hover:underline">
-              더보기
-            </Link>
-          </div>
-
-          {loading ? (
-            <div className="flex h-32 items-center justify-center"><Icon icon="mdi:loading" className="animate-spin text-3xl text-primary" /></div>
-          ) : favoriteMedia.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="즐겨찾기 미리보기">
-              {favoriteMedia.slice(0, 6).map((item) => (
-              <Link
-                key={item.id}
-                to="/my-album/favorites"
-                className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
-                aria-label={`${item.title}, 즐겨찾기 전체 보기`}
-              >
-                <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm backdrop-blur-sm">
-                  <Icon icon="mdi:heart" className="text-base" />
-                </span>
-                {item.type === 'video' && (
-                  <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-lg">
-                    <Icon icon="mdi:play-circle" className="text-4xl" />
-                  </span>
-                )}
-              </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="flex h-32 flex-col items-center justify-center rounded-2xl bg-surface text-center text-text-secondary">
-              <Icon icon="mdi:heart-outline" className="mb-2 text-3xl text-primary/40" />
-              <p className="text-sm font-semibold">아직 즐겨찾기가 없어요</p>
-            </div>
-          )}
-        </section>
+        <SavedMediaSection id="favorites" title="즐겨찾기" media={favoriteMedia} loading={loading} icon="mdi:bookmark" emptyIcon="mdi:bookmark-outline" description="아직 즐겨찾기가 없어요" />
+        <div className="mt-10">
+          <SavedMediaSection id="likes" title="좋아요" media={likedMedia} loading={loading} icon="mdi:heart" emptyIcon="mdi:heart-outline" description="아직 좋아요한 미디어가 없어요" />
+        </div>
 
         <section className="mt-10" aria-labelledby="my-albums-title">
           <div className="mb-4 flex items-center justify-between gap-4">

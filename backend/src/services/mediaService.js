@@ -141,6 +141,26 @@ const listFavoriteMedia = async (userId) => {
   return result.rows;
 };
 
+const listLikedMedia = async (userId) => {
+  if (!userId) throw new HttpError(400, '사용자 정보가 필요합니다');
+  const userResult = await pgDb.query('SELECT id, category, role FROM users WHERE id = $1', [userId]);
+  if (!userResult.rows.length) throw new HttpError(404, '사용자를 찾을 수 없습니다');
+  const user = userResult.rows[0];
+  const result = await pgDb.query(`
+    ${MEDIA_WITH_TAGS_SELECT}
+    JOIN user_liked_media ulm ON ulm.media_id = m.id
+    WHERE ulm.user_id = $1
+      AND (
+        $2::text IN ('admin', 'sub-admin')
+        OR $3::text = ANY(m.shared_with)
+        OR m.uploaded_by = $1
+      )
+    GROUP BY m.id
+    ORDER BY m.created_at DESC
+  `, [userId, user.role, user.category]);
+  return result.rows;
+};
+
 const getMedia = async (id) => {
   const result = await pgDb.query(`
     ${MEDIA_WITH_TAGS_SELECT}
@@ -443,6 +463,7 @@ module.exports = {
   getMediaDateRange,
   getMediaAccess,
   listFavoriteMedia,
+  listLikedMedia,
   listMedia,
   mediaExists,
   updateMedia,

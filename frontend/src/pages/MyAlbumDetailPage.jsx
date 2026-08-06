@@ -3,7 +3,7 @@ import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllVideos, getFavoriteMedia, toMemoryMedia } from '../services/videoApi';
+import { getAllVideos, getFavoriteMedia, getLikedMedia, toMemoryMedia } from '../services/videoApi';
 import {
   addMediaToMyAlbum,
   getMyAlbum,
@@ -20,6 +20,8 @@ const MyAlbumDetailPage = () => {
   const pointerStartRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
   const isFavorites = albumId === 'favorites';
+  const isLikes = albumId === 'likes';
+  const isSystemAlbum = isFavorites || isLikes;
   const [album, setAlbum] = useState(null);
   const [media, setMedia] = useState([]);
   const [loadedRequestKey, setLoadedRequestKey] = useState(null);
@@ -51,8 +53,8 @@ const MyAlbumDetailPage = () => {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
-    const request = isFavorites
-      ? getFavoriteMedia(user.id).then((items) => {
+    const request = isSystemAlbum
+      ? (isFavorites ? getFavoriteMedia(user.id) : getLikedMedia(user.id)).then((items) => {
         if (active) setMedia(items.map(toMemoryMedia));
       })
       : Promise.all([getMyAlbum(user.id, albumId), getMyAlbumMedia(user.id, albumId)])
@@ -71,7 +73,7 @@ const MyAlbumDetailPage = () => {
       .catch((loadError) => {
         if (!active) return;
         setError(loadError.message);
-        if (!isFavorites && loadError.message.includes('찾을 수 없습니다')) setNotFound(true);
+        if (!isSystemAlbum && loadError.message.includes('찾을 수 없습니다')) setNotFound(true);
       })
       .finally(() => {
         if (active) setLoadedRequestKey(requestKey);
@@ -79,7 +81,7 @@ const MyAlbumDetailPage = () => {
     return () => {
       active = false;
     };
-  }, [albumId, isFavorites, requestKey, user?.id]);
+  }, [albumId, isFavorites, isSystemAlbum, requestKey, user?.id]);
 
   if (loading) {
     return (
@@ -89,7 +91,7 @@ const MyAlbumDetailPage = () => {
     );
   }
 
-  if (!isFavorites && (notFound || !album)) {
+  if (!isSystemAlbum && (notFound || !album)) {
     return (
       <>
         <Header showSearch={false} />
@@ -102,7 +104,7 @@ const MyAlbumDetailPage = () => {
     );
   }
 
-  const title = isFavorites ? '즐겨찾기' : album.title;
+  const title = isFavorites ? '즐겨찾기' : isLikes ? '좋아요' : album.title;
 
   const openRenameAlbum = () => {
     setTitleDraft(title);
@@ -142,7 +144,7 @@ const MyAlbumDetailPage = () => {
   };
 
   const beginLongPress = (event, mediaId) => {
-    if (isFavorites || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (isSystemAlbum || (event.pointerType === 'mouse' && event.button !== 0)) return;
     pointerStartRef.current = { x: event.clientX, y: event.clientY };
     longPressTriggeredRef.current = false;
     window.clearTimeout(longPressTimerRef.current);
@@ -246,7 +248,7 @@ const MyAlbumDetailPage = () => {
                   <Icon icon="mdi:arrow-left" className="text-xl" />
                 </button>
                 <h1 className="truncate text-2xl font-bold sm:text-3xl">{title}</h1>
-                {!isFavorites && (
+                {!isSystemAlbum && (
                   <button
                     type="button"
                     onClick={openRenameAlbum}
@@ -259,7 +261,8 @@ const MyAlbumDetailPage = () => {
               </div>
               <span className="shrink-0 text-sm font-semibold text-text-secondary">{media.length}</span>
             </div>
-            {isFavorites && <p className="mt-2 text-sm text-text-secondary">좋아하는 순간만 한곳에 모았어요.</p>}
+            {isFavorites && <p className="mt-2 text-sm text-text-secondary">즐겨찾기한 순간을 한곳에 모았어요.</p>}
+            {isLikes && <p className="mt-2 text-sm text-text-secondary">좋아요한 순간을 한곳에 모았어요.</p>}
             {error && <p className="mt-3 rounded-xl bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
           </header>
 
@@ -284,10 +287,10 @@ const MyAlbumDetailPage = () => {
                     onPointerCancel={endLongPress}
                     onPointerLeave={endLongPress}
                     onContextMenu={(event) => {
-                      if (!isFavorites) event.preventDefault();
+                      if (!isSystemAlbum) event.preventDefault();
                     }}
                     onClick={(event) => {
-                      if (isFavorites || (!selectionMode && !longPressTriggeredRef.current)) return;
+                      if (isSystemAlbum || (!selectionMode && !longPressTriggeredRef.current)) return;
                       event.preventDefault();
                       if (!longPressTriggeredRef.current) toggleMediaSelection(item.id);
                       longPressTriggeredRef.current = false;
@@ -295,12 +298,12 @@ const MyAlbumDetailPage = () => {
                   >
                     <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   </Link>
-                  {isFavorites && (
+                  {isSystemAlbum && (
                     <span className="pointer-events-none absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm">
-                      <Icon icon="mdi:heart" />
+                      <Icon icon={isFavorites ? 'mdi:bookmark' : 'mdi:heart'} />
                     </span>
                   )}
-                  {selectionMode && !isFavorites && (
+                  {selectionMode && !isSystemAlbum && (
                     <span className={`pointer-events-none absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                       selectedMediaIds.includes(item.id)
                         ? 'border-primary bg-primary text-white'
@@ -325,7 +328,7 @@ const MyAlbumDetailPage = () => {
               <p className="mt-2 text-sm text-text-secondary">좋아하는 순간을 이 앨범에 추가해 보세요.</p>
             </section>
           )}
-          {!isFavorites && (
+          {!isSystemAlbum && (
             <div className="flex justify-center pt-10">
               <button
                 type="button"
@@ -338,7 +341,7 @@ const MyAlbumDetailPage = () => {
             </div>
           )}
         </div>
-        {selectionMode && !isFavorites && (
+        {selectionMode && !isSystemAlbum && (
           <section className="fixed inset-x-3 bottom-24 z-40 mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 앨범 미디어 작업">
             <button
               type="button"
