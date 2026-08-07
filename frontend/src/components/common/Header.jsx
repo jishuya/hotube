@@ -7,7 +7,7 @@ import { getChildProfile, saveChildProfile } from '../../services/childProfileAp
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 import { getAllVideos, toMemoryMedia } from '../../services/videoApi';
 import { markAllVideosWatched } from '../../services/authApi';
-import { dismissMediaNotifications, getOrCreateNotificationBaseline } from '../../services/pushApi';
+import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const DEFAULT_CHILD = {
@@ -65,8 +65,10 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [showNotifications, setShowNotifications] = useState(false);
   const [supportRequests, setSupportRequests] = useState([]);
   const [mediaNotifications, setMediaNotifications] = useState([]);
+  const [internalNotifications, setInternalNotifications] = useState([]);
   const [supportNotificationsLoadedFor, setSupportNotificationsLoadedFor] = useState(null);
   const [mediaNotificationsLoadedFor, setMediaNotificationsLoadedFor] = useState(null);
+  const [internalNotificationsLoadedFor, setInternalNotificationsLoadedFor] = useState(null);
   const [notificationError, setNotificationError] = useState('');
   const [mediaNotificationError, setMediaNotificationError] = useState('');
   const [markingAllMedia, setMarkingAllMedia] = useState(false);
@@ -85,9 +87,11 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     if (!notificationBaseline || !media.createdAt) return true;
     return new Date(media.createdAt).getTime() > new Date(notificationBaseline).getTime();
   });
-  const unreadNotificationCount = unreadSupportCount + unreadMedia.length;
-  const hasUnreadNotifications = unreadNotificationCount > 0;
+  const unreadMediaCount = unreadMedia.length;
+  const auxiliaryNotificationCount = unreadSupportCount + internalNotifications.length;
+  const hasUnreadNotifications = unreadMediaCount > 0 || auxiliaryNotificationCount > 0;
   const notificationCountsLoaded = mediaNotificationsLoadedFor === user?.id
+    && internalNotificationsLoadedFor === user?.id
     && (!authIsAdmin || supportNotificationsLoadedFor === user?.id);
   const childAge = getAgeSinceBirth(child.birthday);
 
@@ -95,15 +99,15 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     if (!user?.id || !notificationCountsLoaded) return;
     const syncAppBadge = async () => {
       try {
-        if (unreadNotificationCount > 0 && 'setAppBadge' in navigator) {
-          await navigator.setAppBadge(unreadNotificationCount);
-        } else if (unreadNotificationCount === 0 && 'clearAppBadge' in navigator) {
+        if (unreadMediaCount > 0 && 'setAppBadge' in navigator) {
+          await navigator.setAppBadge(unreadMediaCount);
+        } else if (unreadMediaCount === 0 && 'clearAppBadge' in navigator) {
           await navigator.clearAppBadge();
         }
         const registration = await navigator.serviceWorker?.getRegistration();
         registration?.active?.postMessage({
           type: 'SYNC_APP_BADGE',
-          badgeCount: unreadNotificationCount,
+          badgeCount: unreadMediaCount,
           badgeVersion: Date.now(),
         });
       } catch (error) {
@@ -111,7 +115,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
       }
     };
     syncAppBadge();
-  }, [notificationCountsLoaded, unreadNotificationCount, user?.id]);
+  }, [notificationCountsLoaded, unreadMediaCount, user?.id]);
 
   // URL의 검색어와 input 동기화
   useEffect(() => {
@@ -195,6 +199,34 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setInternalNotifications([]);
+      setInternalNotificationsLoadedFor(null);
+      return undefined;
+    }
+    let active = true;
+    const loadInternalNotifications = () => getInternalNotifications()
+      .then((items) => {
+        if (active) {
+          setInternalNotifications(items);
+          setInternalNotificationsLoadedFor(user.id);
+          setNotificationError('');
+        }
+      })
+      .catch((error) => {
+        if (active) setNotificationError(error.message);
+      });
+    loadInternalNotifications();
+    const intervalId = window.setInterval(loadInternalNotifications, 15000);
+    window.addEventListener('focus', loadInternalNotifications);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', loadInternalNotifications);
+    };
+  }, [user?.id]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -243,6 +275,18 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     navigate(`/media/${encodeURIComponent(media.id)}${dateQuery}`, {
       state: { returnTo: media.date ? `/calendar?month=${media.date.slice(0, 7)}` : '/calendar' },
     });
+  };
+
+  const handleInternalNotificationClick = async (notification) => {
+    setNotificationError('');
+    try {
+      await markInternalNotificationRead(notification.id);
+      setInternalNotifications((current) => current.filter((item) => item.id !== notification.id));
+      setShowNotifications(false);
+      navigate(notification.url || '/');
+    } catch (error) {
+      setNotificationError(error.message || '알림을 확인 처리하지 못했습니다');
+    }
   };
 
   const handleMarkAllMediaRead = async () => {
@@ -323,11 +367,13 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                   title="알림"
                 >
                   <Icon icon={hasUnreadNotifications ? 'mdi:bell-ring-outline' : 'mdi:bell-outline'} className="text-xl" />
-                  {hasUnreadNotifications && (
+                  {unreadMediaCount > 0 ? (
                     <span className="absolute -right-1.5 -top-1.5 flex min-w-5 items-center justify-center rounded-full bg-error px-1 text-[10px] font-extrabold leading-5 text-white ring-2 ring-background">
-                      {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                      {unreadMediaCount > 99 ? '99+' : unreadMediaCount}
                     </span>
-                  )}
+                  ) : auxiliaryNotificationCount > 0 ? (
+                    <span className="absolute right-0 top-0 size-2.5 rounded-full bg-error ring-2 ring-background" aria-label="새 댓글 또는 문의 알림" />
+                  ) : null}
                 </button>
                 {showNotifications && (
                   <section className="fixed left-4 right-4 top-16 z-30 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[22rem]" aria-label="알림 목록">
@@ -335,7 +381,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                       <div>
                         <h2 className="font-bold">알림</h2>
                         <p className="text-xs text-text-secondary">
-                          {hasUnreadNotifications ? `미확인 ${unreadNotificationCount}건` : '새로운 알림이 없어요'}
+                          {hasUnreadNotifications
+                            ? `${unreadMediaCount ? `새 미디어 ${unreadMediaCount}개` : ''}${unreadMediaCount && auxiliaryNotificationCount ? ' · ' : ''}${auxiliaryNotificationCount ? `댓글·문의 ${auxiliaryNotificationCount}건` : ''}`
+                            : '새로운 알림이 없어요'}
                         </p>
                       </div>
                       <button type="button" onClick={() => setShowNotifications(false)} className="flex size-8 items-center justify-center rounded-full hover:bg-primary/10" aria-label="알림 닫기">
@@ -353,6 +401,23 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                         <div className="px-4 py-10 text-center text-sm text-text-secondary">
                           <Icon icon="mdi:bell-check-outline" className="mx-auto mb-2 text-4xl text-primary/50" />
                           확인하지 않은 알림이 없어요.
+                        </div>
+                      )}
+                      {internalNotifications.length > 0 && (
+                        <div>
+                          <h3 className="border-b border-border bg-background px-4 py-2 text-xs font-bold text-text-secondary">댓글 및 문의</h3>
+                          {internalNotifications.map((notification) => (
+                            <button key={`internal-${notification.id}`} type="button" onClick={() => handleInternalNotificationClick(notification)} className="flex w-full items-center gap-3 border-b border-border bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10">
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Icon icon={notification.type === 'comment' ? 'mdi:comment-text-outline' : 'mdi:message-check-outline'} className="text-xl" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold">{notification.title}</span>
+                                <span className="mt-0.5 block truncate text-xs text-text-secondary">{notification.body}</span>
+                              </span>
+                              <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
+                            </button>
+                          ))}
                         </div>
                       )}
                       {unreadMedia.length > 0 && (

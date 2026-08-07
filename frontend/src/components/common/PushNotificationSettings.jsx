@@ -3,6 +3,8 @@ import { Icon } from '@iconify/react';
 import {
   enablePushOnCurrentDevice,
   disablePushOnCurrentDevice,
+  getPushStatus,
+  saveNotificationPreferences,
   sendTestPush,
 } from '../../services/pushApi';
 
@@ -23,6 +25,9 @@ const PushNotificationSettings = () => {
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [preferences, setPreferences] = useState({ media: true, comments: true });
+  const [preferenceBusy, setPreferenceBusy] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -30,10 +35,15 @@ const PushNotificationSettings = () => {
       setBusy(false);
       return undefined;
     }
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((current) => {
-        if (active) setSubscription(current);
+    Promise.all([
+      navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()),
+      getPushStatus(),
+    ])
+      .then(([current, status]) => {
+        if (active) {
+          setSubscription(current);
+          setPreferences(status.preferences || { media: true, comments: true });
+        }
       })
       .catch((loadError) => {
         if (active) setError(loadError.message || '알림 상태를 확인하지 못했습니다');
@@ -97,6 +107,25 @@ const PushNotificationSettings = () => {
     }
   };
 
+  const togglePreference = async (key) => {
+    const previous = preferences;
+    const next = { ...preferences, [key]: !preferences[key] };
+    setPreferences(next);
+    setPreferenceBusy(key);
+    setError('');
+    setMessage('');
+    try {
+      const saved = await saveNotificationPreferences(next);
+      setPreferences(saved.preferences);
+      setMessage('상세 알림 설정을 저장했습니다.');
+    } catch (saveError) {
+      setPreferences(previous);
+      setError(saveError.message || '상세 알림 설정을 저장하지 못했습니다');
+    } finally {
+      setPreferenceBusy('');
+    }
+  };
+
   if (!supported) {
     return (
       <div className="border-b border-border px-5 py-4">
@@ -137,9 +166,37 @@ const PushNotificationSettings = () => {
         </button>
       </div>
       {enabled && (
-        <button type="button" disabled={busy} onClick={testNotification} className="mt-3 ml-[52px] text-xs font-bold text-primary disabled:opacity-50">
-          테스트 알림 보내기
-        </button>
+        <div className="ml-[52px] mt-3">
+          <button type="button" onClick={() => setDetailsOpen((current) => !current)} className="flex w-full items-center justify-between rounded-lg py-1 text-left text-xs font-bold text-primary" aria-expanded={detailsOpen}>
+            <span>{detailsOpen ? '상세 설정 닫기' : '자세히 보기'}</span>
+            <Icon icon={detailsOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'} className="text-lg" />
+          </button>
+          {detailsOpen && (
+            <div className="mt-2 divide-y divide-border overflow-hidden rounded-xl bg-background px-3">
+              {[
+                ['media', 'mdi:image-multiple-outline', '새 미디어 알림', '공유된 사진과 영상이 올라오면 알려드려요.'],
+                ['comments', 'mdi:comment-text-outline', '댓글 알림', '내가 올리거나 댓글에 참여한 미디어의 새 댓글을 알려드려요.'],
+              ].map(([key, icon, label, description]) => (
+                <div key={key} className="flex items-center gap-3 py-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon icon={icon} className="text-lg" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">{label}</span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-text-secondary">{description}</span>
+                  </span>
+                  <button type="button" role="switch" aria-checked={preferences[key]} aria-label={label} disabled={Boolean(preferenceBusy)} onClick={() => togglePreference(key)} className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-50 ${preferences[key] ? 'bg-primary' : 'bg-zinc-300'}`}>
+                    <span className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all ${preferences[key] ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" disabled={busy} onClick={testNotification} className="flex w-full items-center gap-3 py-3 text-left text-sm font-bold text-primary disabled:opacity-50">
+                <span className="flex size-8 items-center justify-center rounded-full bg-primary/10"><Icon icon="mdi:bell-check-outline" className="text-lg" /></span>
+                테스트 알림 보내기
+              </button>
+            </div>
+          )}
+        </div>
       )}
       {isAppleMobile() && !isStandalone() && (
         <p className="mt-3 rounded-xl bg-primary/5 px-3 py-2 text-xs leading-relaxed text-text-secondary">

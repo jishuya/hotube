@@ -45,7 +45,7 @@ router.post("/createComment", async (req, res) => {
       new Date().toISOString(),
     ]);
 
-    void notifyNewComment({
+    await notifyNewComment({
       mediaId: videoId,
       commenter: userData,
       content: normalizedContent,

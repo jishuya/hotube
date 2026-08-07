@@ -18,14 +18,14 @@ import { dismissMediaNotifications } from '../services/pushApi';
 import { extractVideoId } from '../services/youtubeService';
 import { getChildProfile } from '../services/childProfileApi';
 import { useAuth } from '../contexts/AuthContext';
-import { PROFILE_AVATARS } from '../constants/profileAvatars';
-
-const avatarPositions = PROFILE_AVATARS.map(({ x, y }) => [x, y]);
+import { AVATAR_POSITIONS } from '../constants/profileAvatars';
 
 const getAvatarPosition = (person) => {
+  if (person?.avatar && AVATAR_POSITIONS[person.avatar]) return AVATAR_POSITIONS[person.avatar];
   const source = person?.avatar || person?.id || person?.title || 'family';
-  const index = [...source].reduce((total, character) => total + character.charCodeAt(0), 0) % avatarPositions.length;
-  return avatarPositions[index];
+  const fallbackPositions = Object.values(AVATAR_POSITIONS);
+  const index = [...source].reduce((total, character) => total + character.charCodeAt(0), 0) % fallbackPositions.length;
+  return fallbackPositions[index];
 };
 
 const FamilyAvatar = ({ person, className = 'size-8' }) => {
@@ -347,6 +347,7 @@ const MediaViewerPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const commentsRef = useRef(null);
+  const commentScrollHandledRef = useRef('');
   const tagSavingRef = useRef(false);
   const { user, isLiked, toggleLikeLocal, markWatchedLocal } = useAuth();
   const [mediaItems, setMediaItems] = useState([]);
@@ -368,6 +369,7 @@ const MediaViewerPage = () => {
   const [photoOpen, setPhotoOpen] = useState(false);
 
   const requestedDate = searchParams.get('date');
+  const focusComments = searchParams.get('focus') === 'comments';
   const requestedReturnTo = location.state?.returnTo;
   const returnTo = requestedReturnTo === '/album'
     || requestedReturnTo?.startsWith('/my-album/')
@@ -426,6 +428,21 @@ const MediaViewerPage = () => {
       .then(setChild)
       .catch((profileError) => console.error('아이 정보 조회 실패:', profileError));
   }, []);
+
+  useEffect(() => {
+    if (!focusComments) {
+      commentScrollHandledRef.current = '';
+      return undefined;
+    }
+    if (loading || !commentsRef.current) return undefined;
+    const scrollKey = `${mediaId}:comments`;
+    if (commentScrollHandledRef.current === scrollKey) return undefined;
+    commentScrollHandledRef.current = scrollKey;
+    const timer = window.setTimeout(() => {
+      commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [focusComments, loading, mediaId]);
 
   useEffect(() => {
     if (!current) return;
@@ -785,7 +802,7 @@ const MediaViewerPage = () => {
         </div>
 
         <aside className="space-y-4">
-          <div ref={commentsRef}>
+          <div ref={commentsRef} id="comments">
             <CommentSection
               videoId={mediaId}
               onCountChange={(commentCount) => setDetails((value) => value ? { ...value, commentCount } : value)}

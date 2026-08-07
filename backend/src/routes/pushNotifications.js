@@ -3,7 +3,10 @@ const { requireAuth } = require("../authToken");
 const {
   getPublicKey,
   getSubscriptionStatus,
+  listInternalNotifications,
+  markInternalNotificationRead,
   removeSubscription,
+  saveNotificationPreferences,
   saveSubscription,
   sendToUserIds,
 } = require("../services/pushNotificationService");
@@ -29,6 +32,30 @@ router.get("/push/status", async (req, res) => {
     return res.json(await getSubscriptionStatus(req.auth.userId));
   } catch (error) {
     return sendError(res, error, "알림 상태를 불러오지 못했습니다");
+  }
+});
+
+router.put("/push/preferences", async (req, res) => {
+  try {
+    return res.json(await saveNotificationPreferences(req.auth.userId, req.body.preferences));
+  } catch (error) {
+    return sendError(res, error, "상세 알림 설정을 저장하지 못했습니다");
+  }
+});
+
+router.get("/push/notifications", async (req, res) => {
+  try {
+    return res.json(await listInternalNotifications(req.auth.userId));
+  } catch (error) {
+    return sendError(res, error, "앱 알림을 불러오지 못했습니다");
+  }
+});
+
+router.patch("/push/notifications/:id/read", async (req, res) => {
+  try {
+    return res.json(await markInternalNotificationRead(req.auth.userId, req.params.id));
+  } catch (error) {
+    return sendError(res, error, "알림을 확인 처리하지 못했습니다");
   }
 });
 

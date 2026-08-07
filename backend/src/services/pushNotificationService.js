@@ -54,6 +54,56 @@ const ensurePushSubscriptionSchema = async () => {
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
     ON push_subscriptions (user_id)
   `);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS user_notification_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      media_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      comments_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS user_notifications (
+      id UUID PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      url TEXT NOT NULL,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`CREATE INDEX IF NOT EXISTS idx_user_notifications_unread ON user_notifications (user_id, created_at DESC) WHERE read_at IS NULL`);
+};
+
+const saveInternalNotifications = async (userIds, notification) => {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
+  await Promise.all(uniqueIds.map((userId) => pgDb.query(`
+    INSERT INTO user_notifications (id, user_id, type, title, body, url)
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [randomUUID(), userId, notification.type, notification.title, notification.body, notification.url])));
+};
+
+const listInternalNotifications = async (userId) => {
+  const result = await pgDb.query(`
+    SELECT id, type, title, body, url, created_at AS "createdAt"
+    FROM user_notifications
+    WHERE user_id = $1 AND read_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT 50
+  `, [userId]);
+  return result.rows;
+};
+
+const markInternalNotificationRead = async (userId, notificationId) => {
+  const result = await pgDb.query(`
+    UPDATE user_notifications SET read_at = CURRENT_TIMESTAMP
+    WHERE id = $1 AND user_id = $2
+    RETURNING id
+  `, [notificationId, userId]);
+  if (!result.rows.length) throw new HttpError(404, "알림을 찾을 수 없습니다");
+  return { id: notificationId, read: true };
 };
 
 const configureWebPush = () => {
@@ -115,11 +165,34 @@ const removeSubscription = async ({ userId, endpoint }) => {
 };
 
 const getSubscriptionStatus = async (userId) => {
-  const result = await pgDb.query(
-    "SELECT COUNT(*)::INTEGER AS count FROM push_subscriptions WHERE user_id = $1",
-    [userId],
-  );
-  return { subscribed: result.rows[0].count > 0, deviceCount: result.rows[0].count };
+  const [subscriptionResult, preferencesResult] = await Promise.all([
+    pgDb.query("SELECT COUNT(*)::INTEGER AS count FROM push_subscriptions WHERE user_id = $1", [userId]),
+    pgDb.query("SELECT media_enabled, comments_enabled FROM user_notification_preferences WHERE user_id = $1", [userId]),
+  ]);
+  const preferences = preferencesResult.rows[0];
+  return {
+    subscribed: subscriptionResult.rows[0].count > 0,
+    deviceCount: subscriptionResult.rows[0].count,
+    preferences: {
+      media: preferences?.media_enabled ?? true,
+      comments: preferences?.comments_enabled ?? true,
+    },
+  };
+};
+
+const saveNotificationPreferences = async (userId, preferences) => {
+  const media = typeof preferences?.media === "boolean" ? preferences.media : true;
+  const comments = typeof preferences?.comments === "boolean" ? preferences.comments : true;
+  const result = await pgDb.query(`
+    INSERT INTO user_notification_preferences (user_id, media_enabled, comments_enabled, updated_at)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+    ON CONFLICT (user_id) DO UPDATE
+    SET media_enabled = EXCLUDED.media_enabled,
+        comments_enabled = EXCLUDED.comments_enabled,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING media_enabled, comments_enabled
+  `, [userId, media, comments]);
+  return { preferences: { media: result.rows[0].media_enabled, comments: result.rows[0].comments_enabled } };
 };
 
 const deleteExpiredSubscription = async (endpoint) => {
@@ -158,13 +231,16 @@ const sendToSubscriptions = async (subscriptions, payload) => {
   };
 };
 
-const sendToUserIds = async (userIds, payload) => {
+const sendToUserIds = async (userIds, payload, preferenceType = null) => {
   const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
   if (uniqueIds.length === 0) return { sent: 0, failed: 0 };
+  const preferenceColumn = { media: "media_enabled", comments: "comments_enabled" }[preferenceType];
   const result = await pgDb.query(`
-    SELECT endpoint, p256dh, auth
-    FROM push_subscriptions
-    WHERE user_id = ANY($1::text[])
+    SELECT ps.endpoint, ps.p256dh, ps.auth
+    FROM push_subscriptions ps
+    LEFT JOIN user_notification_preferences unp ON unp.user_id = ps.user_id
+    WHERE ps.user_id = ANY($1::text[])
+      ${preferenceColumn ? `AND COALESCE(unp.${preferenceColumn}, TRUE)` : ""}
   `, [uniqueIds]);
   return sendToSubscriptions(result.rows, payload);
 };
@@ -181,27 +257,21 @@ const sendToRoles = async (roles, payload) => {
 
 const getUnreadNotificationCount = async (userId, mediaSince = null) => {
   const result = await pgDb.query(`
-    SELECT
-      (
-        SELECT COUNT(*)::integer
-        FROM media m
-        WHERE (
-          u.role IN ('admin', 'sub-admin')
-          OR u.category = ANY(m.shared_with)
-          OR m.uploaded_by = u.id
-        )
-          AND ($2::timestamptz IS NULL OR m.created_at > $2)
-          AND NOT EXISTS (
-            SELECT 1
-            FROM user_watched_media uwm
-            WHERE uwm.user_id = u.id AND uwm.media_id = m.id
-          )
+    SELECT (
+      SELECT COUNT(*)::integer
+      FROM media m
+      WHERE (
+        u.role IN ('admin', 'sub-admin')
+        OR u.category = ANY(m.shared_with)
+        OR m.uploaded_by = u.id
       )
-      + CASE WHEN u.role = 'admin' THEN (
-        SELECT COUNT(*)::integer
-        FROM support_requests sr
-        WHERE sr.status = 'received'
-      ) ELSE 0 END AS unread_count
+        AND ($2::timestamptz IS NULL OR m.created_at > $2)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_watched_media uwm
+          WHERE uwm.user_id = u.id AND uwm.media_id = m.id
+        )
+    ) AS unread_count
     FROM users u
     WHERE u.id = $1
   `, [userId, mediaSince]);
@@ -221,9 +291,11 @@ const notifyNewMedia = async ({ media, uploader }) => {
   const audienceIds = audience.rows.map(({ id }) => id);
   if (audienceIds.length === 0) return { sent: 0, failed: 0 };
   const subscriptions = await pgDb.query(`
-    SELECT endpoint, p256dh, auth, user_id, created_at
-    FROM push_subscriptions
-    WHERE user_id = ANY($1::text[])
+    SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.created_at
+    FROM push_subscriptions ps
+    LEFT JOIN user_notification_preferences unp ON unp.user_id = ps.user_id
+    WHERE ps.user_id = ANY($1::text[])
+      AND COALESCE(unp.media_enabled, TRUE)
   `, [audienceIds]);
   const results = await Promise.all(subscriptions.rows.map(async (subscription) => {
     const badgeCount = await getUnreadNotificationCount(
@@ -246,19 +318,58 @@ const notifyNewMedia = async ({ media, uploader }) => {
 };
 
 const notifyNewComment = async ({ mediaId, commenter, content }) => {
-  const mediaResult = await pgDb.query(
-    "SELECT id, title, uploaded_by FROM media WHERE id = $1",
-    [mediaId],
-  );
-  const media = mediaResult.rows[0];
-  if (!media?.uploaded_by || media.uploaded_by === commenter.id) return { sent: 0, failed: 0 };
+  const result = await pgDb.query(`
+    SELECT DISTINCT u.id, m.title
+    FROM media m
+    JOIN users u ON (
+      u.id = m.uploaded_by
+      OR EXISTS (
+        SELECT 1
+        FROM comments c
+        WHERE c.media_id = m.id AND c.user_id = u.id
+      )
+    )
+    WHERE m.id = $1
+      AND u.id <> $2
+      AND (
+        u.role IN ('admin', 'sub-admin')
+        OR u.category = ANY(m.shared_with)
+        OR m.uploaded_by = u.id
+      )
+  `, [mediaId, commenter.id]);
+  const recipientIds = result.rows.map(({ id }) => id);
+  if (recipientIds.length === 0) return { sent: 0, failed: 0 };
+  const mediaTitle = result.rows[0]?.title;
   const preview = String(content).length > 70 ? `${String(content).slice(0, 67)}...` : String(content);
-  return sendToUserIds([media.uploaded_by], {
+  const notification = {
+    type: "comment",
     title: `${commenter.name || commenter.title || "가족"}님이 댓글을 남겼어요`,
-    body: preview,
-    url: `/media/${encodeURIComponent(media.id)}`,
-    tag: `comment-${media.id}`,
+    body: mediaTitle ? `${mediaTitle} · ${preview}` : preview,
+    url: `/media/${encodeURIComponent(mediaId)}?focus=comments`,
+  };
+  await saveInternalNotifications(recipientIds, notification).catch((error) => {
+    console.error("댓글 앱 내부 알림 저장 오류:", error);
   });
+  const subscriptions = await pgDb.query(`
+    SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.created_at
+    FROM push_subscriptions ps
+    LEFT JOIN user_notification_preferences unp ON unp.user_id = ps.user_id
+    WHERE ps.user_id = ANY($1::text[])
+      AND COALESCE(unp.comments_enabled, TRUE)
+  `, [recipientIds]);
+  const results = await Promise.all(subscriptions.rows.map(async (subscription) => {
+    const badgeCount = await getUnreadNotificationCount(subscription.user_id, subscription.created_at);
+    return sendToSubscriptions([subscription], {
+      ...notification,
+      tag: `comment-${mediaId}`,
+      badgeCount,
+      badgeVersion: Date.now(),
+    });
+  }));
+  return results.reduce((total, pushResult) => ({
+    sent: total.sent + pushResult.sent,
+    failed: total.failed + pushResult.failed,
+  }), { sent: 0, failed: 0 });
 };
 
 const notifySupportCreated = async ({ request, user }) => sendToRoles(["admin"], {
@@ -276,10 +387,15 @@ const notifySupportStatus = async ({ requestId, status }) => {
   const userId = result.rows[0]?.user_id;
   if (!userId) return { sent: 0, failed: 0 };
   const labels = { received: "접수", in_progress: "처리 중", resolved: "처리 완료" };
-  return sendToUserIds([userId], {
+  const notification = {
+    type: "support_status",
     title: "문의 처리 상태가 변경됐어요",
     body: `문의 상태가 '${labels[status] || status}'(으)로 변경됐습니다.`,
     url: "/mypage",
+  };
+  await saveInternalNotifications([userId], notification);
+  return sendToUserIds([userId], {
+    ...notification,
     tag: `support-${requestId}`,
   });
 };
@@ -288,11 +404,14 @@ module.exports = {
   ensurePushSubscriptionSchema,
   getPublicKey,
   getSubscriptionStatus,
+  listInternalNotifications,
+  markInternalNotificationRead,
   notifyNewComment,
   notifyNewMedia,
   notifySupportCreated,
   notifySupportStatus,
   removeSubscription,
   saveSubscription,
+  saveNotificationPreferences,
   sendToUserIds,
 };

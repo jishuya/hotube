@@ -27,6 +27,33 @@ export const getVapidPublicKey = async () => parseResponse(
   '알림 설정을 불러오지 못했습니다',
 );
 
+export const getPushStatus = async () => parseResponse(
+  await fetch(`${API_BASE_URL}/push/status`, { headers: authHeaders() }),
+  '알림 상태를 불러오지 못했습니다',
+);
+
+export const saveNotificationPreferences = async (preferences) => parseResponse(
+  await fetch(`${API_BASE_URL}/push/preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ preferences }),
+  }),
+  '상세 알림 설정을 저장하지 못했습니다',
+);
+
+export const getInternalNotifications = async () => parseResponse(
+  await fetch(`${API_BASE_URL}/push/notifications`, { headers: authHeaders() }),
+  '앱 알림을 불러오지 못했습니다',
+);
+
+export const markInternalNotificationRead = async (notificationId) => parseResponse(
+  await fetch(`${API_BASE_URL}/push/notifications/${encodeURIComponent(notificationId)}/read`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  }),
+  '알림을 확인 처리하지 못했습니다',
+);
+
 export const savePushSubscription = async (subscription) => parseResponse(
   await fetch(`${API_BASE_URL}/push/subscribe`, {
     method: 'POST',

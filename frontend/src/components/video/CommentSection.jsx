@@ -123,7 +123,7 @@ const CommentSection = ({ videoId, onCountChange }) => {
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-xl p-3 sm:p-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center mb-3">
         <h3 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
           <Icon icon="mdi:comment-multiple" className="text-primary text-lg" />
           댓글
@@ -131,9 +131,6 @@ const CommentSection = ({ videoId, onCountChange }) => {
             ({comments.length})
           </span>
         </h3>
-        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-          모든 가족 댓글
-        </span>
       </div>
 
       {/* 댓글 입력 */}
