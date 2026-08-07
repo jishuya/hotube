@@ -37,6 +37,50 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
+  // 시스템 알림이 별도 PWA 창을 열어도 읽음 상태를 기존 창과 동기화한다.
+  useEffect(() => {
+    const syncUserAcrossWindows = (event) => {
+      if (event.key !== STORAGE_KEY) return;
+      if (!event.newValue) {
+        setUser(null);
+        return;
+      }
+      try {
+        setUser(JSON.parse(event.newValue));
+      } catch (error) {
+        console.error('다른 앱 창의 사용자 상태 동기화 실패:', error);
+      }
+    };
+    window.addEventListener('storage', syncUserAcrossWindows);
+    return () => window.removeEventListener('storage', syncUserAcrossWindows);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || !user.accessToken) return undefined;
+    let active = true;
+    const refreshUser = async () => {
+      try {
+        const freshUser = await getUser(user.id);
+        if (!active) return;
+        const authenticatedUser = { ...freshUser, accessToken: user.accessToken };
+        setUser(authenticatedUser);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
+      } catch (error) {
+        console.error('사용자 읽음 상태 새로고침 실패:', error);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshUser();
+    };
+    window.addEventListener('focus', refreshUser);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refreshUser);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.accessToken, user?.id]);
+
   // 로그인
   const login = (userData) => {
     setUser(userData);

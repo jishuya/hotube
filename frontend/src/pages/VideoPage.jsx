@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { getAllVideos } from '../services/videoApi';
 import { extractVideoId } from '../services/youtubeService';
 import { toggleLike, markVideoWatched } from '../services/authApi';
+import { dismissMediaNotifications } from '../services/pushApi';
 import { useAuth } from '../contexts/AuthContext';
 import CommentSection from '../components/video/CommentSection';
 
@@ -34,8 +35,9 @@ const VideoPage = () => {
   // 시청 기록 추가
   useEffect(() => {
     if (video && user) {
-      markVideoWatched(user.id, videoId).then(() => {
+      markVideoWatched(user.id, videoId).then(async () => {
         markWatchedLocal(videoId);
+        await dismissMediaNotifications([videoId]);
       }).catch(err => console.error('시청 기록 추가 실패:', err));
     }
   }, [video, user, videoId, markWatchedLocal]);

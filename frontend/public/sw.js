@@ -7,6 +7,29 @@ const DEFAULT_NOTIFICATION = {
   badge: "/logo.png",
 };
 
+const BADGE_STATE_CACHE = "hotube-badge-state-v1";
+const BADGE_STATE_URL = new URL("/__hotube_badge_state__", self.location.origin).href;
+
+const updateAppBadge = async ({ badgeCount, badgeVersion = 0 }) => {
+  if (!Number.isInteger(badgeCount) || badgeCount < 0) return;
+
+  const cache = await caches.open(BADGE_STATE_CACHE);
+  const savedResponse = await cache.match(BADGE_STATE_URL);
+  const savedState = await savedResponse?.json().catch(() => null);
+  const nextVersion = Number.isFinite(badgeVersion) ? badgeVersion : 0;
+  if (nextVersion > 0 && nextVersion < (savedState?.version || 0)) return;
+
+  if (badgeCount === 0 && "clearAppBadge" in self.navigator) {
+    await self.navigator.clearAppBadge();
+  } else if ("setAppBadge" in self.navigator) {
+    await self.navigator.setAppBadge(badgeCount);
+  }
+  await cache.put(BADGE_STATE_URL, new Response(JSON.stringify({
+    count: badgeCount,
+    version: nextVersion,
+  }), { headers: { "Content-Type": "application/json" } }));
+};
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -23,6 +46,8 @@ self.addEventListener("push", (event) => {
     payload = { ...DEFAULT_NOTIFICATION, body: event.data?.text() || DEFAULT_NOTIFICATION.body };
   }
 
+  const badgePromise = updateAppBadge(payload);
+
   event.waitUntil(Promise.all([
     self.registration.showNotification(payload.title, {
       body: payload.body,
@@ -32,8 +57,16 @@ self.addEventListener("push", (event) => {
       renotify: true,
       data: { url: payload.url },
     }),
-    "setAppBadge" in self.navigator ? self.navigator.setAppBadge(1) : Promise.resolve(),
+    badgePromise,
   ]));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "SYNC_APP_BADGE") return;
+  event.waitUntil(updateAppBadge({
+    badgeCount: event.data.badgeCount,
+    badgeVersion: event.data.badgeVersion,
+  }));
 });
 
 self.addEventListener("notificationclick", (event) => {

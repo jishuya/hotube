@@ -93,6 +93,7 @@ const saveSubscription = async ({ userId, subscription, userAgent }) => {
       p256dh = EXCLUDED.p256dh,
       auth = EXCLUDED.auth,
       user_agent = EXCLUDED.user_agent,
+      created_at = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP
   `, [
     randomUUID(),
@@ -135,6 +136,8 @@ const sendToSubscriptions = async (subscriptions, payload) => {
     tag: payload.tag || "hotube",
     icon: payload.icon || "/logo.png",
     badge: payload.badge || "/logo.png",
+    ...(Number.isInteger(payload.badgeCount) ? { badgeCount: payload.badgeCount } : {}),
+    ...(Number.isFinite(payload.badgeVersion) ? { badgeVersion: payload.badgeVersion } : {}),
   });
   const results = await Promise.allSettled(subscriptions.map(async (row) => {
     try {
@@ -176,6 +179,35 @@ const sendToRoles = async (roles, payload) => {
   return sendToSubscriptions(result.rows, payload);
 };
 
+const getUnreadNotificationCount = async (userId, mediaSince = null) => {
+  const result = await pgDb.query(`
+    SELECT
+      (
+        SELECT COUNT(*)::integer
+        FROM media m
+        WHERE (
+          u.role IN ('admin', 'sub-admin')
+          OR u.category = ANY(m.shared_with)
+          OR m.uploaded_by = u.id
+        )
+          AND ($2::timestamptz IS NULL OR m.created_at > $2)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_watched_media uwm
+            WHERE uwm.user_id = u.id AND uwm.media_id = m.id
+          )
+      )
+      + CASE WHEN u.role = 'admin' THEN (
+        SELECT COUNT(*)::integer
+        FROM support_requests sr
+        WHERE sr.status = 'received'
+      ) ELSE 0 END AS unread_count
+    FROM users u
+    WHERE u.id = $1
+  `, [userId, mediaSince]);
+  return result.rows[0]?.unread_count || 0;
+};
+
 const notifyNewMedia = async ({ media, uploader }) => {
   const audience = await pgDb.query(`
     SELECT id
@@ -186,12 +218,31 @@ const notifyNewMedia = async ({ media, uploader }) => {
         OR category = ANY($2::text[])
       )
   `, [uploader.id, media.shared_with || ["dad", "mom"]]);
-  return sendToUserIds(audience.rows.map((row) => row.id), {
-    title: "새로운 추억이 등록됐어요",
-    body: `${uploader.name || uploader.title || "가족"}님이 '${media.title}'을(를) 올렸어요.`,
-    url: `/media/${encodeURIComponent(media.id)}`,
-    tag: `media-${media.id}`,
-  });
+  const audienceIds = audience.rows.map(({ id }) => id);
+  if (audienceIds.length === 0) return { sent: 0, failed: 0 };
+  const subscriptions = await pgDb.query(`
+    SELECT endpoint, p256dh, auth, user_id, created_at
+    FROM push_subscriptions
+    WHERE user_id = ANY($1::text[])
+  `, [audienceIds]);
+  const results = await Promise.all(subscriptions.rows.map(async (subscription) => {
+    const badgeCount = await getUnreadNotificationCount(
+      subscription.user_id,
+      subscription.created_at,
+    );
+    return sendToSubscriptions([subscription], {
+      title: "새로운 추억이 등록됐어요",
+      body: "👶🏻호튜브에 새로운 사진 또는 영상이 올라왔어요",
+      url: `/media/${encodeURIComponent(media.id)}`,
+      tag: `media-${media.id}`,
+      badgeCount,
+      badgeVersion: new Date(media.created_at).getTime(),
+    });
+  }));
+  return results.reduce((total, result) => ({
+    sent: total.sent + result.sent,
+    failed: total.failed + result.failed,
+  }), { sent: 0, failed: 0 });
 };
 
 const notifyNewComment = async ({ mediaId, commenter, content }) => {

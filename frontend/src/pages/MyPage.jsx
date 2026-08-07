@@ -9,6 +9,7 @@ import PushNotificationSettings from '../components/common/PushNotificationSetti
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, updateUser as updateUserApi } from '../services/authApi';
 import { createSupportRequest } from '../services/supportApi';
+import { clearAppBadge, disablePushOnCurrentDevice } from '../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../constants/profileAvatars';
 
 const roleLabels = {
@@ -36,7 +37,16 @@ const MyPage = () => {
   const displayName = user?.name || user?.title || 'HoTube 가족';
   const selectedAvatar = PROFILE_AVATARS.find((item) => item.id === user?.avatar) || PROFILE_AVATARS[2];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const cleanupResults = await Promise.allSettled([
+      clearAppBadge(),
+      disablePushOnCurrentDevice(),
+    ]);
+    cleanupResults.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.error('로그아웃 중 푸시 알림 정리 실패:', result.reason);
+      }
+    });
     logout();
     navigate('/login', { replace: true });
   };

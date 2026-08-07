@@ -431,6 +431,33 @@ const deleteMedia = async (id) => {
   }
 };
 
+const deleteMediaByDate = async (uploadedAt) => {
+  let client;
+  try {
+    client = await pgDb.getClient();
+    await client.query("BEGIN");
+    const linkedTags = await client.query(`
+      SELECT DISTINCT mt.tag_id
+      FROM media_tags mt
+      JOIN media m ON m.id = mt.media_id
+      WHERE m.uploaded_at = $1
+    `, [uploadedAt]);
+    const deleted = await client.query(`
+      DELETE FROM media
+      WHERE uploaded_at = $1
+      RETURNING id, file_path, thumbnail_path
+    `, [uploadedAt]);
+    await cleanupOrphanTags(client, linkedTags.rows.map((row) => row.tag_id));
+    await client.query("COMMIT");
+    return deleted.rows;
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client?.release();
+  }
+};
+
 const replaceMediaTags = async (client, mediaId, tags) => {
   const normalizedTags = normalizeTags(tags);
   const previousTags = await client.query('SELECT tag_id FROM media_tags WHERE media_id = $1', [mediaId]);
@@ -459,6 +486,7 @@ module.exports = {
   createFileMedia,
   createMedia,
   deleteMedia,
+  deleteMediaByDate,
   getMedia,
   getMediaDateRange,
   getMediaAccess,

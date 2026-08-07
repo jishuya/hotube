@@ -1,4 +1,15 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const NOTIFICATION_BASELINE_PREFIX = 'hotube_notification_baseline:';
+
+export const getOrCreateNotificationBaseline = (userId) => {
+  if (!userId) return null;
+  const key = `${NOTIFICATION_BASELINE_PREFIX}${userId}`;
+  const saved = localStorage.getItem(key);
+  if (saved) return saved;
+  const baseline = new Date().toISOString();
+  localStorage.setItem(key, baseline);
+  return baseline;
+};
 
 const authHeaders = () => {
   const token = JSON.parse(localStorage.getItem('hotube_user') || 'null')?.accessToken;
@@ -75,4 +86,50 @@ export const enablePushOnCurrentDevice = async () => {
   });
   await savePushSubscription(subscription.toJSON());
   return subscription;
+};
+
+export const disablePushOnCurrentDevice = async (knownSubscription = null) => {
+  if (!('serviceWorker' in navigator)) return;
+
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = knownSubscription
+    || await registration?.pushManager?.getSubscription();
+  if (!subscription) return;
+
+  const results = await Promise.allSettled([
+    removePushSubscription(subscription.endpoint),
+    subscription.unsubscribe(),
+  ]);
+  const rejected = results.find((result) => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
+};
+
+export const clearAppBadge = async () => {
+  if ('clearAppBadge' in navigator) {
+    await navigator.clearAppBadge();
+  } else if ('setAppBadge' in navigator) {
+    await navigator.setAppBadge(0);
+  }
+};
+
+export const dismissMediaNotifications = async (mediaIds) => {
+  if (!('serviceWorker' in navigator)) return;
+
+  const ids = new Set((mediaIds || []).filter(Boolean).map(String));
+  if (ids.size === 0) return;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration?.getNotifications) return;
+
+    const notifications = await registration.getNotifications();
+    notifications.forEach((notification) => {
+      const mediaId = notification.tag?.startsWith('media-')
+        ? notification.tag.slice('media-'.length)
+        : null;
+      if (mediaId && ids.has(mediaId)) notification.close();
+    });
+  } catch (error) {
+    console.error('확인한 미디어의 시스템 알림 닫기 실패:', error);
+  }
 };

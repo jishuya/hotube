@@ -6,6 +6,7 @@ const FUNCTIONS_URL = {
   createVideo: `${API_BASE_URL}/createVideo`,
   updateVideo: `${API_BASE_URL}/updateVideo`,
   deleteVideo: `${API_BASE_URL}/deleteVideo`,
+  deleteMediaByDate: `${API_BASE_URL}/deleteMediaByDate`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
   getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
@@ -193,4 +194,15 @@ export const deleteVideo = async (id, requesterId = getViewerId()) => {
   }
 
   return response.json();
+};
+
+export const deleteMediaByDate = async (date) => {
+  const token = JSON.parse(localStorage.getItem('hotube_user') || 'null')?.accessToken;
+  const response = await fetch(`${FUNCTIONS_URL.deleteMediaByDate}/${encodeURIComponent(date)}`, {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '날짜별 미디어 삭제에 실패했습니다');
+  return data;
 };

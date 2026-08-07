@@ -4,6 +4,7 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const pgDb = require('../db');
+const { requireAuth } = require('../authToken');
 const { mapMediaRowToVideo } = require("../responseMappers");
 const {
   ensureMediaDateDirectory,
@@ -17,6 +18,7 @@ const {
   createFileMedia,
   createMedia,
   deleteMedia,
+  deleteMediaByDate,
   getMedia,
   getMediaAccess,
   getMediaDateRange,
@@ -254,6 +256,34 @@ router.delete("/deleteVideo/:id", async (req, res) => {
   } catch (error) {
     console.error("비디오 삭제 오류:", error);
     sendRouteError(res, "비디오 삭제 실패", error);
+  }
+});
+
+router.delete("/deleteMediaByDate/:date", requireAuth, async (req, res) => {
+  try {
+    const requester = await fetchUserById(req.auth.userId);
+    if (requester?.role !== 'admin') {
+      return res.status(403).json({ error: '관리자만 날짜별 미디어를 삭제할 수 있습니다' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+      return res.status(400).json({ error: '올바른 날짜가 필요합니다' });
+    }
+    const deleted = await deleteMediaByDate(req.params.date);
+    for (const row of deleted) {
+      for (const storedPath of [row.file_path, row.thumbnail_path].filter(Boolean)) {
+        await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {
+          if (error.code !== 'ENOENT') console.error('미디어 파일 삭제 오류:', error);
+        });
+      }
+    }
+    return res.json({
+      message: `${deleted.length}개의 미디어가 삭제되었습니다`,
+      count: deleted.length,
+      ids: deleted.map((row) => row.id),
+    });
+  } catch (error) {
+    console.error("날짜별 미디어 삭제 오류:", error);
+    return sendRouteError(res, "날짜별 미디어 삭제 실패", error);
   }
 });
 

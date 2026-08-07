@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +7,7 @@ import { getChildProfile, saveChildProfile } from '../../services/childProfileAp
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 import { getAllVideos, toMemoryMedia } from '../../services/videoApi';
 import { markAllVideosWatched } from '../../services/authApi';
+import { dismissMediaNotifications, getOrCreateNotificationBaseline } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const DEFAULT_CHILD = {
@@ -73,9 +74,17 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [supportDetailLoading, setSupportDetailLoading] = useState(false);
   const { user, isAdmin: authIsAdmin, markAllWatchedLocal } = useAuth();
   const selectedAvatar = PROFILE_AVATARS.find((avatar) => avatar.id === user?.avatar) || PROFILE_AVATARS[2];
+  const notificationBaseline = useMemo(
+    () => getOrCreateNotificationBaseline(user?.id),
+    [user?.id],
+  );
   const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
   const unreadSupportCount = unreadSupportRequests.length;
-  const unreadMedia = mediaNotifications.filter((media) => !user?.watchedVideos?.includes(media.id));
+  const unreadMedia = mediaNotifications.filter((media) => {
+    if (user?.watchedVideos?.includes(media.id)) return false;
+    if (!notificationBaseline || !media.createdAt) return true;
+    return new Date(media.createdAt).getTime() > new Date(notificationBaseline).getTime();
+  });
   const unreadNotificationCount = unreadSupportCount + unreadMedia.length;
   const hasUnreadNotifications = unreadNotificationCount > 0;
   const notificationCountsLoaded = mediaNotificationsLoadedFor === user?.id
@@ -91,6 +100,12 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
         } else if (unreadNotificationCount === 0 && 'clearAppBadge' in navigator) {
           await navigator.clearAppBadge();
         }
+        const registration = await navigator.serviceWorker?.getRegistration();
+        registration?.active?.postMessage({
+          type: 'SYNC_APP_BADGE',
+          badgeCount: unreadNotificationCount,
+          badgeVersion: Date.now(),
+        });
       } catch (error) {
         console.error('홈 화면 앱 배지 동기화 실패:', error);
       }
@@ -236,7 +251,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     setMediaNotificationError('');
     try {
       await markAllVideosWatched(user.id);
-      markAllWatchedLocal(unreadMedia.map((media) => media.id));
+      const unreadMediaIds = unreadMedia.map((media) => media.id);
+      markAllWatchedLocal(unreadMediaIds);
+      await dismissMediaNotifications(unreadMediaIds);
     } catch (error) {
       setMediaNotificationError(error.message || '전체 미디어 확인 처리에 실패했습니다');
     } finally {

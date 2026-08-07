@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
 import {
   enablePushOnCurrentDevice,
-  removePushSubscription,
+  disablePushOnCurrentDevice,
   sendTestPush,
 } from '../../services/pushApi';
 
@@ -72,10 +72,7 @@ const PushNotificationSettings = () => {
     try {
       const current = subscription
         || await (await navigator.serviceWorker.ready).pushManager.getSubscription();
-      if (current) {
-        await removePushSubscription(current.endpoint);
-        await current.unsubscribe();
-      }
+      await disablePushOnCurrentDevice(current);
       setSubscription(null);
       setMessage('이 기기의 HoTube 알림을 껐습니다.');
     } catch (disableError) {

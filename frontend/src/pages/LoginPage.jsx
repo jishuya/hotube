@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../contexts/AuthContext';
 import { loginUser, USERS } from '../services/authApi';
+import { getOrCreateNotificationBaseline } from '../services/pushApi';
 
 const REMEMBER_ID_KEY = 'hotube_remember_id';
 
@@ -15,7 +16,6 @@ const LoginPage = () => {
     password: '',
   });
   const [rememberUserId, setRememberUserId] = useState(false);
-  const [rememberPassword, setRememberPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -70,19 +70,7 @@ const LoginPage = () => {
         localStorage.removeItem(REMEMBER_ID_KEY);
       }
 
-      if (rememberPassword && 'credentials' in navigator && 'PasswordCredential' in window) {
-        try {
-          const credential = new window.PasswordCredential({
-            id: formData.userId,
-            password: formData.password,
-            name: selectedUser?.label || formData.userId,
-          });
-          await navigator.credentials.store(credential);
-        } catch (credentialError) {
-          console.error('비밀번호 관리자 저장 요청 실패:', credentialError);
-        }
-      }
-
+      getOrCreateNotificationBaseline(user.id);
       login(user);
       navigate('/');
     } catch (err) {
@@ -112,29 +100,47 @@ const LoginPage = () => {
               <p className="text-zinc-500 mt-2">가족 영상을 함께 감상하세요</p>
             </div>
 
-            <form onSubmit={handleSubmit} autoComplete="on" className="space-y-5">
-              {/* 아이디 (호칭 선택) - 커스텀 드롭다운 */}
+            <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
+              {/* 아이디를 직접 입력하거나 가족 계정 목록에서 선택한다. */}
               <div className="relative" ref={dropdownRef}>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                <label htmlFor="username" className="block text-sm font-medium text-zinc-700 mb-1.5">
                   아이디
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className={`w-full h-11 px-4 rounded-lg border bg-white text-left flex items-center justify-between transition-colors ${
+                <div className={`flex h-11 w-full items-center rounded-lg border bg-white transition-colors ${
                     isDropdownOpen
                       ? 'border-primary ring-2 ring-primary/50'
                       : 'border-zinc-300 hover:border-zinc-400'
-                  }`}
-                >
-                  <span className={selectedUser ? 'text-zinc-900' : 'text-zinc-400'}>
-                    {selectedUser ? selectedUser.label : '호칭을 선택하세요'}
-                  </span>
-                  <Icon
-                    icon={isDropdownOpen ? "mdi:chevron-up" : "mdi:chevron-down"}
-                    className="text-xl text-zinc-400"
+                  }`}>
+                  <input
+                    id="username"
+                    type="text"
+                    name="username"
+                    value={formData.userId}
+                    onChange={(event) => {
+                      setFormData((current) => ({ ...current, userId: event.target.value }));
+                      setError('');
+                    }}
+                    autoComplete="off"
+                    className="h-full min-w-0 flex-1 rounded-l-lg bg-transparent px-4 outline-none"
+                    placeholder="아이디를 입력하세요"
+                    required
                   />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="flex h-full w-11 shrink-0 items-center justify-center rounded-r-lg text-zinc-400"
+                    aria-label="아이디 목록 열기"
+                    aria-expanded={isDropdownOpen}
+                  >
+                    <Icon
+                      icon={isDropdownOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+                      className="text-xl"
+                    />
+                  </button>
+                </div>
+                {selectedUser && (
+                  <p className="mt-1 text-xs text-zinc-500">{selectedUser.label} 계정</p>
+                )}
 
                 {/* 드롭다운 목록 */}
                 {isDropdownOpen && (
@@ -155,40 +161,27 @@ const LoginPage = () => {
                     ))}
                   </div>
                 )}
-
-                {/* hidden input for form validation */}
-                <input
-                  type="text"
-                  name="userId"
-                  value={formData.userId}
-                  autoComplete="username"
-                  readOnly
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  className="sr-only"
-                  required
-                />
               </div>
 
               {/* 비밀번호 */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                <label htmlFor="current-password" className="block text-sm font-medium text-zinc-700 mb-1.5">
                   비밀번호
                 </label>
                 <input
+                  id="current-password"
                   type="password"
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  autoComplete="current-password"
+                  autoComplete="off"
                   className="w-full h-11 px-4 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                   placeholder="비밀번호를 입력하세요"
                   required
                 />
               </div>
 
-              {/* 로그인 정보 기억하기 */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <div>
                 <label className="flex cursor-pointer select-none items-center text-sm text-zinc-600">
                   <input
                     type="checkbox"
@@ -197,15 +190,6 @@ const LoginPage = () => {
                     className="size-4 cursor-pointer rounded border-zinc-300 text-primary focus:ring-primary/50"
                   />
                   <span className="ml-2">아이디 기억하기</span>
-                </label>
-                <label className="flex cursor-pointer select-none items-center text-sm text-zinc-600">
-                  <input
-                    type="checkbox"
-                    checked={rememberPassword}
-                    onChange={(e) => setRememberPassword(e.target.checked)}
-                    className="size-4 cursor-pointer rounded border-zinc-300 text-primary focus:ring-primary/50"
-                  />
-                  <span className="ml-2">비밀번호 기억하기</span>
                 </label>
               </div>
 

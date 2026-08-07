@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
+import { deleteMediaByDate, deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
 import { addTagsToDateMedia, deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -95,6 +95,8 @@ const AlbumPage = () => {
   const [noteDraftDirty, setNoteDraftDirty] = useState(false);
   const [noteSaveStatus, setNoteSaveStatus] = useState('');
   const [deletingNoteDate, setDeletingNoteDate] = useState(null);
+  const [deletingMediaDate, setDeletingMediaDate] = useState(null);
+  const [dateDeleteBusy, setDateDeleteBusy] = useState(false);
   const [mediaItems, setMediaItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -434,6 +436,24 @@ const AlbumPage = () => {
     if (deletedIds.length) window.dispatchEvent(new Event('hotube:media-updated'));
   };
 
+  const deleteDateMedia = async () => {
+    if (!deletingMediaDate || !user?.id || dateDeleteBusy) return;
+    setDateDeleteBusy(true);
+    try {
+      const result = await deleteMediaByDate(deletingMediaDate);
+      const deletedIds = new Set(result.ids || []);
+      setMediaItems((current) => current.filter((item) => !deletedIds.has(item.id)));
+      setSelectedMediaIds((current) => current.filter((id) => !deletedIds.has(id)));
+      setDeletingMediaDate(null);
+      showToast('success', `${formatDateTitle(deletingMediaDate)} 미디어 ${result.count}개를 삭제했습니다.`);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setDateDeleteBusy(false);
+    }
+  };
+
   return (
     <>
       <Header showSearch={false} />
@@ -628,6 +648,18 @@ const AlbumPage = () => {
                           className="shrink-0 px-1 py-1.5 text-xs font-bold text-primary transition hover:opacity-70"
                         >
                           +공통태그
+                        </button>
+                      )}
+                      {user?.role === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingMediaDate(date)}
+                          disabled={dateDeleteBusy}
+                          className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-error/10 hover:text-error disabled:opacity-40"
+                          aria-label={`${formatDateTitle(date)} 사진과 영상 전체 삭제`}
+                          title="이 날짜의 사진·영상 전체 삭제"
+                        >
+                          <Icon icon="mdi:trash-can-outline" className="text-lg" />
                         </button>
                       )}
                       </div>
@@ -897,6 +929,16 @@ const AlbumPage = () => {
         message="이날의 메모를 삭제할까요?"
         type="confirm"
         confirmText="삭제"
+        cancelText="취소"
+      />
+      <Modal
+        isOpen={Boolean(deletingMediaDate)}
+        onClose={() => { if (!dateDeleteBusy) setDeletingMediaDate(null); }}
+        onConfirm={deleteDateMedia}
+        title="날짜 전체 삭제"
+        message={`${deletingMediaDate ? formatDateTitle(deletingMediaDate) : ''}의 사진과 영상 ${timeline.find(([date]) => date === deletingMediaDate)?.[1].length || 0}개를 모두 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`}
+        type="confirm"
+        confirmText={dateDeleteBusy ? "삭제 중" : "전체 삭제"}
         cancelText="취소"
       />
     </>

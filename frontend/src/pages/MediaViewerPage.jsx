@@ -14,6 +14,7 @@ import {
   updateVideo,
 } from '../services/videoApi';
 import { markVideoWatched, toggleLike } from '../services/authApi';
+import { dismissMediaNotifications } from '../services/pushApi';
 import { extractVideoId } from '../services/youtubeService';
 import { getChildProfile } from '../services/childProfileApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -436,8 +437,9 @@ const MediaViewerPage = () => {
   useEffect(() => {
     if (!current || !user || user.watchedVideos?.includes(current.id)) return;
     markVideoWatched(user.id, current.id)
-      .then(() => {
+      .then(async () => {
         markWatchedLocal(current.id);
+        await dismissMediaNotifications([current.id]);
         return loadDetails();
       })
       .catch((watchError) => console.error('시청 기록 추가 실패:', watchError));
