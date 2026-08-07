@@ -13,6 +13,16 @@ const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
   month: 'long', day: 'numeric', weekday: 'short',
 }).format(new Date(`${dateString}T00:00:00`));
 
+const formatUploadTime = (createdAt) => {
+  if (!createdAt) return '';
+  const uploaded = new Date(createdAt);
+  const elapsed = Date.now() - uploaded.getTime();
+  if (elapsed < 60 * 60 * 1000) return '방금 업로드';
+  if (elapsed < 24 * 60 * 60 * 1000) return `${Math.max(1, Math.floor(elapsed / (60 * 60 * 1000)))}시간 전 업로드`;
+  if (elapsed < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}일 전 업로드`;
+  return `${new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(uploaded)} 업로드`;
+};
+
 const formatDateKey = (date) => [
   date.getFullYear(),
   String(date.getMonth() + 1).padStart(2, '0'),
@@ -57,6 +67,7 @@ const CalendarPage = () => {
   const monthParam = searchParams.get('month');
   const month = useMemo(() => parseMonthKey(monthParam) || new Date(), [monthParam]);
   const [mediaItems, setMediaItems] = useState([]);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const selectedMonth = formatMonthKey(month);
   const mediaByDate = useMemo(() => mediaItems.reduce((groups, item) => {
     if (item.date) {
@@ -69,6 +80,23 @@ const CalendarPage = () => {
     .filter((date) => date.startsWith(selectedMonth)
       && mediaByDate[date].some((item) => !user?.watchedVideos?.includes(item.id)))
     .sort((a, b) => b.localeCompare(a));
+  const recentActivity = useMemo(() => Object.entries(mediaItems
+    .filter((item) => !user?.watchedVideos?.includes(item.id))
+    .reduce((groups, item) => {
+      if (!item.date) return groups;
+      if (!groups[item.date]) groups[item.date] = [];
+      groups[item.date].push(item);
+      return groups;
+    }, {}))
+    .map(([date, items]) => ({
+      date,
+      items: items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+      latestCreatedAt: items.reduce((latest, item) => (
+        !latest || new Date(item.createdAt || 0) > new Date(latest) ? item.createdAt : latest
+      ), null),
+    }))
+    .sort((a, b) => new Date(b.latestCreatedAt || 0) - new Date(a.latestCreatedAt || 0)), [mediaItems, user?.watchedVideos]);
+  const visibleRecentActivity = showAllRecent ? recentActivity : recentActivity.slice(0, 3);
 
   useEffect(() => {
     const loadMedia = () => getAllVideos()
@@ -118,12 +146,15 @@ const CalendarPage = () => {
 
           <section className="mt-8" aria-labelledby="recent-media-title">
             <h2 id="recent-media-title" className="mb-4 text-xl font-bold">최근 활동</h2>
-            {unreadDates.length > 0 ? (
+            {recentActivity.length > 0 ? (
               <div className="space-y-4">
-                {unreadDates.map((date) => (
+                {visibleRecentActivity.map(({ date, items, latestCreatedAt }) => (
                   <article key={date} className="rounded-xl bg-surface p-4 shadow-sm">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="font-bold">{formatRecentDate(date)}</h3>
+                      <div className="min-w-0">
+                        <h3 className="font-bold">새 사진·영상 {items.length}개가 올라왔어요</h3>
+                        <p className="mt-0.5 truncate text-xs text-text-secondary">촬영일 {formatRecentDate(date)} · {formatUploadTime(latestCreatedAt)}</p>
+                      </div>
                       <Link
                         to={`/calendar/${date}`}
                         state={{ returnTo: `/calendar?month=${date.slice(0, 7)}` }}
@@ -134,7 +165,7 @@ const CalendarPage = () => {
                       </Link>
                     </div>
                     <div className="grid grid-cols-4 grid-rows-2 gap-2">
-                      {mediaByDate[date].slice(0, 5).map((item, index) => (
+                      {items.slice(0, 5).map((item, index) => (
                         <Link
                           key={item.id}
                           to={`/media/${item.id}?date=${date}`}
@@ -157,6 +188,12 @@ const CalendarPage = () => {
                     </div>
                   </article>
                 ))}
+                {recentActivity.length > 3 && (
+                  <button type="button" onClick={() => setShowAllRecent((current) => !current)} className="flex w-full items-center justify-center gap-1 rounded-xl py-3 text-sm font-bold text-primary transition hover:bg-primary/10">
+                    {showAllRecent ? '접기' : `최근 활동 전체 보기 (${recentActivity.length})`}
+                    <Icon icon={showAllRecent ? 'mdi:chevron-up' : 'mdi:chevron-down'} className="text-lg" />
+                  </button>
+                )}
               </div>
             ) : (
               <div className="rounded-xl bg-surface px-4 py-10 text-center text-sm text-text-secondary shadow-sm">
