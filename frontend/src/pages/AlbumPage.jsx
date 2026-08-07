@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { deleteMediaByDate, deleteVideo, getAllVideos, getMediaDateRange, toMemoryMedia } from '../services/videoApi';
-import { addTagsToDateMedia, deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
+import { deleteVideo, getAllVideos, getFavoriteMedia, getMediaDateRange, toMemoryMedia, toggleFavorite, updateVideo } from '../services/videoApi';
+import { deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
+import { toggleLike } from '../services/authApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
 import CustomSelect from '../components/common/CustomSelect';
@@ -72,7 +73,6 @@ const NewMediaBadge = () => (
 
 const AlbumPage = () => {
   const monthBarRef = useRef(null);
-  const tagSavingRef = useRef(false);
   const noteDraftRef = useRef('');
   const longPressTimerRef = useRef(null);
   const pointerStartRef = useRef(null);
@@ -87,29 +87,30 @@ const AlbumPage = () => {
   const [collapsedDates, setCollapsedDates] = useState([]);
   const [dateNotes, setDateNotes] = useState({});
   const [tagError, setTagError] = useState('');
-  const [taggingDate, setTaggingDate] = useState(null);
-  const [tagDraft, setTagDraft] = useState('');
   const [editingNoteDate, setEditingNoteDate] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDraftDirty, setNoteDraftDirty] = useState(false);
   const [noteSaveStatus, setNoteSaveStatus] = useState('');
   const [deletingNoteDate, setDeletingNoteDate] = useState(null);
-  const [deletingMediaDate, setDeletingMediaDate] = useState(null);
-  const [dateDeleteBusy, setDateDeleteBusy] = useState(false);
   const [mediaItems, setMediaItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectionActive, setSelectionActive] = useState(false);
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
   const [selectionBusy, setSelectionBusy] = useState('');
   const [selectionError, setSelectionError] = useState('');
   const [albumCreateOpen, setAlbumCreateOpen] = useState(false);
   const [albumTitleDraft, setAlbumTitleDraft] = useState('');
   const [albumCreateError, setAlbumCreateError] = useState('');
+  const [selectionDialog, setSelectionDialog] = useState('');
+  const [selectionDeleteOpen, setSelectionDeleteOpen] = useState(false);
+  const [selectionTagDraft, setSelectionTagDraft] = useState('');
+  const [selectionFamilies, setSelectionFamilies] = useState(['dad', 'mom']);
   const [toasts, setToasts] = useState([]);
-  const { user } = useAuth();
-  const selectionMode = selectedMediaIds.length > 0;
+  const { user, isLiked, updateUser } = useAuth();
+  const selectionMode = selectionActive;
   const viewedMediaIds = user?.watchedVideos || [];
   const monthOptions = useMemo(() => buildMonthOptions(
     mediaDateRange.minDate,
@@ -154,7 +155,7 @@ const AlbumPage = () => {
   }, []);
 
   const showToast = useCallback((type, message) => {
-    setToasts((current) => [...current.slice(-2), {
+    setToasts([{
       id: `${Date.now()}-${Math.random()}`,
       type,
       message,
@@ -245,6 +246,7 @@ const AlbumPage = () => {
     setSearchDateTo('');
     setDateFilterOpen(false);
     setCollapsedDates([]);
+    setSelectionActive(false);
     setSelectedMediaIds([]);
     setSelectionError('');
   };
@@ -260,29 +262,6 @@ const AlbumPage = () => {
     setCollapsedDates((current) => current.includes(date)
       ? current.filter((item) => item !== date)
       : [...current, date]);
-  };
-
-  const addTag = async (date) => {
-    if (tagSavingRef.current) return;
-    const normalizedTags = [...new Set(tagDraft.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean))];
-    if (!normalizedTags.length || !user?.id) return;
-    tagSavingRef.current = true;
-    try {
-      const result = await addTagsToDateMedia(date, normalizedTags, user.id);
-      if (result.addedCount > 0) {
-        setTagError('');
-        showToast('success', '공통 태그를 사진에 예쁘게 붙였어요 ✨');
-      } else {
-        showToast('info', '이미 같은 태그가 붙어 있어요.');
-      }
-      setReloadKey((current) => current + 1);
-      setTaggingDate(null);
-      setTagDraft('');
-    } catch (error) {
-      showToast('error', error.message);
-    } finally {
-      tagSavingRef.current = false;
-    }
   };
 
   const saveNote = async (date) => {
@@ -369,6 +348,7 @@ const AlbumPage = () => {
     window.clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = window.setTimeout(() => {
       longPressTriggeredRef.current = true;
+      setSelectionActive(true);
       toggleMediaSelection(mediaId);
       if (navigator.vibrate) navigator.vibrate(30);
     }, 550);
@@ -406,6 +386,7 @@ const AlbumPage = () => {
     try {
       createdAlbum = await createMyAlbum(user.id, { title });
       await addMediaToMyAlbum(user.id, createdAlbum.id, selectedMediaIds);
+      setSelectionActive(false);
       setSelectedMediaIds([]);
       setSelectionError('');
       setAlbumCreateOpen(false);
@@ -420,7 +401,6 @@ const AlbumPage = () => {
 
   const deleteSelectedMedia = async () => {
     if (!user?.id || selectionBusy) return;
-    if (!window.confirm(`선택한 ${selectedMediaIds.length}개의 사진·영상을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`)) return;
     setSelectionBusy('delete');
     const results = await Promise.allSettled(
       selectedMediaIds.map((mediaId) => deleteVideo(mediaId, user.id)),
@@ -428,7 +408,9 @@ const AlbumPage = () => {
     const deletedIds = selectedMediaIds.filter((_, index) => results[index].status === 'fulfilled');
     const failedCount = results.length - deletedIds.length;
     setMediaItems((current) => current.filter((item) => !deletedIds.includes(item.id)));
+    setSelectionActive(false);
     setSelectedMediaIds([]);
+    setSelectionDeleteOpen(false);
     setSelectionError(failedCount > 0
       ? `${deletedIds.length}개를 삭제했고, 권한이 없는 ${failedCount}개는 삭제하지 못했습니다.`
       : '');
@@ -436,22 +418,84 @@ const AlbumPage = () => {
     if (deletedIds.length) window.dispatchEvent(new Event('hotube:media-updated'));
   };
 
-  const deleteDateMedia = async () => {
-    if (!deletingMediaDate || !user?.id || dateDeleteBusy) return;
-    setDateDeleteBusy(true);
+  const runSelectedAction = async (action, task, successMessage) => {
+    if (!selectedMediaIds.length || selectionBusy) return;
+    setSelectionBusy(action);
+    const ids = [...selectedMediaIds];
+    const results = await Promise.allSettled(ids.map(task));
+    const successCount = results.filter((result) => result.status === 'fulfilled').length;
+    const failedCount = results.length - successCount;
+    setSelectionBusy('');
+    if (successCount) showToast('success', `${successCount}개 ${successMessage}`);
+    if (failedCount) setSelectionError(`${failedCount}개는 처리하지 못했습니다.`);
+    else setSelectionError('');
+  };
+
+  const addSelectedFavorites = async () => {
+    setSelectionBusy('favorite');
     try {
-      const result = await deleteMediaByDate(deletingMediaDate);
-      const deletedIds = new Set(result.ids || []);
-      setMediaItems((current) => current.filter((item) => !deletedIds.has(item.id)));
-      setSelectedMediaIds((current) => current.filter((id) => !deletedIds.has(id)));
-      setDeletingMediaDate(null);
-      showToast('success', `${formatDateTitle(deletingMediaDate)} 미디어 ${result.count}개를 삭제했습니다.`);
-      window.dispatchEvent(new Event('hotube:media-updated'));
+      const favoriteIds = new Set((await getFavoriteMedia(user.id)).map((item) => item.id));
+      const targets = selectedMediaIds.filter((id) => !favoriteIds.has(id));
+      const results = await Promise.allSettled(targets.map((id) => toggleFavorite(user.id, id)));
+      const count = results.filter((result) => result.status === 'fulfilled').length;
+      showToast('success', targets.length ? `${count}개를 즐겨찾기에 추가했습니다.` : '선택한 항목은 이미 즐겨찾기에 있어요.');
+      setSelectionError(count !== targets.length ? `${targets.length - count}개는 처리하지 못했습니다.` : '');
     } catch (error) {
-      showToast('error', error.message);
+      setSelectionError(error.message);
     } finally {
-      setDateDeleteBusy(false);
+      setSelectionBusy('');
     }
+  };
+
+  const addSelectedLikes = async () => {
+    const targets = selectedMediaIds.filter((id) => !isLiked(id));
+    if (!targets.length) {
+      showToast('info', '선택한 항목은 이미 좋아요가 추가되어 있어요.');
+      return;
+    }
+    setSelectionBusy('like');
+    const results = await Promise.allSettled(targets.map((id) => toggleLike(user.id, id)));
+    const addedIds = targets.filter((_, index) => results[index].status === 'fulfilled');
+    updateUser({ likedVideos: [...new Set([...(user.likedVideos || []), ...addedIds])] });
+    setSelectionBusy('');
+    if (addedIds.length) showToast('success', `${addedIds.length}개에 좋아요를 추가했습니다.`);
+    const failedCount = targets.length - addedIds.length;
+    setSelectionError(failedCount ? `${failedCount}개는 처리하지 못했습니다.` : '');
+  };
+
+  const saveSelectedTags = async (event) => {
+    event.preventDefault();
+    const tags = [...new Set(selectionTagDraft.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean))];
+    if (!tags.length) return;
+    const selected = mediaItems.filter((item) => selectedMediaIds.includes(item.id));
+    await runSelectedAction('tag', (id) => {
+      const item = selected.find((media) => media.id === id);
+      return updateVideo(id, { tags: [...new Set([...(item?.tags || []), ...tags])] }, user.id);
+    }, '미디어에 태그를 추가했습니다.');
+    setSelectionDialog('');
+    setSelectionTagDraft('');
+    setReloadKey((current) => current + 1);
+  };
+
+  const saveSelectedFamilies = async () => {
+    if (!selectionFamilies.length) return;
+    await runSelectedAction('family', (id) => updateVideo(id, { sharedWith: selectionFamilies }, user.id), '미디어의 공유 가족을 변경했습니다.');
+    setSelectionDialog('');
+    setReloadKey((current) => current + 1);
+  };
+
+  const downloadSelectedMedia = () => {
+    const downloadable = mediaItems.filter((item) => selectedMediaIds.includes(item.id) && item.source === 'file');
+    downloadable.forEach((item, index) => window.setTimeout(() => {
+      const link = document.createElement('a');
+      link.href = `${item.src}${item.src.includes('?') ? '&' : '?'}download=1`;
+      link.download = item.title || '';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, index * 150));
+    const skipped = selectedMediaIds.length - downloadable.length;
+    showToast(downloadable.length ? 'success' : 'info', downloadable.length ? `${downloadable.length}개 다운로드를 시작했습니다.${skipped ? ` YouTube ${skipped}개는 제외했어요.` : ''}` : '다운로드할 파일이 없어요.');
   };
 
   return (
@@ -628,40 +672,23 @@ const AlbumPage = () => {
                         <span className="truncate text-xl font-bold sm:text-2xl">{formatDateTitle(date)}</span>
                         <span className="shrink-0 text-sm font-medium text-text-secondary">{formatWeekday(date)}</span>
                       </Link>
-                      {taggingDate === date ? (
-                        <form className="shrink-0" onSubmit={(event) => { event.preventDefault(); addTag(date); }}>
-                          <input
-                            autoFocus
-                            value={tagDraft}
-                            onChange={(event) => setTagDraft(event.target.value)}
-                            onBlur={() => { if (!tagSavingRef.current) { setTaggingDate(null); setTagDraft(''); } }}
-                            onKeyDown={(event) => { if (event.key === 'Escape') { setTaggingDate(null); setTagDraft(''); } }}
-                            placeholder="가족, 여행"
-                            className="h-8 w-28 rounded-full border-primary bg-surface px-3 text-xs focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
-                            aria-label="공통으로 추가할 태그"
-                          />
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => { setTaggingDate(date); setTagDraft(''); }}
-                          className="shrink-0 px-1 py-1.5 text-xs font-bold text-primary transition hover:opacity-70"
-                        >
-                          +공통태그
-                        </button>
-                      )}
-                      {user?.role === 'admin' && (
-                        <button
-                          type="button"
-                          onClick={() => setDeletingMediaDate(date)}
-                          disabled={dateDeleteBusy}
-                          className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-error/10 hover:text-error disabled:opacity-40"
-                          aria-label={`${formatDateTitle(date)} 사진과 영상 전체 삭제`}
-                          title="이 날짜의 사진·영상 전체 삭제"
-                        >
-                          <Icon icon="mdi:trash-can-outline" className="text-lg" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectionActive((current) => !current);
+                          setSelectedMediaIds([]);
+                          setSelectionError('');
+                        }}
+                        className={`flex size-8 shrink-0 items-center justify-center rounded-full transition ${
+                          selectionMode
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-text-secondary hover:bg-primary/10 hover:text-primary'
+                        }`}
+                        aria-label={selectionMode ? '사진 선택 모드 종료' : '사진 선택'}
+                        title={selectionMode ? '선택 취소' : '사진·영상 선택'}
+                      >
+                        <Icon icon={selectionMode ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-multiple-blank-circle-outline'} className="text-xl" />
+                      </button>
                       </div>
                       <div className="ml-8 mt-1 text-xs text-text-secondary sm:ml-9">
                           {editingNoteDate === date ? (
@@ -819,11 +846,13 @@ const AlbumPage = () => {
           )}
         </div>
         {selectionMode && (
-          <section className="fixed inset-x-3 bottom-24 z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 미디어 작업">
+          <section className="fixed inset-x-3 bottom-20 z-40 mx-auto max-w-2xl rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 미디어 작업">
+            <div className="mb-2 flex items-center justify-between px-1">
             <button
               type="button"
               onClick={() => {
                 setSelectedMediaIds([]);
+                setSelectionActive(false);
                 setSelectionError('');
               }}
               disabled={Boolean(selectionBusy)}
@@ -832,25 +861,33 @@ const AlbumPage = () => {
             >
               <Icon icon="mdi:close" className="text-2xl" />
             </button>
-            <span className="min-w-12 text-center text-sm font-black text-primary">{selectedMediaIds.length}개</span>
+            <span className="text-sm font-black text-primary">{selectedMediaIds.length}개 선택</span>
+            <span className="size-10" aria-hidden="true" />
+            </div>
+            <div className="scrollbar-hide flex gap-1 overflow-x-auto">
+            {[
+              ['album', 'mdi:folder-plus-outline', '앨범 만들기', openAlbumCreateModal],
+              ['favorite', 'mdi:bookmark-plus-outline', '즐겨찾기', addSelectedFavorites],
+              ['like', 'mdi:heart-plus-outline', '좋아요', addSelectedLikes],
+              ['family', 'mdi:account-group-outline', '공유가족', () => setSelectionDialog('family')],
+              ['download', 'mdi:download-outline', '다운로드', downloadSelectedMedia],
+              ['tag', 'mdi:tag-plus-outline', '태그', () => setSelectionDialog('tag')],
+            ].map(([key, icon, label, handler]) => (
+              <button key={key} type="button" onClick={handler} disabled={Boolean(selectionBusy) || !selectedMediaIds.length} className="flex min-w-[72px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-bold text-text-secondary transition hover:bg-primary/10 hover:text-primary disabled:opacity-40">
+                <Icon icon={selectionBusy === key ? 'mdi:loading' : icon} className={`text-xl ${selectionBusy === key ? 'animate-spin' : ''}`} />
+                {label}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={openAlbumCreateModal}
-              disabled={Boolean(selectionBusy)}
-              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-bold text-white disabled:opacity-50"
+              onClick={() => setSelectionDeleteOpen(true)}
+              disabled={Boolean(selectionBusy) || !selectedMediaIds.length}
+              className="flex min-w-[72px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-bold text-error transition hover:bg-error/10 disabled:opacity-40"
             >
-              <Icon icon={selectionBusy === 'album' ? 'mdi:loading' : 'mdi:folder-plus-outline'} className={`text-lg ${selectionBusy === 'album' ? 'animate-spin' : ''}`} />
-              앨범 만들기
-            </button>
-            <button
-              type="button"
-              onClick={deleteSelectedMedia}
-              disabled={Boolean(selectionBusy)}
-              className="flex h-10 items-center justify-center gap-1 rounded-xl bg-error px-3 text-sm font-bold text-white disabled:opacity-50"
-            >
-              <Icon icon={selectionBusy === 'delete' ? 'mdi:loading' : 'mdi:trash-can-outline'} className={`text-lg ${selectionBusy === 'delete' ? 'animate-spin' : ''}`} />
+              <Icon icon={selectionBusy === 'delete' ? 'mdi:loading' : 'mdi:trash-can-outline'} className={`text-xl ${selectionBusy === 'delete' ? 'animate-spin' : ''}`} />
               삭제
             </button>
+            </div>
           </section>
         )}
         {albumCreateOpen && (
@@ -919,6 +956,43 @@ const AlbumPage = () => {
             </form>
           </div>
         )}
+        {selectionDialog && (
+          <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+            <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!selectionBusy) setSelectionDialog(''); }} aria-label="작업 창 닫기" />
+            <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+              {selectionDialog === 'tag' ? (
+                <form onSubmit={saveSelectedTags}>
+                  <h2 className="text-lg font-bold text-gray-900">개별 태그 추가</h2>
+                  <p className="mt-1 text-sm text-gray-600">선택한 각 미디어의 기존 태그는 유지하고 새 태그를 추가합니다.</p>
+                  <input autoFocus value={selectionTagDraft} onChange={(event) => setSelectionTagDraft(event.target.value)} placeholder="가족, 여행, 생일" className="mt-4 h-11 w-full rounded-xl border-border bg-background px-3 text-sm focus:border-primary focus:ring-primary" />
+                  <div className="mt-5 flex gap-2">
+                    <button type="button" onClick={() => setSelectionDialog('')} disabled={Boolean(selectionBusy)} className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700">취소</button>
+                    <button type="submit" disabled={Boolean(selectionBusy) || !selectionTagDraft.trim()} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white disabled:opacity-50">
+                      {selectionBusy === 'tag' && <Icon icon="mdi:loading" className="animate-spin" />} 추가
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">공유 가족 변경</h2>
+                  <p className="mt-1 text-sm text-gray-600">선택한 미디어를 볼 수 있는 가족을 정해 주세요.</p>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {[['mom', '엄마가족'], ['dad', '아빠가족'], ['etc', '기타']].map(([value, label]) => {
+                      const selected = selectionFamilies.includes(value);
+                      return <button key={value} type="button" onClick={() => setSelectionFamilies((current) => selected ? current.filter((item) => item !== value) : [...current, value])} className={`rounded-xl border px-2 py-3 text-sm font-bold ${selected ? 'border-primary bg-primary/10 text-primary' : 'border-border text-gray-600'}`}><Icon icon={selected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline text-lg" />{label}</button>;
+                    })}
+                  </div>
+                  <div className="mt-5 flex gap-2">
+                    <button type="button" onClick={() => setSelectionDialog('')} disabled={Boolean(selectionBusy)} className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700">취소</button>
+                    <button type="button" onClick={saveSelectedFamilies} disabled={Boolean(selectionBusy) || !selectionFamilies.length} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white disabled:opacity-50">
+                      {selectionBusy === 'family' && <Icon icon="mdi:loading" className="animate-spin" />} 변경
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <Modal
@@ -932,13 +1006,13 @@ const AlbumPage = () => {
         cancelText="취소"
       />
       <Modal
-        isOpen={Boolean(deletingMediaDate)}
-        onClose={() => { if (!dateDeleteBusy) setDeletingMediaDate(null); }}
-        onConfirm={deleteDateMedia}
-        title="날짜 전체 삭제"
-        message={`${deletingMediaDate ? formatDateTitle(deletingMediaDate) : ''}의 사진과 영상 ${timeline.find(([date]) => date === deletingMediaDate)?.[1].length || 0}개를 모두 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`}
+        isOpen={selectionDeleteOpen}
+        onClose={() => { if (!selectionBusy) setSelectionDeleteOpen(false); }}
+        onConfirm={deleteSelectedMedia}
+        title="선택 항목 삭제"
+        message={`선택한 사진과 영상 ${selectedMediaIds.length}개를 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`}
         type="confirm"
-        confirmText={dateDeleteBusy ? "삭제 중" : "전체 삭제"}
+        confirmText={selectionBusy === 'delete' ? '삭제 중' : '삭제'}
         cancelText="취소"
       />
     </>

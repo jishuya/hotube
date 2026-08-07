@@ -32,8 +32,6 @@ const CommentSection = ({ videoId, onCountChange }) => {
   const [editContent, setEditContent] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, commentId: null });
 
-  const isAdminOrSubAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
-
   useEffect(() => {
     if (videoId && user) {
       loadComments();
@@ -122,14 +120,6 @@ const CommentSection = ({ videoId, onCountChange }) => {
     return date.toLocaleDateString();
   };
 
-  const getCategoryLabel = (category) => {
-    switch (category) {
-      case 'dad': return '아빠가족';
-      case 'mom': return '엄마가족';
-      default: return '기타';
-    }
-  };
-
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-xl p-3 sm:p-4">
       {/* 헤더 */}
@@ -142,7 +132,7 @@ const CommentSection = ({ videoId, onCountChange }) => {
           </span>
         </h3>
         <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-          {isAdminOrSubAdmin ? '모든 댓글' : `${getCategoryLabel(user?.category)} 전용`}
+          모든 가족 댓글
         </span>
       </div>
 

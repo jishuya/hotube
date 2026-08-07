@@ -101,46 +101,29 @@ const LoginPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
-              {/* 아이디를 직접 입력하거나 가족 계정 목록에서 선택한다. */}
+              {/* 아이디 (호칭 선택) */}
               <div className="relative" ref={dropdownRef}>
-                <label htmlFor="username" className="block text-sm font-medium text-zinc-700 mb-1.5">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   아이디
                 </label>
-                <div className={`flex h-11 w-full items-center rounded-lg border bg-white transition-colors ${
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-4 text-left transition-colors ${
                     isDropdownOpen
                       ? 'border-primary ring-2 ring-primary/50'
                       : 'border-zinc-300 hover:border-zinc-400'
-                  }`}>
-                  <input
-                    id="username"
-                    type="text"
-                    name="username"
-                    value={formData.userId}
-                    onChange={(event) => {
-                      setFormData((current) => ({ ...current, userId: event.target.value }));
-                      setError('');
-                    }}
-                    autoComplete="off"
-                    className="h-full min-w-0 flex-1 rounded-l-lg bg-transparent px-4 outline-none"
-                    placeholder="아이디를 입력하세요"
-                    required
+                  }`}
+                  aria-expanded={isDropdownOpen}
+                >
+                  <span className={selectedUser ? 'text-zinc-900' : 'text-zinc-400'}>
+                    {selectedUser ? selectedUser.label : '호칭을 선택하세요'}
+                  </span>
+                  <Icon
+                    icon={isDropdownOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+                    className="text-xl text-zinc-400"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="flex h-full w-11 shrink-0 items-center justify-center rounded-r-lg text-zinc-400"
-                    aria-label="아이디 목록 열기"
-                    aria-expanded={isDropdownOpen}
-                  >
-                    <Icon
-                      icon={isDropdownOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'}
-                      className="text-xl"
-                    />
-                  </button>
-                </div>
-                {selectedUser && (
-                  <p className="mt-1 text-xs text-zinc-500">{selectedUser.label} 계정</p>
-                )}
+                </button>
 
                 {/* 드롭다운 목록 */}
                 {isDropdownOpen && (
@@ -161,6 +144,17 @@ const LoginPage = () => {
                     ))}
                   </div>
                 )}
+                <input
+                  type="text"
+                  name="userId"
+                  value={formData.userId}
+                  autoComplete="off"
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                  required
+                />
               </div>
 
               {/* 비밀번호 */}
