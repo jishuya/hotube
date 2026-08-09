@@ -75,6 +75,15 @@ const ensurePushSubscriptionSchema = async () => {
     )
   `);
   await pgDb.query(`CREATE INDEX IF NOT EXISTS idx_user_notifications_unread ON user_notifications (user_id, created_at DESC) WHERE read_at IS NULL`);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS media_notification_batches (
+      upload_batch_id TEXT NOT NULL,
+      uploader_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (upload_batch_id, uploader_id, user_id)
+    )
+  `);
 };
 
 const saveInternalNotifications = async (userIds, notification) => {
@@ -278,7 +287,18 @@ const getUnreadNotificationCount = async (userId, mediaSince = null) => {
   return result.rows[0]?.unread_count || 0;
 };
 
-const notifyNewMedia = async ({ media, uploader }) => {
+const claimBatchRecipients = async ({ uploadBatchId, uploaderId, userIds }) => {
+  if (!uploadBatchId) return userIds;
+  const result = await pgDb.query(`
+    INSERT INTO media_notification_batches (upload_batch_id, uploader_id, user_id)
+    SELECT $1, $2, UNNEST($3::text[])
+    ON CONFLICT DO NOTHING
+    RETURNING user_id
+  `, [String(uploadBatchId).slice(0, 100), uploaderId, userIds]);
+  return result.rows.map(({ user_id: userId }) => userId);
+};
+
+const notifyNewMedia = async ({ media, uploader, uploadBatchId = null }) => {
   const audience = await pgDb.query(`
     SELECT id
     FROM users
@@ -288,7 +308,11 @@ const notifyNewMedia = async ({ media, uploader }) => {
         OR category = ANY($2::text[])
       )
   `, [uploader.id, media.shared_with || ["dad", "mom"]]);
-  const audienceIds = audience.rows.map(({ id }) => id);
+  const audienceIds = await claimBatchRecipients({
+    uploadBatchId,
+    uploaderId: uploader.id,
+    userIds: audience.rows.map(({ id }) => id),
+  });
   if (audienceIds.length === 0) return { sent: 0, failed: 0 };
   const subscriptions = await pgDb.query(`
     SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.created_at

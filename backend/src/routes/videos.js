@@ -181,7 +181,11 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
     });
     if (browserVideoPath) await fs.unlink(req.file.path).catch(() => {});
-    void notifyNewMedia({ media: createdMedia, uploader }).catch((error) => {
+    void notifyNewMedia({
+      media: createdMedia,
+      uploader,
+      uploadBatchId: req.body.uploadBatchId || null,
+    }).catch((error) => {
       console.error('새 미디어 푸시 알림 오류:', error);
     });
     return res.status(201).json(mapMediaRowToVideo(createdMedia));

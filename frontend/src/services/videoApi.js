@@ -105,7 +105,7 @@ export const addVideo = async (videoData) => {
 };
 
 export const uploadMediaFile = async (file, {
-  title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'],
+  title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'], uploadBatchId,
 }) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -113,6 +113,7 @@ export const uploadMediaFile = async (file, {
   formData.append('uploadedAt', uploadedAt);
   formData.append('tags', JSON.stringify(tags || []));
   if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+  if (uploadBatchId) formData.append('uploadBatchId', uploadBatchId);
   formData.append('sharedWith', JSON.stringify(sharedWith));
 
   const response = await fetch(FUNCTIONS_URL.uploadMedia, {

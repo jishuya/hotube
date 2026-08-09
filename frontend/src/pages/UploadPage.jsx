@@ -278,6 +278,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     try {
       const created = [];
       if (uploadSource === 'device') {
+        const uploadBatchId = crypto.randomUUID();
         for (const item of selectedFiles) {
           const itemTags = item.tags.split(',')
             .map((tag) => tag.trim().replace(/^#/, ''))
@@ -289,6 +290,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             tags: mergedTags,
             uploadedBy: user?.id,
             sharedWith,
+            uploadBatchId,
           });
           created.push(toMemoryMedia(saved));
         }
