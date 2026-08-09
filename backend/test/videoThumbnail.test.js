@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
-const { createBrowserCompatibleVideo, createVideoThumbnail } = require('../src/videoThumbnail');
+const { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail } = require('../src/videoThumbnail');
 
 const run = (command, args) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { stdio: 'ignore' });
@@ -27,6 +27,24 @@ test('영상에서 JPEG 썸네일을 생성한다', async (t) => {
   const thumbnail = await fs.readFile(thumbnailPath);
   assert.equal(thumbnail[0], 0xff);
   assert.equal(thumbnail[1], 0xd8);
+  assert.ok(thumbnail.length > 100);
+});
+
+test('사진에서 WebP 썸네일을 생성한다', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-image-thumbnail-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const imagePath = path.join(directory, 'sample.jpg');
+  const thumbnailPath = path.join(directory, 'thumbnail.webp');
+
+  await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=orange:s=1200x900', '-frames:v', '1', imagePath,
+  ]);
+  await createImageThumbnail(imagePath, thumbnailPath);
+
+  const thumbnail = await fs.readFile(thumbnailPath);
+  assert.equal(thumbnail.subarray(0, 4).toString(), 'RIFF');
+  assert.equal(thumbnail.subarray(8, 12).toString(), 'WEBP');
   assert.ok(thumbnail.length > 100);
 });
 

@@ -848,13 +848,15 @@ const AlbumPage = () => {
                                   src={item.src}
                                   muted
                                   playsInline
-                                  preload="metadata"
+                                  preload="none"
                                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
                               ) : (
                                 <img
                                   src={item.thumbnail || item.src}
                                   alt={item.title}
+                                  loading="lazy"
+                                  decoding="async"
                                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
                               )}

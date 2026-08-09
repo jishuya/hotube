@@ -32,9 +32,9 @@ const DayAlbumPage = () => {
 
   useEffect(() => {
     let active = true;
-    const loadMedia = (markAsLoaded = false) => getAllVideos()
+    const loadMedia = (markAsLoaded = false) => getAllVideos({ uploadedAt: date })
       .then((items) => {
-        if (active) setMedia(items.map(toMemoryMedia).filter((item) => item.date === date));
+        if (active) setMedia(items.map(toMemoryMedia));
       })
       .catch((error) => console.error('날짜별 미디어 조회 실패:', error))
       .finally(() => {
@@ -119,9 +119,9 @@ const DayAlbumPage = () => {
                     </span>
                   )}
                   {item.type === 'video' && !item.thumbnail ? (
-                    <video src={item.src} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <video src={item.src} preload="none" muted playsInline className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   ) : (
-                    <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   )}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
                     <div className="flex items-center justify-between gap-2">

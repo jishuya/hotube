@@ -13,12 +13,13 @@ const {
   resolveMediaPath,
   toStoredMediaPath,
 } = require('../mediaStorage');
-const { createBrowserCompatibleVideo, createVideoThumbnail } = require('../videoThumbnail');
+const { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail } = require('../videoThumbnail');
 const {
   createFileMedia,
   createMedia,
   deleteMedia,
   deleteMediaByDate,
+  getCalendarMedia,
   getMedia,
   getMediaAccess,
   getMediaDateRange,
@@ -67,6 +68,25 @@ router.get('/getMediaDateRange', async (req, res) => {
   }
 });
 
+router.get('/getCalendarMedia', async (req, res) => {
+  try {
+    const viewer = req.query.viewerId ? await fetchUserById(req.query.viewerId) : null;
+    if (!viewer) return res.status(401).json({ error: '로그인 정보가 필요합니다' });
+    const calendar = await getCalendarMedia({
+      viewerId: viewer.id,
+      viewerCategory: viewer.category,
+      viewerRole: viewer.role,
+    });
+    return res.json({
+      dates: calendar.dates,
+      unreadMedia: calendar.unreadMedia.map(mapMediaRowToVideo),
+    });
+  } catch (error) {
+    console.error('캘린더 미디어 조회 오류:', error);
+    return sendRouteError(res, '캘린더 미디어 조회 실패', error);
+  }
+});
+
 router.get("/getVideos", async (req, res) => {
   try {
     const contentType = req.query.contentType || null;
@@ -77,6 +97,8 @@ router.get("/getVideos", async (req, res) => {
     const dateTo = req.query.dateTo || null;
     const source = req.query.source || null;
     const mediaType = req.query.mediaType || null;
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
     const viewerId = req.query.viewerId || null;
     const viewer = viewerId ? await fetchUserById(viewerId) : null;
     if (!viewer) return res.status(401).json({ error: '로그인 정보가 필요합니다' });
@@ -101,12 +123,20 @@ router.get("/getVideos", async (req, res) => {
     if (mediaType && !['photo', 'video'].includes(mediaType)) {
       return res.status(400).json({ error: "mediaType은 photo 또는 video여야 합니다" });
     }
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
+      return res.status(400).json({ error: "limit은 1부터 100 사이의 정수여야 합니다" });
+    }
+    if (!Number.isInteger(offset) || offset < 0) {
+      return res.status(400).json({ error: "offset은 0 이상의 정수여야 합니다" });
+    }
 
     const videos = await listMedia({
       contentType, search, tag, uploadedAt, dateFrom, dateTo, source, mediaType,
       viewerCategory: viewer.category,
       viewerRole: viewer.role,
       viewerId: viewer.id,
+      limit,
+      offset,
     });
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
@@ -172,6 +202,9 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       await createBrowserCompatibleVideo(req.file.path, path.join(absoluteDirectory, browserVideoFilename));
       storedFilePath = browserVideoPath;
     } else {
+      const thumbnailFilename = `${randomUUID()}.webp`;
+      thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
+      await createImageThumbnail(req.file.path, path.join(absoluteDirectory, thumbnailFilename));
       storedFilePath = toStoredMediaPath(relativeDirectory, req.file.filename);
       await fs.rename(req.file.path, resolveMediaPath(storedFilePath));
     }

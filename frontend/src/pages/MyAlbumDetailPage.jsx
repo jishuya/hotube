@@ -296,7 +296,7 @@ const MyAlbumDetailPage = () => {
                       longPressTriggeredRef.current = false;
                     }}
                   >
-                    <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   </Link>
                   {isSystemAlbum && (
                     <span className="pointer-events-none absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm">
@@ -477,9 +477,9 @@ const MyAlbumDetailPage = () => {
                         aria-label={`${item.title} ${selected ? '선택 해제' : '선택'}`}
                       >
                         {item.type === 'video' && !item.thumbnail ? (
-                          <video src={item.src} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                          <video src={item.src} muted playsInline preload="none" className="h-full w-full object-cover" />
                         ) : (
-                          <img src={item.thumbnail || item.src} alt="" className="h-full w-full object-cover" />
+                          <img src={item.thumbnail || item.src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                         )}
                         <span className={`absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                           selected ? 'border-primary bg-primary text-white' : 'border-white bg-black/35 text-transparent'

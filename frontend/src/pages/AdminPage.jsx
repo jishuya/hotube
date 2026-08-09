@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Icon } from '@iconify/react';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { getAllVideos, addVideo, updateVideo, deleteVideo } from '../services/videoApi';
 import Header from '../components/common/Header';
@@ -382,9 +383,7 @@ const AdminPage = () => {
                     </div>
                   ) : videos.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4">
-                      <span className="material-symbols-outlined text-6xl text-primary/30">
-                        video_library
-                      </span>
+                      <Icon icon="mdi:video-outline" className="text-6xl text-primary/30" />
                       <p className="text-slate-500">아직 영상이 없습니다. 첫 번째 영상을 등록해보세요!</p>
                     </div>
                   ) : (
@@ -412,14 +411,14 @@ const AdminPage = () => {
                                   onClick={() => handleEdit(video)}
                                   className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1"
                                 >
-                                  <span className="material-symbols-outlined text-base">edit</span>
+                                  <Icon icon="mdi:pencil-outline" className="text-base" />
                                   수정
                                 </button>
                                 <button
                                   onClick={() => handleDelete(video.id)}
                                   className="text-xs text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1"
                                 >
-                                  <span className="material-symbols-outlined text-base">delete</span>
+                                  <Icon icon="mdi:trash-can-outline" className="text-base" />
                                   삭제
                                 </button>
                               </div>
@@ -474,13 +473,13 @@ const AdminPage = () => {
                                       onClick={() => handleEdit(video)}
                                       className="text-slate-500 hover:text-primary transition-colors"
                                     >
-                                      <span className="material-symbols-outlined">edit</span>
+                                      <Icon icon="mdi:pencil-outline" className="text-2xl" />
                                     </button>
                                     <button
                                       onClick={() => handleDelete(video.id)}
                                       className="text-slate-500 hover:text-red-500 transition-colors"
                                     >
-                                      <span className="material-symbols-outlined">delete</span>
+                                      <Icon icon="mdi:trash-can-outline" className="text-2xl" />
                                     </button>
                                   </div>
                                 </td>

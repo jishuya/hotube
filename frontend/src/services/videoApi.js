@@ -9,6 +9,7 @@ const FUNCTIONS_URL = {
   deleteMediaByDate: `${API_BASE_URL}/deleteMediaByDate`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
+  getCalendarMedia: `${API_BASE_URL}/getCalendarMedia`,
   getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
   getFavoriteMedia: `${API_BASE_URL}/getFavoriteMedia`,
   getLikedMedia: `${API_BASE_URL}/getLikedMedia`,
@@ -73,6 +74,18 @@ export const getMediaDateRange = async () => {
   const response = await fetch(FUNCTIONS_URL.getMediaDateRange);
   if (!response.ok) throw new Error('미디어 날짜 범위를 가져오는데 실패했습니다');
   return response.json();
+};
+
+export const getCalendarMedia = async () => {
+  const response = await fetch(
+    `${FUNCTIONS_URL.getCalendarMedia}?viewerId=${encodeURIComponent(getViewerId())}`,
+  );
+  if (!response.ok) throw new Error('캘린더 미디어를 가져오는데 실패했습니다');
+  const calendar = await response.json();
+  return {
+    dates: calendar.dates || [],
+    unreadMedia: (calendar.unreadMedia || []).map(resolveMediaUrls),
+  };
 };
 
 // 단일 비디오 조회

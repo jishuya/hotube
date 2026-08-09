@@ -1,24 +1,29 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import {
-  HomePage,
-  VideoPage,
-  AdminPage,
-  CalendarPage,
-  AlbumPage,
-  UploadPage,
-  MyAlbumPage,
-  MyAlbumDetailPage,
-  MyPage,
-  DayAlbumPage,
-  MediaViewerPage,
-  SupportManagementPage,
-} from './pages';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import BottomNavigationLayout from './components/common/BottomNavigationLayout';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const VideoPage = lazy(() => import('./pages/VideoPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
+const AlbumPage = lazy(() => import('./pages/AlbumPage'));
+const UploadPage = lazy(() => import('./pages/UploadPage'));
+const MyAlbumPage = lazy(() => import('./pages/MyAlbumPage'));
+const MyAlbumDetailPage = lazy(() => import('./pages/MyAlbumDetailPage'));
+const MyPage = lazy(() => import('./pages/MyPage'));
+const DayAlbumPage = lazy(() => import('./pages/DayAlbumPage'));
+const MediaViewerPage = lazy(() => import('./pages/MediaViewerPage'));
+const SupportManagementPage = lazy(() => import('./pages/SupportManagementPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+
+const PageLoadingFallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background">
+    <Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" aria-label="페이지 불러오는 중" />
+  </div>
+);
 
 // 로그인 필요한 라우트 보호
 const ProtectedRoute = ({ children }) => {
@@ -190,7 +195,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppRoutes />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <AppRoutes />
+        </Suspense>
       </AuthProvider>
     </Router>
   );

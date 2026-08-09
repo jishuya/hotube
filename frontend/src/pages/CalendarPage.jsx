@@ -5,8 +5,7 @@ import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
-import { getAllVideos, toMemoryMedia } from '../services/videoApi';
-import { useAuth } from '../contexts/AuthContext';
+import { getCalendarMedia, toMemoryMedia } from '../services/videoApi';
 import { DayPickerDropdown } from '../components/common/CustomSelect';
 
 const formatRecentDate = (dateString) => new Intl.DateTimeFormat('ko-KR', {
@@ -63,25 +62,17 @@ const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
 const CalendarPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
   const monthParam = searchParams.get('month');
   const month = useMemo(() => parseMonthKey(monthParam) || new Date(), [monthParam]);
   const [mediaItems, setMediaItems] = useState([]);
+  const [mediaDates, setMediaDates] = useState([]);
   const [showAllRecent, setShowAllRecent] = useState(false);
   const selectedMonth = formatMonthKey(month);
-  const mediaByDate = useMemo(() => mediaItems.reduce((groups, item) => {
-    if (item.date) {
-      if (!groups[item.date]) groups[item.date] = [];
-      groups[item.date].push(item);
-    }
-    return groups;
-  }, {}), [mediaItems]);
-  const unreadDates = Object.keys(mediaByDate)
-    .filter((date) => date.startsWith(selectedMonth)
-      && mediaByDate[date].some((item) => !user?.watchedVideos?.includes(item.id)))
+  const unreadDates = [...new Set(mediaItems
+    .map((item) => item.date)
+    .filter((date) => date?.startsWith(selectedMonth)))]
     .sort((a, b) => b.localeCompare(a));
   const recentActivity = useMemo(() => Object.entries(mediaItems
-    .filter((item) => !user?.watchedVideos?.includes(item.id))
     .reduce((groups, item) => {
       if (!item.date) return groups;
       if (!groups[item.date]) groups[item.date] = [];
@@ -95,12 +86,15 @@ const CalendarPage = () => {
         !latest || new Date(item.createdAt || 0) > new Date(latest) ? item.createdAt : latest
       ), null),
     }))
-    .sort((a, b) => new Date(b.latestCreatedAt || 0) - new Date(a.latestCreatedAt || 0)), [mediaItems, user?.watchedVideos]);
+    .sort((a, b) => new Date(b.latestCreatedAt || 0) - new Date(a.latestCreatedAt || 0)), [mediaItems]);
   const visibleRecentActivity = showAllRecent ? recentActivity : recentActivity.slice(0, 3);
 
   useEffect(() => {
-    const loadMedia = () => getAllVideos()
-      .then((items) => setMediaItems(items.map(toMemoryMedia)))
+    const loadMedia = () => getCalendarMedia()
+      .then(({ dates, unreadMedia }) => {
+        setMediaDates(dates);
+        setMediaItems(unreadMedia.map(toMemoryMedia));
+      })
       .catch((error) => console.error('캘린더 미디어 조회 실패:', error));
     loadMedia();
     window.addEventListener('hotube:media-updated', loadMedia);
@@ -136,7 +130,7 @@ const CalendarPage = () => {
             showOutsideDays
             fixedWeeks
             modifiers={{
-              hasMedia: Object.keys(mediaByDate).map(parseDateKey),
+              hasMedia: mediaDates.map(parseDateKey),
               unread: unreadDates.map(parseDateKey),
             }}
             components={{ DayButton: CalendarDayButton, Dropdown: DayPickerDropdown }}
@@ -174,9 +168,9 @@ const CalendarPage = () => {
                           aria-label={item.title}
                         >
                           {item.type === 'video' && !item.thumbnail ? (
-                            <video src={item.src} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            <video src={item.src} preload="none" muted playsInline className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                           ) : (
-                            <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                           )}
                           {item.type === 'video' && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/10">

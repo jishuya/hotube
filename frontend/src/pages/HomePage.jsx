@@ -5,12 +5,16 @@ import Header from '../components/common/Header';
 import VideoCard from '../components/common/VideoCard';
 import { getAllVideos } from '../services/videoApi';
 
+const PAGE_SIZE = 40;
+
 const HomePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchQuery = searchParams.get('q') || '';
   const tabParam = searchParams.get('tab') || 'all';
 
   const [videos, setVideos] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeTab, setActiveTab] = useState(tabParam); // all, longform, short, timeline
 
   // URL 파라미터로 탭 상태 동기화
@@ -42,30 +46,57 @@ const HomePage = () => {
       : activeTab === 'short'
         ? 'short'
         : null;
-
-    loadVideos(contentType);
-  }, [activeTab]);
-
-  const loadVideos = async (contentType = null) => {
-    try {
-      setLoading(true);
-      const fetchedVideos = await getAllVideos(contentType);
-      setVideos(fetchedVideos);
-
-      // 타임라인 뷰에서 연도는 열려있고, 월은 닫혀있게 설정
-      const years = [...new Set(fetchedVideos.map(v => v.year))];
-      const initialExpandedYears = {};
-      const initialExpandedMonths = {};
-      years.forEach(year => {
-        initialExpandedYears[year] = true;
-        // 월은 기본적으로 닫혀있음 (초기화하지 않음)
+    let active = true;
+    setLoading(true);
+    getAllVideos({
+      contentType,
+      search: searchQuery.trim(),
+      limit: PAGE_SIZE,
+      offset: 0,
+    })
+      .then((fetchedVideos) => {
+        if (!active) return;
+        setVideos(fetchedVideos);
+        setHasMore(fetchedVideos.length === PAGE_SIZE);
+        setExpandedYears(Object.fromEntries(
+          [...new Set(fetchedVideos.map((video) => video.year))].map((year) => [year, true]),
+        ));
+        setExpandedMonths({});
+      })
+      .catch((error) => console.error('Error loading videos:', error))
+      .finally(() => {
+        if (active) setLoading(false);
       });
-      setExpandedYears(initialExpandedYears);
-      setExpandedMonths(initialExpandedMonths);
+    return () => {
+      active = false;
+    };
+  }, [activeTab, searchQuery]);
+
+  const loadMoreVideos = async () => {
+    const contentType = activeTab === 'longform'
+      ? 'long'
+      : activeTab === 'short'
+        ? 'short'
+        : null;
+    try {
+      setLoadingMore(true);
+      const fetchedVideos = await getAllVideos({
+        contentType,
+        search: searchQuery.trim(),
+        limit: PAGE_SIZE,
+        offset: videos.length,
+      });
+      const nextVideos = [...videos, ...fetchedVideos];
+      setVideos(nextVideos);
+      setHasMore(fetchedVideos.length === PAGE_SIZE);
+      setExpandedYears((current) => ({
+        ...current,
+        ...Object.fromEntries(fetchedVideos.map((video) => [video.year, true])),
+      }));
     } catch (error) {
       console.error('Error loading videos:', error);
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -425,6 +456,18 @@ const HomePage = () => {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {hasMore && videos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={loadMoreVideos}
+                    disabled={loadingMore}
+                    className="mx-auto flex min-w-40 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {loadingMore && <Icon icon="mdi:loading" className="animate-spin text-xl" />}
+                    {loadingMore ? '불러오는 중...' : '더 보기'}
+                  </button>
                 )}
 
                 {/* 검색 결과 없음 */}

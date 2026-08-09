@@ -54,6 +54,8 @@ const listMedia = async ({
   viewerCategory = null,
   viewerRole = null,
   viewerId = null,
+  limit = null,
+  offset = 0,
 } = {}) => {
   const conditions = [];
   const params = [];
@@ -110,12 +112,16 @@ const listMedia = async ({
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limitClause = limit
+    ? `LIMIT ${addParam(limit)} OFFSET ${addParam(offset)}`
+    : '';
 
   const result = await pgDb.query(`
     ${MEDIA_WITH_TAGS_SELECT}
     ${whereClause}
     GROUP BY m.id
     ORDER BY m.created_at DESC
+    ${limitClause}
   `, params);
 
   return result.rows;
@@ -185,6 +191,55 @@ const getMediaDateRange = async () => {
   `);
 
   return result.rows[0] || { min_date: null, max_date: null };
+};
+
+const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
+  const params = [viewerId, viewerCategory, viewerRole];
+  const accessCondition = `(
+    $3::text IN ('admin', 'sub-admin')
+    OR $2::text = ANY(m.shared_with)
+    OR m.uploaded_by = $1
+  )`;
+
+  const [datesResult, unreadResult] = await Promise.all([
+    pgDb.query(`
+      SELECT TO_CHAR(m.uploaded_at, 'YYYY-MM-DD') AS date
+      FROM media m
+      WHERE m.uploaded_at IS NOT NULL
+        AND ${accessCondition}
+      GROUP BY m.uploaded_at
+      ORDER BY m.uploaded_at DESC
+    `, params),
+    pgDb.query(`
+      SELECT
+        m.id,
+        m.title,
+        m.media_type,
+        m.content_type,
+        m.youtube_url,
+        m.file_path,
+        m.thumbnail_url,
+        m.thumbnail_path,
+        m.uploaded_at,
+        m.created_at,
+        m.updated_at
+      FROM media m
+      WHERE m.uploaded_at IS NOT NULL
+        AND ${accessCondition}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_watched_media uwm
+          WHERE uwm.user_id = $1
+            AND uwm.media_id = m.id
+        )
+      ORDER BY m.created_at DESC
+    `, params),
+  ]);
+
+  return {
+    dates: datesResult.rows.map((row) => row.date),
+    unreadMedia: unreadResult.rows,
+  };
 };
 
 const mediaExists = async (db, id) => {
@@ -489,6 +544,7 @@ module.exports = {
   deleteMedia,
   deleteMediaByDate,
   getMedia,
+  getCalendarMedia,
   getMediaDateRange,
   getMediaAccess,
   listFavoriteMedia,

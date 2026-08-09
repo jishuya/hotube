@@ -27,6 +27,8 @@ const VideoCard = ({ video, isShort = false }) => {
         <img
           src={video.thumbnailUrl}
           alt={video.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover"
         />
         {/* 재생시간 */}

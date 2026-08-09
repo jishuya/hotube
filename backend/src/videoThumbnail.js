@@ -34,6 +34,33 @@ const createVideoThumbnail = (inputPath, outputPath) => new Promise((resolve, re
   });
 });
 
+/** 사진 원본을 목록용 640px WebP 썸네일로 변환한다. */
+const createImageThumbnail = (inputPath, outputPath) => new Promise((resolve, reject) => {
+  const ffmpeg = spawn(ffmpegExecutable, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-y',
+    '-i', inputPath,
+    '-frames:v', '1',
+    '-vf', "scale='min(640,iw)':-2",
+    '-c:v', 'libwebp',
+    '-quality', '78',
+    '-compression_level', '4',
+    outputPath,
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  let errorOutput = '';
+  ffmpeg.stderr.setEncoding('utf8');
+  ffmpeg.stderr.on('data', (chunk) => {
+    errorOutput = `${errorOutput}${chunk}`.slice(-8192);
+  });
+  ffmpeg.on('error', (error) => reject(new Error(`FFmpeg를 실행할 수 없습니다: ${error.message}`)));
+  ffmpeg.on('close', (code) => {
+    if (code === 0) return resolve();
+    return reject(new Error(`사진 썸네일 생성 실패 (FFmpeg ${code}): ${errorOutput.trim()}`));
+  });
+});
+
 /**
  * HEVC 등 브라우저 호환성이 낮은 영상을 H.264/AAC MP4로 변환한다.
  * faststart를 적용해 파일 전체 다운로드 전에도 재생을 시작할 수 있게 한다.
@@ -67,4 +94,4 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
   });
 });
 
-module.exports = { createBrowserCompatibleVideo, createVideoThumbnail };
+module.exports = { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail };

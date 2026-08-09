@@ -34,9 +34,13 @@ app.use(pushNotificationRoutes);
 const frontendDist = path.resolve(__dirname, "../../frontend/dist");
 
 if (fs.existsSync(frontendDist)) {
-  const sendPwaFile = (filename, contentType) => (req, res) => {
+  const setNoCacheHeaders = (res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
+  };
+
+  const sendPwaFile = (filename, contentType) => (req, res) => {
+    setNoCacheHeaders(res);
     res.type(contentType);
     return res.sendFile(path.join(frontendDist, filename));
   };
@@ -46,12 +50,25 @@ if (fs.existsSync(frontendDist)) {
     "/manifest.webmanifest",
     sendPwaFile("manifest.webmanifest", "application/manifest+json"),
   );
-  app.use(express.static(frontendDist));
+  app.use('/assets', express.static(path.join(frontendDist, 'assets'), {
+    immutable: true,
+    maxAge: '1y',
+    setHeaders: (res) => {
+      res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  }));
+  app.use(express.static(frontendDist, {
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+      if (path.basename(filePath) === 'index.html') setNoCacheHeaders(res);
+    },
+  }));
   app.get("*", (req, res, next) => {
     if (!req.accepts("html")) {
       return next();
     }
 
+    setNoCacheHeaders(res);
     return res.sendFile(path.join(frontendDist, "index.html"));
   });
 }
