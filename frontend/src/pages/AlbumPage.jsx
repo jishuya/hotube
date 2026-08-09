@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CustomSelect from '../components/common/CustomSelect';
 import ToastContainer from '../components/common/Toast';
 import Modal from '../components/common/Modal';
-import { DateRangePicker } from '../components/common/DatePickerField';
+import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const currentMonthKey = formatMonthKey(new Date());
@@ -107,6 +107,7 @@ const AlbumPage = () => {
   const [selectionDialog, setSelectionDialog] = useState('');
   const [selectionDeleteOpen, setSelectionDeleteOpen] = useState(false);
   const [selectionTagDraft, setSelectionTagDraft] = useState('');
+  const [selectionDateDraft, setSelectionDateDraft] = useState('');
   const [selectionFamilies, setSelectionFamilies] = useState(['dad', 'mom']);
   const [toasts, setToasts] = useState([]);
   const { user, isLiked, updateUser } = useAuth();
@@ -264,6 +265,21 @@ const AlbumPage = () => {
       : [...current, date]);
   };
 
+  const toggleDateMediaSelection = (media) => {
+    const dateMediaIds = media.map((item) => item.id);
+    setSelectionActive(true);
+    setSelectedMediaIds((current) => {
+      const selectedIds = new Set(current);
+      const allSelected = dateMediaIds.every((id) => selectedIds.has(id));
+      dateMediaIds.forEach((id) => {
+        if (allSelected) selectedIds.delete(id);
+        else selectedIds.add(id);
+      });
+      return [...selectedIds];
+    });
+    setSelectionError('');
+  };
+
   const saveNote = async (date) => {
     if (noteSaving || !user?.id) return;
     setNoteSaving(true);
@@ -419,16 +435,39 @@ const AlbumPage = () => {
   };
 
   const runSelectedAction = async (action, task, successMessage) => {
-    if (!selectedMediaIds.length || selectionBusy) return;
+    if (!selectedMediaIds.length || selectionBusy) return null;
     setSelectionBusy(action);
     const ids = [...selectedMediaIds];
     const results = await Promise.allSettled(ids.map(task));
-    const successCount = results.filter((result) => result.status === 'fulfilled').length;
-    const failedCount = results.length - successCount;
+    const successIds = ids.filter((_, index) => results[index].status === 'fulfilled');
+    const failedIds = ids.filter((_, index) => results[index].status === 'rejected');
     setSelectionBusy('');
-    if (successCount) showToast('success', `${successCount}개 ${successMessage}`);
-    if (failedCount) setSelectionError(`${failedCount}개는 처리하지 못했습니다.`);
+    if (successIds.length) showToast('success', `${successIds.length}개 ${successMessage}`);
+    if (failedIds.length) setSelectionError(`${failedIds.length}개는 처리하지 못했습니다.`);
     else setSelectionError('');
+    return { successIds, failedIds };
+  };
+
+  const openSelectedDateDialog = () => {
+    const firstSelected = mediaItems.find((item) => selectedMediaIds.includes(item.id));
+    setSelectionDateDraft(firstSelected?.date || '');
+    setSelectionDialog('date');
+  };
+
+  const saveSelectedDate = async (event) => {
+    event.preventDefault();
+    if (!selectionDateDraft) return;
+    const result = await runSelectedAction(
+      'date',
+      (id) => updateVideo(id, { uploadedAt: selectionDateDraft }, user.id),
+      `미디어의 날짜를 ${selectionDateDraft}(으)로 변경했습니다.`,
+    );
+    if (!result) return;
+    setSelectedMediaIds(result.failedIds);
+    setSelectionActive(result.failedIds.length > 0);
+    setSelectionDialog('');
+    setReloadKey((current) => current + 1);
+    if (result.successIds.length) window.dispatchEvent(new Event('hotube:media-updated'));
   };
 
   const addSelectedFavorites = async () => {
@@ -651,6 +690,9 @@ const AlbumPage = () => {
                 const collapsed = collapsedDates.includes(date);
                 const dateNote = dateNotes[date];
                 const canEditNote = dateNote?.createdBy === user?.id || ['admin', 'sub-admin'].includes(user?.role);
+                const selectedDateMediaCount = media.filter((item) => selectedMediaIds.includes(item.id)).length;
+                const allDateMediaSelected = selectedDateMediaCount === media.length;
+                const someDateMediaSelected = selectedDateMediaCount > 0 && !allDateMediaSelected;
                 return (
                   <article key={date} className="group/timeline mt-3 first:mt-0">
                     <div className="mb-3">
@@ -674,20 +716,23 @@ const AlbumPage = () => {
                       </Link>
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectionActive((current) => !current);
-                          setSelectedMediaIds([]);
-                          setSelectionError('');
-                        }}
+                        onClick={() => toggleDateMediaSelection(media)}
                         className={`flex size-8 shrink-0 items-center justify-center rounded-full transition ${
-                          selectionMode
+                          allDateMediaSelected
                             ? 'bg-primary text-white shadow-sm'
                             : 'text-text-secondary hover:bg-primary/10 hover:text-primary'
                         }`}
-                        aria-label={selectionMode ? '사진 선택 모드 종료' : '사진 선택'}
-                        title={selectionMode ? '선택 취소' : '사진·영상 선택'}
+                        aria-label={`${formatDateTitle(date)} 미디어 ${allDateMediaSelected ? '전체 선택 해제' : '전체 선택'}`}
+                        title={allDateMediaSelected ? '이 날짜 전체 선택 해제' : '이 날짜 전체 선택'}
                       >
-                        <Icon icon={selectionMode ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-multiple-blank-circle-outline'} className="text-xl" />
+                        <Icon
+                          icon={allDateMediaSelected
+                            ? 'mdi:checkbox-multiple-marked-circle'
+                            : someDateMediaSelected
+                              ? 'mdi:checkbox-multiple-marked-outline'
+                              : 'mdi:select-all'}
+                          className="text-xl"
+                        />
                       </button>
                       </div>
                       <div className="ml-8 mt-1 text-xs text-text-secondary sm:ml-9">
@@ -869,6 +914,7 @@ const AlbumPage = () => {
               ['album', 'mdi:folder-plus-outline', '앨범 만들기', openAlbumCreateModal],
               ['favorite', 'mdi:bookmark-plus-outline', '즐겨찾기', addSelectedFavorites],
               ['like', 'mdi:heart-plus-outline', '좋아요', addSelectedLikes],
+              ['date', 'mdi:calendar-edit-outline', '날짜 변경', openSelectedDateDialog],
               ['family', 'mdi:account-group-outline', '공유가족', () => setSelectionDialog('family')],
               ['download', 'mdi:download-outline', '다운로드', downloadSelectedMedia],
               ['tag', 'mdi:tag-plus-outline', '태그', () => setSelectionDialog('tag')],
@@ -960,7 +1006,25 @@ const AlbumPage = () => {
           <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
             <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!selectionBusy) setSelectionDialog(''); }} aria-label="작업 창 닫기" />
             <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-              {selectionDialog === 'tag' ? (
+              {selectionDialog === 'date' ? (
+                <form onSubmit={saveSelectedDate}>
+                  <h2 className="text-lg font-bold text-gray-900">날짜 변경</h2>
+                  <p className="mt-1 text-sm text-gray-600">선택한 {selectedMediaIds.length}개 미디어를 같은 날짜로 이동합니다.</p>
+                  <div className="mt-4">
+                    <DatePickerField
+                      label="변경할 날짜"
+                      value={selectionDateDraft}
+                      onChange={setSelectionDateDraft}
+                    />
+                  </div>
+                  <div className="mt-5 flex gap-2">
+                    <button type="button" onClick={() => setSelectionDialog('')} disabled={Boolean(selectionBusy)} className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700">취소</button>
+                    <button type="submit" disabled={Boolean(selectionBusy) || !selectionDateDraft} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white disabled:opacity-50">
+                      {selectionBusy === 'date' && <Icon icon="mdi:loading" className="animate-spin" />} 변경
+                    </button>
+                  </div>
+                </form>
+              ) : selectionDialog === 'tag' ? (
                 <form onSubmit={saveSelectedTags}>
                   <h2 className="text-lg font-bold text-gray-900">개별 태그 추가</h2>
                   <p className="mt-1 text-sm text-gray-600">선택한 각 미디어의 기존 태그는 유지하고 새 태그를 추가합니다.</p>
