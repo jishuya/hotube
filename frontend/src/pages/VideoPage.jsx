@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { getAllVideos } from '../services/videoApi';
+import { getAllVideos, getVideoById } from '../services/videoApi';
 import { extractVideoId } from '../services/youtubeService';
 import { toggleLike, markVideoWatched } from '../services/authApi';
 import { dismissMediaNotifications } from '../services/pushApi';
@@ -28,9 +28,30 @@ const VideoPage = () => {
     }
   }, []);
 
+  const loadVideoData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const currentVideo = await getVideoById(videoId);
+      setVideo(currentVideo);
+
+      const relatedVideos = await getAllVideos({
+        contentType: currentVideo.type,
+        year: currentVideo.year,
+        limit: 20,
+      });
+      setRecommendedVideos(relatedVideos.filter((item) => item.id !== videoId));
+    } catch (error) {
+      console.error('Error loading video:', error);
+      setVideo(null);
+      setRecommendedVideos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [videoId]);
+
   useEffect(() => {
     loadVideoData();
-  }, [videoId]);
+  }, [loadVideoData]);
 
   // 시청 기록 추가
   useEffect(() => {
@@ -41,32 +62,6 @@ const VideoPage = () => {
       }).catch(err => console.error('시청 기록 추가 실패:', err));
     }
   }, [video, user, videoId, markWatchedLocal]);
-
-  const loadVideoData = async () => {
-    try {
-      setLoading(true);
-      const allVideos = await getAllVideos();
-
-      // 현재 비디오 찾기
-      const currentVideo = allVideos.find(v => v.id === videoId);
-      setVideo(currentVideo);
-
-      // 추천 영상 (같은 연도, 같은 타입)
-      const sameYearAndType = allVideos
-        .filter(v => v.year === currentVideo?.year && v.type === currentVideo?.type);
-
-      const currentIndex = sameYearAndType.findIndex(v => v.id === videoId);
-      const afterCurrent = sameYearAndType.slice(currentIndex + 1);
-      const beforeCurrent = sameYearAndType.slice(0, currentIndex);
-      const recommended = [...afterCurrent, ...beforeCurrent];
-
-      setRecommendedVideos(recommended);
-    } catch (error) {
-      console.error('Error loading video:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // 좋아요 토글
   const handleToggleLike = async () => {

@@ -51,6 +51,8 @@ const listMedia = async ({
   dateTo = null,
   source = null,
   mediaType = null,
+  year = null,
+  ids = null,
   viewerCategory = null,
   viewerRole = null,
   viewerId = null,
@@ -72,6 +74,8 @@ const listMedia = async ({
   if (source === 'file') conditions.push("m.media_type IN ('photo', 'video')");
   if (mediaType === 'photo') conditions.push("m.media_type = 'photo'");
   if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
+  if (year) conditions.push(`m.year = ${addParam(year)}`);
+  if (Array.isArray(ids) && ids.length > 0) conditions.push(`m.id = ANY(${addParam(ids)}::text[])`);
   if (viewerRole !== 'admin' && viewerRole !== 'sub-admin') {
     if (!viewerCategory) conditions.push('FALSE');
     else {
@@ -221,6 +225,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         m.thumbnail_url,
         m.thumbnail_path,
         m.uploaded_at,
+        m.upload_batch_id,
         m.created_at,
         m.updated_at
       FROM media m

@@ -97,6 +97,10 @@ router.get("/getVideos", async (req, res) => {
     const dateTo = req.query.dateTo || null;
     const source = req.query.source || null;
     const mediaType = req.query.mediaType || null;
+    const year = req.query.year ? Number(req.query.year) : null;
+    const ids = req.query.ids
+      ? [...new Set(String(req.query.ids).split(',').map((id) => id.trim()).filter(Boolean))]
+      : null;
     const limit = req.query.limit ? Number(req.query.limit) : null;
     const offset = req.query.offset ? Number(req.query.offset) : 0;
     const viewerId = req.query.viewerId || null;
@@ -123,6 +127,12 @@ router.get("/getVideos", async (req, res) => {
     if (mediaType && !['photo', 'video'].includes(mediaType)) {
       return res.status(400).json({ error: "mediaType은 photo 또는 video여야 합니다" });
     }
+    if (year !== null && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
+      return res.status(400).json({ error: "year는 1900부터 2100 사이의 정수여야 합니다" });
+    }
+    if (ids && (ids.length > 200 || ids.some((id) => id.length > 200))) {
+      return res.status(400).json({ error: "ids는 최대 200개까지 조회할 수 있습니다" });
+    }
     if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
       return res.status(400).json({ error: "limit은 1부터 100 사이의 정수여야 합니다" });
     }
@@ -131,7 +141,7 @@ router.get("/getVideos", async (req, res) => {
     }
 
     const videos = await listMedia({
-      contentType, search, tag, uploadedAt, dateFrom, dateTo, source, mediaType,
+      contentType, search, tag, uploadedAt, dateFrom, dateTo, source, mediaType, year, ids,
       viewerCategory: viewer.category,
       viewerRole: viewer.role,
       viewerId: viewer.id,

@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import ChildInfoModal from './ChildInfoModal';
 import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
-import { getAllVideos, toMemoryMedia } from '../../services/videoApi';
+import { getCalendarMedia, toMemoryMedia } from '../../services/videoApi';
 import { markAllVideosWatched, markVideoWatched } from '../../services/authApi';
 import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
@@ -195,10 +195,10 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     }
     let active = true;
     const loadMediaNotifications = () => {
-      getAllVideos()
-        .then((items) => {
+      getCalendarMedia()
+        .then(({ unreadMedia }) => {
           if (active) {
-            setMediaNotifications(items.map(toMemoryMedia));
+            setMediaNotifications(unreadMedia.map(toMemoryMedia));
             setMediaNotificationsLoadedFor(user.id);
             setMediaNotificationError('');
           }

@@ -8,6 +8,7 @@ import DatePickerField from '../components/common/DatePickerField';
 import {
   deleteVideo,
   getAllVideos,
+  getVideoById,
   getMediaDetails,
   toMemoryMedia,
   toggleFavorite,
@@ -408,20 +409,25 @@ const MediaViewerPage = () => {
     setToasts([]);
   }, [mediaId]);
 
-  const loadDetails = () => getMediaDetails(mediaId, user?.id)
+  const loadDetails = useCallback(() => getMediaDetails(mediaId, user?.id)
     .then((data) => {
       setDetails(data);
       setSharedWith(data.sharedWith?.length ? data.sharedWith : ['dad', 'mom']);
     })
-    .catch((loadError) => showToast('error', loadError.message));
+    .catch((loadError) => showToast('error', loadError.message)), [mediaId, showToast, user?.id]);
 
   useEffect(() => {
     setLoading(true);
+    const loadMediaItems = Array.isArray(albumMediaIds) && albumMediaIds.length > 0
+      ? getAllVideos({ ids: albumMediaIds.join(',') })
+      : requestedDate
+        ? getAllVideos({ uploadedAt: requestedDate })
+        : getVideoById(mediaId).then((item) => [item]);
     Promise.all([
-      getAllVideos().then((allMedia) => setMediaItems(allMedia.map(toMemoryMedia))),
+      loadMediaItems.then((allMedia) => setMediaItems(allMedia.map(toMemoryMedia))),
       loadDetails(),
     ]).finally(() => setLoading(false));
-  }, [mediaId, user?.id]);
+  }, [albumMediaIds, loadDetails, mediaId, requestedDate, user?.id]);
 
   useEffect(() => {
     getChildProfile()
@@ -460,7 +466,7 @@ const MediaViewerPage = () => {
         return loadDetails();
       })
       .catch((watchError) => console.error('시청 기록 추가 실패:', watchError));
-  }, [current, user, markWatchedLocal]);
+  }, [current, loadDetails, markWatchedLocal, user]);
 
   const moveTo = (item) => {
     if (item) navigate(`/media/${item.id}?date=${date}`, { state: { returnTo, albumMediaIds } });
