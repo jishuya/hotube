@@ -29,6 +29,8 @@ const { fetchUserById } = require('../services/userService');
 const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
+const MAX_MEDIA_SIZE = 90 * 1024 * 1024;
 
 ensureMediaDirectory();
 
@@ -40,7 +42,7 @@ const upload = multer({
       callback(null, `${randomUUID()}${extension || ''}`);
     },
   }),
-  limits: { fileSize: 1024 * 1024 * 1024 },
+  limits: { fileSize: MAX_MEDIA_SIZE },
   fileFilter: (req, file, callback) => {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) return callback(null, true);
     return callback(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'file'));
@@ -148,6 +150,11 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
   try {
     const tags = JSON.parse(req.body.tags || '[]');
     const isVideo = req.file.mimetype.startsWith('video/');
+    if (!isVideo && req.file.size > MAX_IMAGE_SIZE) {
+      const error = new Error('사진은 개당 20MB까지 업로드할 수 있습니다');
+      error.status = 400;
+      throw error;
+    }
     const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(req.body.uploadedAt);
     const uploader = req.body.uploadedBy ? await fetchUserById(req.body.uploadedBy) : null;
     if (!uploader) {
@@ -179,6 +186,7 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       uploadedAt: req.body.uploadedAt,
       uploadedBy: uploader.id,
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
+      uploadBatchId: req.body.uploadBatchId || null,
     });
     if (browserVideoPath) await fs.unlink(req.file.path).catch(() => {});
     void notifyNewMedia({
@@ -294,7 +302,7 @@ router.delete("/deleteMediaByDate/:date", requireAuth, async (req, res) => {
 router.use((error, req, res, next) => {
   if (!(error instanceof multer.MulterError)) return next(error);
   const message = error.code === 'LIMIT_FILE_SIZE'
-    ? '파일 크기는 1GB를 초과할 수 없습니다'
+    ? '영상은 개당 90MB, 사진은 개당 20MB까지 업로드할 수 있습니다'
     : '사진 또는 영상 파일만 업로드할 수 있습니다';
   return res.status(400).json({ error: message });
 });

@@ -291,6 +291,7 @@ const createFileMedia = async ({
   uploadedAt,
   uploadedBy = null,
   sharedWith = ['dad', 'mom'],
+  uploadBatchId = null,
 }) => {
   let client;
 
@@ -306,10 +307,10 @@ const createFileMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, uploaded_by, shared_with, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $10)
-    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $11)
+    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, now]);
 
     await replaceMediaTags(client, id, tags);
     const createdMedia = await fetchMediaById(client, id);

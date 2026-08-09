@@ -64,6 +64,7 @@ const mapMediaRowToVideo = (row) => ({
   likeCount: row.like_count,
   channelTitle: row.channel_title,
   uploadedBy: row.uploaded_by,
+  uploadBatchId: row.upload_batch_id,
   sharedWith: normalizeArray(row.shared_with),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),

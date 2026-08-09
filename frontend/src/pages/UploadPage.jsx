@@ -12,6 +12,10 @@ import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, upload
 import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 20;
+const MAX_UPLOAD_FILES = 10;
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 90 * 1024 * 1024;
+const MAX_TOTAL_UPLOAD_SIZE = 300 * 1024 * 1024;
 const SHARE_OPTIONS = [
   { value: 'dad', label: '아빠가족' },
   { value: 'mom', label: '엄마가족' },
@@ -158,6 +162,27 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
   const addFiles = (files) => {
     const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    if (selectedFiles.length + mediaFiles.length > MAX_UPLOAD_FILES) {
+      setUploadError(`사진과 영상은 한 번에 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있습니다.`);
+      return;
+    }
+    const oversizedImage = mediaFiles.find((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
+    if (oversizedImage) {
+      setUploadError(`사진은 개당 20MB까지 업로드할 수 있습니다: ${oversizedImage.name}`);
+      return;
+    }
+    const oversizedVideo = mediaFiles.find((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
+    if (oversizedVideo) {
+      setUploadError(`영상은 개당 90MB까지 업로드할 수 있습니다: ${oversizedVideo.name}`);
+      return;
+    }
+    const totalSize = [...selectedFiles, ...mediaFiles]
+      .reduce((sum, item) => sum + (item.file?.size ?? item.size), 0);
+    if (totalSize > MAX_TOTAL_UPLOAD_SIZE) {
+      setUploadError('한 번에 선택한 파일의 전체 용량은 300MB를 초과할 수 없습니다.');
+      return;
+    }
+    setUploadError('');
     Promise.all(mediaFiles.map((file) => new Promise((resolve) => {
       if (file.type.startsWith('video/')) {
         getMediaDate(file).then((mediaDate) => resolve({
@@ -407,7 +432,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       >
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
                         <span className="font-bold">사진 또는 영상 선택</span>
-                        <span className="mt-1 text-xs text-text-secondary">여러 파일을 한번에 선택할 수 있어요.</span>
+                        <span className="mt-1 text-xs text-text-secondary">최대 10개 · 사진 20MB · 영상 90MB · 전체 300MB</span>
                         <input type="file" accept="image/*,video/*" multiple className="sr-only" onChange={(event) => addFiles(event.target.files)} />
                       </label>
 

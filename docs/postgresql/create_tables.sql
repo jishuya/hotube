@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS media (
     like_count INTEGER NOT NULL DEFAULT 0,
     channel_title TEXT,
     uploaded_by TEXT,
+    upload_batch_id TEXT,
     shared_with TEXT[] NOT NULL DEFAULT ARRAY['dad', 'mom']::TEXT[],
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,

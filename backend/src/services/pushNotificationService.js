@@ -38,6 +38,7 @@ const loadVapidKeys = () => {
 };
 
 const ensurePushSubscriptionSchema = async () => {
+  await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS upload_batch_id TEXT`);
   await pgDb.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id UUID PRIMARY KEY,
@@ -267,7 +268,7 @@ const sendToRoles = async (roles, payload) => {
 const getUnreadNotificationCount = async (userId, mediaSince = null) => {
   const result = await pgDb.query(`
     SELECT (
-      SELECT COUNT(*)::integer
+      SELECT COUNT(DISTINCT COALESCE(m.upload_batch_id, m.id))::integer
       FROM media m
       WHERE (
         u.role IN ('admin', 'sub-admin')
@@ -278,7 +279,10 @@ const getUnreadNotificationCount = async (userId, mediaSince = null) => {
         AND NOT EXISTS (
           SELECT 1
           FROM user_watched_media uwm
-          WHERE uwm.user_id = u.id AND uwm.media_id = m.id
+          JOIN media watched_media ON watched_media.id = uwm.media_id
+          WHERE uwm.user_id = u.id
+            AND COALESCE(watched_media.upload_batch_id, watched_media.id)
+              = COALESCE(m.upload_batch_id, m.id)
         )
     ) AS unread_count
     FROM users u

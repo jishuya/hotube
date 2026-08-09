@@ -6,7 +6,7 @@ import ChildInfoModal from './ChildInfoModal';
 import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 import { getAllVideos, toMemoryMedia } from '../../services/videoApi';
-import { markAllVideosWatched } from '../../services/authApi';
+import { markAllVideosWatched, markVideoWatched } from '../../services/authApi';
 import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
@@ -82,12 +82,32 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   );
   const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
   const unreadSupportCount = unreadSupportRequests.length;
-  const unreadMedia = mediaNotifications.filter((media) => {
-    if (user?.watchedVideos?.includes(media.id)) return false;
+  const notificationMedia = mediaNotifications.filter((media) => {
     if (!notificationBaseline || !media.createdAt) return true;
     return new Date(media.createdAt).getTime() > new Date(notificationBaseline).getTime();
   });
-  const unreadMediaCount = unreadMedia.length;
+  const unreadMediaGroups = [...notificationMedia.reduce((groups, media) => {
+    const groupId = media.uploadBatchId || media.id;
+    const existing = groups.get(groupId);
+    if (existing) {
+      existing.mediaIds.push(media.id);
+      existing.mediaItems.push(media);
+      existing.count += 1;
+    } else {
+      groups.set(groupId, {
+        ...media,
+        groupId,
+        mediaIds: [media.id],
+        mediaItems: [media],
+        count: 1,
+      });
+    }
+    return groups;
+  }, new Map()).values()].filter((group) => (
+    !group.mediaIds.some((mediaId) => user?.watchedVideos?.includes(mediaId))
+  ));
+  const unreadMedia = unreadMediaGroups.flatMap((group) => group.mediaItems);
+  const unreadMediaCount = unreadMediaGroups.length;
   const auxiliaryNotificationCount = unreadSupportCount + internalNotifications.length;
   const hasUnreadNotifications = unreadMediaCount > 0 || auxiliaryNotificationCount > 0;
   const notificationCountsLoaded = mediaNotificationsLoadedFor === user?.id
@@ -269,8 +289,15 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     }
   };
 
-  const handleMediaNotificationClick = (media) => {
+  const handleMediaNotificationClick = async (media) => {
     setShowNotifications(false);
+    try {
+      await markVideoWatched(user.id, media.id);
+      markAllWatchedLocal([media.id]);
+      await dismissMediaNotifications(media.mediaIds);
+    } catch (error) {
+      setMediaNotificationError(error.message || '미디어 알림을 확인 처리하지 못했습니다');
+    }
     const dateQuery = media.date ? `?date=${encodeURIComponent(media.date)}` : '';
     navigate(`/media/${encodeURIComponent(media.id)}${dateQuery}`, {
       state: { returnTo: media.date ? `/calendar?month=${media.date.slice(0, 7)}` : '/calendar' },
@@ -420,7 +447,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                           ))}
                         </div>
                       )}
-                      {unreadMedia.length > 0 && (
+                      {unreadMediaGroups.length > 0 && (
                         <div>
                           <div className="flex items-center justify-between border-b border-border bg-background px-4 py-2">
                             <h3 className="text-xs font-bold text-text-secondary">새 미디어</h3>
@@ -434,9 +461,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                               {markingAllMedia ? '처리 중' : '모두 확인'}
                             </button>
                           </div>
-                          {unreadMedia.map((media) => (
+                          {unreadMediaGroups.map((media) => (
                             <button
-                              key={`media-${media.id}`}
+                              key={`media-${media.groupId}`}
                               type="button"
                               onClick={() => handleMediaNotificationClick(media)}
                               className="flex w-full items-center gap-3 border-b border-border bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10"
@@ -449,7 +476,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                                 )}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold">{media.title}</span>
+                                <span className="block truncate text-sm font-semibold">
+                                  {media.count > 1 ? `새 미디어 ${media.count}개가 등록됐어요` : media.title}
+                                </span>
                                 {media.date && <span className="mt-0.5 block text-xs text-text-secondary">{media.date}</span>}
                               </span>
                               <span className="size-2 shrink-0 rounded-full bg-error" aria-label="미확인" />
