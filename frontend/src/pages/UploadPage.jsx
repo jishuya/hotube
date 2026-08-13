@@ -161,11 +161,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   }, [listOnly, filterDateFrom, filterDateTo, filterTag, filterSource, filterMediaType, hasActiveFilters, dateFilterError]);
 
   const addFiles = (files) => {
-    const mediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
-    if (selectedFiles.length + mediaFiles.length > MAX_UPLOAD_FILES) {
+    const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
+    const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    if (availableSlots === 0) {
       setUploadError(`사진과 영상은 한 번에 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있습니다.`);
       return;
     }
+    const mediaFiles = selectedMediaFiles.slice(0, availableSlots);
+    const exceededSelectionLimit = selectedMediaFiles.length > availableSlots;
     const oversizedImage = mediaFiles.find((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
     if (oversizedImage) {
       setUploadError(`사진은 개당 20MB까지 업로드할 수 있습니다: ${oversizedImage.name}`);
@@ -182,7 +185,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       setUploadError('한 번에 선택한 파일의 전체 용량은 300MB를 초과할 수 없습니다.');
       return;
     }
-    setUploadError('');
+    setUploadError(exceededSelectionLimit
+      ? `최대 ${MAX_UPLOAD_FILES}개까지만 선택되어 초과한 파일은 제외했습니다.`
+      : '');
     Promise.all(mediaFiles.map((file) => new Promise((resolve) => {
       if (file.type.startsWith('video/')) {
         getMediaDate(file).then((mediaDate) => resolve({
@@ -423,7 +428,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                   {uploadSource === 'device' ? (
                     <>
                       <label
-                        className="flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/35 bg-primary/5 px-4 py-8 text-center transition hover:border-primary hover:bg-primary/10"
+                        className={`flex min-h-52 flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition ${selectedFiles.length >= MAX_UPLOAD_FILES ? 'cursor-not-allowed border-border bg-gray-100 opacity-70' : 'cursor-pointer border-primary/35 bg-primary/5 hover:border-primary hover:bg-primary/10'}`}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={(event) => {
                           event.preventDefault();
@@ -431,9 +436,26 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                         }}
                       >
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
-                        <span className="font-bold">사진 또는 영상 선택</span>
-                        <span className="mt-1 text-xs text-text-secondary">최대 10개 · 사진 20MB · 영상 90MB · 전체 300MB</span>
-                        <input type="file" accept="image/*,video/*" multiple className="sr-only" onChange={(event) => addFiles(event.target.files)} />
+                        <span className="font-bold">{selectedFiles.length >= MAX_UPLOAD_FILES ? '10개를 모두 선택했어요' : '사진 또는 영상 선택'}</span>
+                        <span className="mt-1 text-xs text-text-secondary">현재 {selectedFiles.length}/10개 선택</span>
+                        <span className="mt-4 flex flex-col gap-1.5 rounded-xl border border-orange-300 bg-orange-100 px-4 py-3 text-sm font-extrabold text-orange-700 shadow-sm dark:border-orange-500/50 dark:bg-orange-500/15 dark:text-orange-300">
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Icon icon="mdi:alert-circle-outline" className="shrink-0 text-lg" />
+                            최대 10개까지 올릴 수 있습니다
+                          </span>
+                          <span>영상은 1분 미만으로 올려주세요</span>
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          multiple
+                          disabled={selectedFiles.length >= MAX_UPLOAD_FILES}
+                          className="sr-only"
+                          onChange={(event) => {
+                            addFiles(event.target.files);
+                            event.target.value = '';
+                          }}
+                        />
                       </label>
 
                       {selectedFiles.length > 0 && (

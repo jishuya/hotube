@@ -477,7 +477,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-semibold">
-                                  {media.count > 1 ? `새 미디어 ${media.count}개가 등록됐어요` : media.title}
+                                  {media.count > 1 ? `새로운 게시물이 ${media.count}개 올라왔어요` : media.title}
                                 </span>
                                 {media.date && <span className="mt-0.5 block text-xs text-text-secondary">{media.date}</span>}
                               </span>

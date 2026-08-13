@@ -234,8 +234,10 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         AND NOT EXISTS (
           SELECT 1
           FROM user_watched_media uwm
+          JOIN media watched_media ON watched_media.id = uwm.media_id
           WHERE uwm.user_id = $1
-            AND uwm.media_id = m.id
+            AND COALESCE(watched_media.upload_batch_id, watched_media.id)
+              = COALESCE(m.upload_batch_id, m.id)
         )
       ORDER BY m.created_at DESC
     `, params),
