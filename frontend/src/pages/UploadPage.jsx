@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,7 @@ import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, checkMediaDuplicates, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
+import { listPendingUploads, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
 
 const ITEMS_PER_PAGE = 20;
 const MAX_UPLOAD_FILES = 10;
@@ -105,6 +106,20 @@ const getUploadFailureMessage = (error) => {
   return '사진 또는 영상을 업로드하지 못했습니다. 잠시 후 다시 시도해주세요.';
 };
 
+const mapWithConcurrency = async (items, concurrency, mapper) => {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+};
+
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetDate = '', listOnly = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -131,9 +146,13 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [editingUpload, setEditingUpload] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
   const [toasts, setToasts] = useState([]);
+  const [resumeVersion, setResumeVersion] = useState(0);
+  const resumeStartedRef = useRef('');
+  const uploadInProgressRef = useRef(false);
   const showToast = useCallback((message, type = 'info') => {
     setToasts((current) => [...current, {
       id: `${Date.now()}-${Math.random()}`,
@@ -156,6 +175,54 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     ? '종료일은 시작일보다 빠를 수 없어요.'
     : '';
   const hasActiveFilters = Boolean(hasDateFilter || filterTag.trim() || filterSource !== 'all' || filterMediaType !== 'all');
+
+  useEffect(() => {
+    const handleOnline = () => {
+      resumeStartedRef.current = '';
+      setResumeVersion((current) => current + 1);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || uploadInProgressRef.current || resumeStartedRef.current === user.id) return;
+    resumeStartedRef.current = user.id;
+    let active = true;
+    listPendingUploads(user.id)
+      .then(async (records) => {
+        if (!active || !records.length) return;
+        uploadInProgressRef.current = true;
+        setUploading(true);
+        setUploadProgress({ completed: 0, total: records.length });
+        let completed = 0;
+        for (const record of records) {
+          try {
+            await uploadMediaFile(record.file, record.options);
+            await removePendingUpload(record.id);
+            completed += 1;
+            setUploadProgress((current) => ({ ...current, completed: current.completed + 1 }));
+          } catch (error) {
+            if (error.code === 'DUPLICATE_MEDIA') {
+              await removePendingUpload(record.id);
+              continue;
+            }
+            if (active) setUploadFailureMessage(getUploadFailureMessage(error));
+            break;
+          }
+        }
+        if (active && completed) {
+          showToast(`중단된 업로드 ${completed}개를 완료했어요.`, 'success');
+          window.dispatchEvent(new Event('hotube:media-updated'));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        uploadInProgressRef.current = false;
+        if (active) setUploading(false);
+      });
+    return () => { active = false; };
+  }, [resumeVersion, showToast, user?.id]);
 
   useEffect(() => {
     if (!listOnly) return;
@@ -364,6 +431,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const youtubeId = extractYouTubeId(youtubeUrl.trim());
     const normalizedTags = tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean);
     setUploading(true);
+    uploadInProgressRef.current = true;
+    setUploadProgress({ completed: 0, total: uploadSource === 'device' ? selectedFiles.length : 1 });
     setUploadError('');
     setUploadFailureMessage('');
     try {
@@ -371,26 +440,48 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       const duplicateFiles = [];
       if (uploadSource === 'device') {
         const uploadBatchId = crypto.randomUUID();
-        for (const item of selectedFiles) {
+        const optionsFor = (item) => {
           const itemTags = item.tags.split(',')
             .map((tag) => tag.trim().replace(/^#/, ''))
             .filter(Boolean);
-          const mergedTags = [...new Set([...normalizedTags, ...itemTags])];
+          return {
+            title: item.name,
+            uploadedAt: targetDate || item.date || date,
+            tags: [...new Set([...normalizedTags, ...itemTags])],
+            uploadedBy: user.id,
+            sharedWith,
+            uploadBatchId,
+            contentHash: item.contentHash,
+          };
+        };
+        await Promise.all(selectedFiles.map((item) => savePendingUpload({
+          id: `${user.id}:${item.contentHash}`,
+          userId: user.id,
+          file: item.file,
+          options: optionsFor(item),
+        }).catch(() => {})));
+        const uploadItem = async (item) => {
+          const pendingId = `${user.id}:${item.contentHash}`;
           try {
-            const saved = await uploadMediaFile(item.file, {
-              title: item.name,
-              uploadedAt: targetDate || item.date || date,
-              tags: mergedTags,
-              uploadedBy: user?.id,
-              sharedWith,
-              uploadBatchId,
-            });
-            created.push(toMemoryMedia(saved));
+            const saved = await uploadMediaFile(item.file, optionsFor(item));
+            await removePendingUpload(pendingId).catch(() => {});
+            return toMemoryMedia(saved);
           } catch (error) {
             if (error.code !== 'DUPLICATE_MEDIA') throw error;
+            await removePendingUpload(pendingId).catch(() => {});
             duplicateFiles.push(item.name);
+            return null;
+          } finally {
+            setUploadProgress((current) => ({ ...current, completed: current.completed + 1 }));
           }
-        }
+        };
+        const photos = selectedFiles.filter((item) => item.type === 'photo');
+        const videos = selectedFiles.filter((item) => item.type === 'video');
+        const [uploadedPhotos, uploadedVideos] = await Promise.all([
+          mapWithConcurrency(photos, 3, uploadItem),
+          mapWithConcurrency(videos, 1, uploadItem),
+        ]);
+        created.push(...uploadedPhotos.filter(Boolean), ...uploadedVideos.filter(Boolean));
       } else if (youtubeId && youtubeInfo) {
         const saved = await addVideo({
           videoId: youtubeInfo.videoId,
@@ -410,6 +501,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           sharedWith,
         });
         created.push(toMemoryMedia(saved));
+        setUploadProgress({ completed: 1, total: 1 });
       }
       if (created.length === 0) {
         if (duplicateFiles.length) {
@@ -424,16 +516,18 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       const uploadedMedia = created[0];
       const uploadedMonth = uploadedMedia.date?.slice(0, 7);
       const returnTo = uploadedMonth ? `/calendar?month=${uploadedMonth}` : '/calendar';
+      const processingVideoCount = created.filter((media) => media.processingStatus === 'processing').length;
       navigate(`/media/${uploadedMedia.id}?date=${encodeURIComponent(uploadedMedia.date || '')}`, {
         replace: true,
         state: {
           returnTo,
-          uploadSuccessMessage: `${created.length}개의 미디어가 업로드되었습니다.${duplicateFiles.length ? ` 중복 파일 ${duplicateFiles.length}개는 제외했어요: ${duplicateFiles.join(', ')}` : ''}`,
+          uploadSuccessMessage: `${created.length}개의 미디어가 업로드되었습니다.${processingVideoCount ? ` 영상 ${processingVideoCount}개는 재생 준비 중입니다.` : ''}${duplicateFiles.length ? ` 중복 파일 ${duplicateFiles.length}개는 제외했어요: ${duplicateFiles.join(', ')}` : ''}`,
         },
       });
     } catch (error) {
       setUploadFailureMessage(getUploadFailureMessage(error));
     } finally {
+      uploadInProgressRef.current = false;
       setUploading(false);
     }
   };
@@ -675,7 +769,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
               {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}
               <button type="submit" disabled={uploading || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
                 <Icon icon={uploading ? 'mdi:loading' : 'mdi:cloud-upload'} className={`text-xl ${uploading ? 'animate-spin' : ''}`} />
-                {uploading ? '업로드 중...' : '업로드하기'}
+                {uploading
+                  ? `업로드 중 · ${uploadProgress.completed}/${uploadProgress.total}`
+                  : '업로드하기'}
               </button>
             </form>
           ) : (

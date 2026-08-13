@@ -15,7 +15,10 @@ const {
   resolveMediaPath,
   toStoredMediaPath,
 } = require('../mediaStorage');
-const { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail } = require('../videoThumbnail');
+const {
+  createImageThumbnail,
+} = require('../videoThumbnail');
+const { enqueueVideoProcessing } = require('../services/mediaProcessingService');
 const {
   createFileMedia,
   createMedia,
@@ -216,6 +219,7 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
   let thumbnailPath = null;
   let browserVideoPath = null;
   let storedFilePath = null;
+  let createdMedia = null;
   try {
     const tags = JSON.parse(req.body.tags || '[]');
     const isVideo = req.file.mimetype.startsWith('video/');
@@ -238,13 +242,10 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
     }
 
     if (isVideo) {
-      const thumbnailFilename = `${randomUUID()}.jpg`;
-      thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
-      await createVideoThumbnail(req.file.path, path.join(absoluteDirectory, thumbnailFilename));
-      const browserVideoFilename = `${randomUUID()}.mp4`;
-      browserVideoPath = toStoredMediaPath(relativeDirectory, browserVideoFilename);
-      await createBrowserCompatibleVideo(req.file.path, path.join(absoluteDirectory, browserVideoFilename));
-      storedFilePath = browserVideoPath;
+      const extension = path.extname(req.file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '');
+      const inputFilename = `${randomUUID()}${extension || '.video'}`;
+      storedFilePath = toStoredMediaPath(relativeDirectory, inputFilename);
+      await fs.rename(req.file.path, path.join(absoluteDirectory, inputFilename));
     } else {
       const thumbnailFilename = `${randomUUID()}.webp`;
       thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
@@ -253,7 +254,7 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       await fs.rename(req.file.path, resolveMediaPath(storedFilePath));
     }
 
-    const createdMedia = await createFileMedia({
+    createdMedia = await createFileMedia({
       id: randomUUID(),
       title: req.body.title?.trim() || req.file.originalname,
       filePath: storedFilePath,
@@ -265,8 +266,11 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
       uploadBatchId: req.body.uploadBatchId || null,
       contentHash,
+      processingStatus: isVideo ? 'processing' : 'ready',
     });
-    if (browserVideoPath) await fs.unlink(req.file.path).catch(() => {});
+    if (isVideo) {
+      await enqueueVideoProcessing({ mediaId: createdMedia.id, inputPath: storedFilePath });
+    }
     void notifyNewMedia({
       media: createdMedia,
       uploader,
@@ -276,6 +280,7 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
     });
     return res.status(201).json(mapMediaRowToVideo(createdMedia));
   } catch (error) {
+    if (createdMedia?.id) await deleteMedia(createdMedia.id).catch(() => {});
     await fs.unlink(req.file.path).catch(() => {});
     if (thumbnailPath) await fs.unlink(resolveMediaPath(thumbnailPath)).catch(() => {});
     if (browserVideoPath) await fs.unlink(resolveMediaPath(browserVideoPath)).catch(() => {});

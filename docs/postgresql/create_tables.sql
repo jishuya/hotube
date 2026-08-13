@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS media (
     uploaded_by TEXT,
     upload_batch_id TEXT,
     content_hash TEXT,
+    processing_status TEXT NOT NULL DEFAULT 'ready',
+    processing_error TEXT,
     shared_with TEXT[] NOT NULL DEFAULT ARRAY['dad', 'mom']::TEXT[],
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
@@ -92,6 +94,32 @@ CREATE TABLE IF NOT EXISTS media (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_media_content_hash
     ON media (content_hash)
     WHERE content_hash IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS media_processing_jobs (
+    id UUID PRIMARY KEY,
+    media_id TEXT NOT NULL UNIQUE REFERENCES media (id) ON UPDATE CASCADE ON DELETE CASCADE,
+    input_path TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_upload_sessions (
+    id UUID PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+    content_hash TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    file_size BIGINT NOT NULL,
+    total_chunks INTEGER NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status TEXT NOT NULL DEFAULT 'pending',
+    media_id TEXT REFERENCES media (id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE IF NOT EXISTS tags (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

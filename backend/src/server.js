@@ -1,6 +1,7 @@
 const app = require("./app");
 const { pool } = require("./db");
 const { ensurePushSubscriptionSchema } = require("./services/pushNotificationService");
+const { resumeMediaProcessing } = require('./services/mediaProcessingService');
 
 const port = Number(process.env.PORT || 5001);
 
@@ -11,6 +12,7 @@ const start = async () => {
     throw new Error("AUTH_TOKEN_SECRET 환경변수가 필요합니다");
   }
   await ensurePushSubscriptionSchema();
+  await resumeMediaProcessing();
   server = app.listen(port, () => {
     console.log(`Hotube API server listening on http://localhost:${port}`);
   });

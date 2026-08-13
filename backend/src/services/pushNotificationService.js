@@ -40,7 +40,39 @@ const loadVapidKeys = () => {
 const ensurePushSubscriptionSchema = async () => {
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS upload_batch_id TEXT`);
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS content_hash TEXT`);
+  await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'ready'`);
+  await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS processing_error TEXT`);
   await pgDb.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_media_content_hash ON media (content_hash) WHERE content_hash IS NOT NULL`);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS media_processing_jobs (
+      id UUID PRIMARY KEY,
+      media_id TEXT NOT NULL UNIQUE REFERENCES media (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      input_path TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`CREATE INDEX IF NOT EXISTS idx_media_processing_jobs_status ON media_processing_jobs (status, created_at)`);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS media_upload_sessions (
+      id UUID PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      content_hash TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size BIGINT NOT NULL,
+      total_chunks INTEGER NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL DEFAULT 'pending',
+      media_id TEXT REFERENCES media (id) ON UPDATE CASCADE ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`CREATE INDEX IF NOT EXISTS idx_media_upload_sessions_resume ON media_upload_sessions (user_id, content_hash, status)`);
   await pgDb.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id UUID PRIMARY KEY,

@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 
 const ffmpegExecutable = process.env.FFMPEG_PATH || 'ffmpeg';
+const ffprobeExecutable = process.env.FFPROBE_PATH || 'ffprobe';
 
 /**
  * 영상 초반 프레임들 가운데 대표 프레임을 골라 앨범용 JPEG 썸네일을 생성한다.
@@ -11,9 +12,10 @@ const createVideoThumbnail = (inputPath, outputPath) => new Promise((resolve, re
     '-hide_banner',
     '-loglevel', 'error',
     '-y',
+    '-ss', '0.5',
     '-i', inputPath,
     '-frames:v', '1',
-    '-vf', "thumbnail=100,scale='min(640,iw)':-2",
+    '-vf', "scale='min(640,iw)':-2",
     '-q:v', '3',
     outputPath,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -33,6 +35,42 @@ const createVideoThumbnail = (inputPath, outputPath) => new Promise((resolve, re
     return reject(new Error(`영상 썸네일 생성 실패 (FFmpeg ${code}): ${errorOutput.trim()}`));
   });
 });
+
+const probeVideo = (inputPath) => new Promise((resolve, reject) => {
+  const ffprobe = spawn(ffprobeExecutable, [
+    '-v', 'error',
+    '-show_entries', 'format=format_name:stream=codec_type,codec_name,pix_fmt',
+    '-of', 'json',
+    inputPath,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  let errorOutput = '';
+  ffprobe.stdout.setEncoding('utf8');
+  ffprobe.stderr.setEncoding('utf8');
+  ffprobe.stdout.on('data', (chunk) => { output += chunk; });
+  ffprobe.stderr.on('data', (chunk) => { errorOutput = `${errorOutput}${chunk}`.slice(-8192); });
+  ffprobe.on('error', reject);
+  ffprobe.on('close', (code) => {
+    if (code !== 0) return reject(new Error(`영상 정보 확인 실패 (FFprobe ${code}): ${errorOutput.trim()}`));
+    try {
+      return resolve(JSON.parse(output));
+    } catch (error) {
+      return reject(new Error(`영상 정보 해석 실패: ${error.message}`));
+    }
+  });
+});
+
+const isBrowserCompatibleVideo = async (inputPath) => {
+  const info = await probeVideo(inputPath);
+  const streams = info.streams || [];
+  const video = streams.find((stream) => stream.codec_type === 'video');
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const isMp4 = String(info.format?.format_name || '').split(',').some((name) => ['mov', 'mp4'].includes(name));
+  return Boolean(isMp4
+    && video?.codec_name === 'h264'
+    && (!video.pix_fmt || video.pix_fmt === 'yuv420p')
+    && (!audio || audio.codec_name === 'aac'));
+};
 
 /** 사진 원본을 목록용 640px WebP 썸네일로 변환한다. */
 const createImageThumbnail = (inputPath, outputPath) => new Promise((resolve, reject) => {
@@ -94,4 +132,31 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
   });
 });
 
-module.exports = { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail };
+const remuxBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((resolve, reject) => {
+  const ffmpeg = spawn(ffmpegExecutable, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-y',
+    '-i', inputPath,
+    '-map_metadata', '0',
+    '-c', 'copy',
+    '-movflags', '+faststart',
+    outputPath,
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let errorOutput = '';
+  ffmpeg.stderr.setEncoding('utf8');
+  ffmpeg.stderr.on('data', (chunk) => { errorOutput = `${errorOutput}${chunk}`.slice(-8192); });
+  ffmpeg.on('error', reject);
+  ffmpeg.on('close', (code) => {
+    if (code === 0) return resolve();
+    return reject(new Error(`브라우저용 영상 정리 실패 (FFmpeg ${code}): ${errorOutput.trim()}`));
+  });
+});
+
+module.exports = {
+  createBrowserCompatibleVideo,
+  createImageThumbnail,
+  createVideoThumbnail,
+  isBrowserCompatibleVideo,
+  remuxBrowserCompatibleVideo,
+};

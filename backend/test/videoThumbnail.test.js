@@ -4,7 +4,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
-const { createBrowserCompatibleVideo, createImageThumbnail, createVideoThumbnail } = require('../src/videoThumbnail');
+const {
+  createBrowserCompatibleVideo,
+  createImageThumbnail,
+  createVideoThumbnail,
+  isBrowserCompatibleVideo,
+} = require('../src/videoThumbnail');
 
 const run = (command, args) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { stdio: 'ignore' });
@@ -63,4 +68,17 @@ test('브라우저용 MP4 영상을 생성한다', async (t) => {
   const output = await fs.readFile(outputPath);
   assert.equal(output.subarray(4, 8).toString(), 'ftyp');
   assert.ok(output.length > 1000);
+});
+
+test('H.264 MP4 영상은 브라우저 호환 영상으로 판별한다', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-compatible-video-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const videoPath = path.join(directory, 'sample.mp4');
+
+  await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=orange:s=160x120:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoPath,
+  ]);
+
+  assert.equal(await isBrowserCompatibleVideo(videoPath), true);
 });

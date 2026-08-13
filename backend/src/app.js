@@ -11,6 +11,7 @@ const memoryDateRoutes = require('./routes/memoryDates');
 const userAlbumRoutes = require('./routes/userAlbums');
 const supportRoutes = require('./routes/support');
 const pushNotificationRoutes = require('./routes/pushNotifications');
+const uploadSessionRoutes = require('./routes/uploadSessions');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use(memoryDateRoutes);
 app.use(userAlbumRoutes);
 app.use(supportRoutes);
 app.use(pushNotificationRoutes);
+app.use(uploadSessionRoutes);
 
 const frontendDist = path.resolve(__dirname, "../../frontend/dist");
 

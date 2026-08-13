@@ -8,6 +8,7 @@ const FUNCTIONS_URL = {
   deleteVideo: `${API_BASE_URL}/deleteVideo`,
   deleteMediaByDate: `${API_BASE_URL}/deleteMediaByDate`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
+  initMediaUpload: `${API_BASE_URL}/uploadMedia/init`,
   checkMediaDuplicates: `${API_BASE_URL}/checkMediaDuplicates`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
   getCalendarMedia: `${API_BASE_URL}/getCalendarMedia`,
@@ -129,28 +130,68 @@ export const addVideo = async (videoData) => {
 };
 
 export const uploadMediaFile = async (file, {
-  title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'], uploadBatchId,
+  title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'], uploadBatchId, contentHash,
 }) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('title', title || file.name);
-  formData.append('uploadedAt', uploadedAt);
-  formData.append('tags', JSON.stringify(tags || []));
-  if (uploadedBy) formData.append('uploadedBy', uploadedBy);
-  if (uploadBatchId) formData.append('uploadBatchId', uploadBatchId);
-  formData.append('sharedWith', JSON.stringify(sharedWith));
-
-  const response = await fetch(FUNCTIONS_URL.uploadMedia, {
+  const parseUploadError = async (response, fallback) => {
+    const body = await response.json().catch(() => ({}));
+    const error = new Error(body.error || fallback);
+    error.code = body.code;
+    throw error;
+  };
+  const initResponse = await fetch(FUNCTIONS_URL.initMediaUpload, {
     method: 'POST',
-    body: formData,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: uploadedBy,
+      contentHash,
+      originalName: file.name,
+      mimeType: file.type,
+      fileSize: file.size,
+      metadata: { title: title || file.name, uploadedAt, tags: tags || [], sharedWith, uploadBatchId },
+    }),
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const uploadError = new Error(error.error || '파일 업로드에 실패했습니다');
-    uploadError.code = error.code;
-    throw uploadError;
+  if (!initResponse.ok) await parseUploadError(initResponse, '업로드를 시작하지 못했습니다');
+  const session = await initResponse.json();
+  const uploaded = new Set(session.uploadedChunks || []);
+  const missingChunks = Array.from({ length: session.totalChunks }, (_, index) => index)
+    .filter((index) => !uploaded.has(index));
+  let nextChunk = 0;
+  const uploadChunk = async (index) => {
+    const start = index * session.chunkSize;
+    const body = file.slice(start, Math.min(file.size, start + session.chunkSize));
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const response = await fetch(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/chunks/${index}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body,
+        });
+        if (!response.ok) await parseUploadError(response, '파일 일부를 올리지 못했습니다');
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 1000));
+      }
+    }
+    throw lastError;
+  };
+  await Promise.all(Array.from({ length: Math.min(2, missingChunks.length) }, async () => {
+    while (nextChunk < missingChunks.length) {
+      const index = missingChunks[nextChunk];
+      nextChunk += 1;
+      await uploadChunk(index);
+    }
+  }));
+  const completeResponse = await fetch(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!completeResponse.ok) {
+    await parseUploadError(completeResponse, '업로드를 완료하지 못했습니다');
   }
-  return resolveMediaUrls(await response.json());
+  return resolveMediaUrls(await completeResponse.json());
 };
 
 export const getMediaDetails = async (id, userId) => {

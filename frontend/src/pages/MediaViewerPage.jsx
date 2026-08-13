@@ -458,6 +458,23 @@ const MediaViewerPage = () => {
   }, [current]);
 
   useEffect(() => {
+    if (current?.processingStatus !== 'processing') return undefined;
+    let active = true;
+    const refreshProcessingMedia = () => getVideoById(mediaId)
+      .then((item) => {
+        if (!active) return;
+        const mapped = toMemoryMedia(item);
+        setMediaItems((itemsValue) => itemsValue.map((media) => media.id === mapped.id ? mapped : media));
+      })
+      .catch(() => {});
+    const intervalId = window.setInterval(refreshProcessingMedia, 2500);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [current?.processingStatus, mediaId]);
+
+  useEffect(() => {
     if (!current || !user || user.watchedVideos?.includes(current.id)) return;
     markVideoWatched(user.id, current.id)
       .then(async () => {
@@ -689,7 +706,20 @@ const MediaViewerPage = () => {
               </div>
             )}
             <div className={`relative flex items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}>
-              {current.source === 'youtube' ? (
+              {current.processingStatus === 'processing' ? (
+                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <Icon icon="mdi:movie-open-cog-outline" className="text-6xl text-primary" />
+                  <p className="mt-4 text-lg font-bold">영상을 준비하고 있어요</p>
+                  <p className="mt-1 text-sm text-text-secondary">완료되면 이 화면에서 자동으로 재생됩니다.</p>
+                  <Icon icon="mdi:loading" className="mt-5 animate-spin text-2xl text-primary" />
+                </div>
+              ) : current.processingStatus === 'failed' ? (
+                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <Icon icon="mdi:alert-circle-outline" className="text-6xl text-error" />
+                  <p className="mt-4 text-lg font-bold">영상을 처리하지 못했어요</p>
+                  <p className="mt-1 text-sm text-text-secondary">관리자에게 문의하거나 영상을 다시 올려주세요.</p>
+                </div>
+              ) : current.source === 'youtube' ? (
                 <div className={`flex w-full justify-center bg-black ${isYoutubeShort ? 'py-2 sm:py-4' : ''}`}>
                   <iframe
                     src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1&mute=0&playsinline=1`}
@@ -739,7 +769,7 @@ const MediaViewerPage = () => {
               <ActionButton icon={isLiked(mediaId) ? 'mdi:heart' : 'mdi:heart-outline'} label="좋아요" count={details?.likeCount || 0} active={isLiked(mediaId)} onClick={handleLike} />
               <ActionButton icon={details?.favorited ? 'mdi:bookmark' : 'mdi:bookmark-outline'} label="즐겨찾기" active={details?.favorited} onClick={handleFavorite} />
               <ActionButton icon="mdi:comment-outline" label="댓글" count={details?.commentCount || 0} onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
-              <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' ? `${current.src}&download=1` : undefined} disabled={current.source !== 'file'} />
+              <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' && current.src ? `${current.src}&download=1` : undefined} disabled={current.source !== 'file' || !current.src} />
             </div>
 
             {(current.description || details?.canModify) && <div className="mt-3 border-t border-border pt-3">

@@ -226,6 +226,8 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         m.thumbnail_path,
         m.uploaded_at,
         m.upload_batch_id,
+        m.processing_status,
+        m.processing_error,
         m.created_at,
         m.updated_at
       FROM media m
@@ -355,6 +357,7 @@ const createFileMedia = async ({
   sharedWith = ['dad', 'mom'],
   uploadBatchId = null,
   contentHash = null,
+  processingStatus = 'ready',
 }) => {
   let client;
 
@@ -370,10 +373,11 @@ const createFileMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash,
+        processing_status, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $12, $12)
-    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $12, $13, $13)
+    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now]);
 
     await replaceMediaTags(client, id, tags);
     const createdMedia = await fetchMediaById(client, id);

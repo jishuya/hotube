@@ -49,7 +49,7 @@ const mapMediaRowToVideo = (row) => ({
   description: row.description,
   youtubeUrl: row.youtube_url,
   mediaType: row.media_type,
-  fileUrl: row.file_path
+  fileUrl: row.file_path && (row.processing_status || 'ready') === 'ready'
     ? versionedMediaPath(`/mediaFile/${encodeURIComponent(row.id)}`, row.updated_at)
     : null,
   thumbnailUrl: row.thumbnail_path
@@ -65,6 +65,8 @@ const mapMediaRowToVideo = (row) => ({
   channelTitle: row.channel_title,
   uploadedBy: row.uploaded_by,
   uploadBatchId: row.upload_batch_id,
+  processingStatus: row.processing_status || 'ready',
+  processingError: row.processing_status === 'failed' ? '영상을 처리하지 못했습니다.' : null,
   sharedWith: normalizeArray(row.shared_with),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
