@@ -3,10 +3,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 const { Pool } = require("pg");
 
-const envPaths = [
-  path.resolve(__dirname, "../.env"),
-  path.resolve(__dirname, "../../functions/.env"),
-];
+const envPaths = [path.resolve(__dirname, "../.env")];
 
 const envPath = envPaths.find((candidate) => fs.existsSync(candidate));
 if (envPath) {

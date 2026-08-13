@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
@@ -32,13 +32,8 @@ const CommentSection = ({ videoId, onCountChange }) => {
   const [editContent, setEditContent] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, commentId: null });
 
-  useEffect(() => {
-    if (videoId && user) {
-      loadComments();
-    }
-  }, [videoId, user?.category, user?.role]);
-
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
+    if (!videoId || !user?.id) return;
     try {
       setLoading(true);
       const data = await getComments(videoId, user.id);
@@ -49,7 +44,11 @@ const CommentSection = ({ videoId, onCountChange }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onCountChange, user?.id, videoId]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

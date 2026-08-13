@@ -132,31 +132,9 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
   });
 });
 
-const remuxBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((resolve, reject) => {
-  const ffmpeg = spawn(ffmpegExecutable, [
-    '-hide_banner',
-    '-loglevel', 'error',
-    '-y',
-    '-i', inputPath,
-    '-map_metadata', '0',
-    '-c', 'copy',
-    '-movflags', '+faststart',
-    outputPath,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let errorOutput = '';
-  ffmpeg.stderr.setEncoding('utf8');
-  ffmpeg.stderr.on('data', (chunk) => { errorOutput = `${errorOutput}${chunk}`.slice(-8192); });
-  ffmpeg.on('error', reject);
-  ffmpeg.on('close', (code) => {
-    if (code === 0) return resolve();
-    return reject(new Error(`브라우저용 영상 정리 실패 (FFmpeg ${code}): ${errorOutput.trim()}`));
-  });
-});
-
 module.exports = {
   createBrowserCompatibleVideo,
   createImageThumbnail,
   createVideoThumbnail,
   isBrowserCompatibleVideo,
-  remuxBrowserCompatibleVideo,
 };

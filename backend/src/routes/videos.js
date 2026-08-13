@@ -1,26 +1,11 @@
 const express = require("express");
-const { createHash, randomUUID } = require('crypto');
-const { createReadStream } = require('fs');
 const fs = require('fs/promises');
 const path = require('path');
-const multer = require('multer');
 const pgDb = require('../db');
 const { requireAuth } = require('../authToken');
-const { HttpError } = require('../httpErrors');
 const { mapMediaRowToVideo } = require("../responseMappers");
+const { resolveMediaPath } = require('../mediaStorage');
 const {
-  ensureMediaDateDirectory,
-  ensureMediaDirectory,
-  mediaDirectory,
-  resolveMediaPath,
-  toStoredMediaPath,
-} = require('../mediaStorage');
-const {
-  createImageThumbnail,
-} = require('../videoThumbnail');
-const { enqueueVideoProcessing } = require('../services/mediaProcessingService');
-const {
-  createFileMedia,
   createMedia,
   deleteMedia,
   deleteMediaByDate,
@@ -36,25 +21,6 @@ const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
 const MAX_UPLOAD_FILES = 10;
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_MEDIA_SIZE = 90 * 1024 * 1024;
-
-ensureMediaDirectory();
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, callback) => callback(null, mediaDirectory),
-    filename: (req, file, callback) => {
-      const extension = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '');
-      callback(null, `${randomUUID()}${extension || ''}`);
-    },
-  }),
-  limits: { fileSize: MAX_MEDIA_SIZE },
-  fileFilter: (req, file, callback) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) return callback(null, true);
-    return callback(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'file'));
-  },
-});
 
 const sendRouteError = (res, fallbackMessage, error) => {
   if (error.status) {
@@ -63,14 +29,6 @@ const sendRouteError = (res, fallbackMessage, error) => {
 
   return res.status(500).json({ error: fallbackMessage });
 };
-
-const hashFile = (filePath) => new Promise((resolve, reject) => {
-  const hash = createHash('sha256');
-  const stream = createReadStream(filePath);
-  stream.on('error', reject);
-  stream.on('data', (chunk) => hash.update(chunk));
-  stream.on('end', () => resolve(hash.digest('hex')));
-});
 
 router.post('/checkMediaDuplicates', async (req, res) => {
   try {
@@ -214,82 +172,6 @@ router.post("/createVideo", async (req, res) => {
   }
 });
 
-router.post('/uploadMedia', upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: '업로드할 파일이 없습니다' });
-  let thumbnailPath = null;
-  let browserVideoPath = null;
-  let storedFilePath = null;
-  let createdMedia = null;
-  try {
-    const tags = JSON.parse(req.body.tags || '[]');
-    const isVideo = req.file.mimetype.startsWith('video/');
-    if (!isVideo && req.file.size > MAX_IMAGE_SIZE) {
-      const error = new Error('사진은 개당 20MB까지 업로드할 수 있습니다');
-      error.status = 400;
-      throw error;
-    }
-    const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(req.body.uploadedAt);
-    const uploader = req.body.uploadedBy ? await fetchUserById(req.body.uploadedBy) : null;
-    if (!uploader) {
-      const error = new Error('업로드할 로그인 사용자 정보가 필요합니다');
-      error.status = 401;
-      throw error;
-    }
-    const contentHash = await hashFile(req.file.path);
-    const duplicate = await pgDb.query('SELECT id FROM media WHERE content_hash = $1 LIMIT 1', [contentHash]);
-    if (duplicate.rows.length) {
-      throw new HttpError(409, `이미 업로드된 파일입니다: ${req.file.originalname}`, 'DUPLICATE_MEDIA');
-    }
-
-    if (isVideo) {
-      const extension = path.extname(req.file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '');
-      const inputFilename = `${randomUUID()}${extension || '.video'}`;
-      storedFilePath = toStoredMediaPath(relativeDirectory, inputFilename);
-      await fs.rename(req.file.path, path.join(absoluteDirectory, inputFilename));
-    } else {
-      const thumbnailFilename = `${randomUUID()}.webp`;
-      thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
-      await createImageThumbnail(req.file.path, path.join(absoluteDirectory, thumbnailFilename));
-      storedFilePath = toStoredMediaPath(relativeDirectory, req.file.filename);
-      await fs.rename(req.file.path, resolveMediaPath(storedFilePath));
-    }
-
-    createdMedia = await createFileMedia({
-      id: randomUUID(),
-      title: req.body.title?.trim() || req.file.originalname,
-      filePath: storedFilePath,
-      thumbnailPath,
-      mediaType: isVideo ? 'video' : 'photo',
-      tags,
-      uploadedAt: req.body.uploadedAt,
-      uploadedBy: uploader.id,
-      sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
-      uploadBatchId: req.body.uploadBatchId || null,
-      contentHash,
-      processingStatus: isVideo ? 'processing' : 'ready',
-    });
-    if (isVideo) {
-      await enqueueVideoProcessing({ mediaId: createdMedia.id, inputPath: storedFilePath });
-    }
-    void notifyNewMedia({
-      media: createdMedia,
-      uploader,
-      uploadBatchId: req.body.uploadBatchId || null,
-    }).catch((error) => {
-      console.error('새 미디어 푸시 알림 오류:', error);
-    });
-    return res.status(201).json(mapMediaRowToVideo(createdMedia));
-  } catch (error) {
-    if (createdMedia?.id) await deleteMedia(createdMedia.id).catch(() => {});
-    await fs.unlink(req.file.path).catch(() => {});
-    if (thumbnailPath) await fs.unlink(resolveMediaPath(thumbnailPath)).catch(() => {});
-    if (browserVideoPath) await fs.unlink(resolveMediaPath(browserVideoPath)).catch(() => {});
-    if (storedFilePath && !browserVideoPath) await fs.unlink(resolveMediaPath(storedFilePath)).catch(() => {});
-    console.error('미디어 파일 업로드 오류:', error);
-    return sendRouteError(res, '미디어 업로드 실패', error);
-  }
-});
-
 router.get('/mediaFile/:id', async (req, res) => {
   try {
     const access = await getMediaAccess(pgDb, req.params.id, req.query.viewerId);
@@ -380,14 +262,6 @@ router.delete("/deleteMediaByDate/:date", requireAuth, async (req, res) => {
     console.error("날짜별 미디어 삭제 오류:", error);
     return sendRouteError(res, "날짜별 미디어 삭제 실패", error);
   }
-});
-
-router.use((error, req, res, next) => {
-  if (!(error instanceof multer.MulterError)) return next(error);
-  const message = error.code === 'LIMIT_FILE_SIZE'
-    ? '영상은 개당 90MB, 사진은 개당 20MB까지 업로드할 수 있습니다'
-    : '사진 또는 영상 파일만 업로드할 수 있습니다';
-  return res.status(400).json({ error: message });
 });
 
 module.exports = router;
