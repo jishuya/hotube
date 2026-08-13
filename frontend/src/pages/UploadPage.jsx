@@ -149,6 +149,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
+  const [fileSelectionNotice, setFileSelectionNotice] = useState('');
   const [toasts, setToasts] = useState([]);
   const [resumeVersion, setResumeVersion] = useState(0);
   const resumeStartedRef = useRef('');
@@ -261,25 +262,52 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
     const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     if (availableSlots === 0) {
-      setUploadError(`사진과 영상은 한 번에 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있습니다.`);
+      setFileSelectionNotice(`이미 ${MAX_UPLOAD_FILES}개를 선택했어요.\n추가로 선택한 파일은 목록에 넣지 않았습니다.`);
       return;
     }
-    const mediaFiles = selectedMediaFiles.slice(0, availableSlots);
-    const exceededSelectionLimit = selectedMediaFiles.length > availableSlots;
-    const oversizedImage = mediaFiles.find((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
-    if (oversizedImage) {
-      setUploadError(`사진은 개당 20MB까지 업로드할 수 있습니다: ${oversizedImage.name}`);
-      return;
+    const selectionNotices = [];
+    const summarizeNames = (items) => {
+      const names = items.slice(0, 3).map((file) => file.name).join(', ');
+      return items.length > 3 ? `${names} 외 ${items.length - 3}개` : names;
+    };
+    const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
+    const oversizedVideos = selectedMediaFiles.filter((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
+    const sizeEligibleFiles = selectedMediaFiles.filter((file) => (
+      !(file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE)
+      && !(file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE)
+    ));
+    const countExcludedFiles = sizeEligibleFiles.slice(availableSlots);
+    const countEligibleFiles = sizeEligibleFiles.slice(0, availableSlots);
+    const mediaFiles = [];
+    const totalSizeExcludedFiles = [];
+    let totalSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size), 0);
+
+    countEligibleFiles.forEach((file) => {
+      if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) {
+        totalSizeExcludedFiles.push(file);
+        return;
+      }
+      mediaFiles.push(file);
+      totalSize += file.size;
+    });
+
+    if (countExcludedFiles.length) {
+      selectionNotices.push(`최대 ${MAX_UPLOAD_FILES}개 제한: ${summarizeNames(countExcludedFiles)}`);
     }
-    const oversizedVideo = mediaFiles.find((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
-    if (oversizedVideo) {
-      setUploadError(`영상은 개당 90MB까지 업로드할 수 있습니다: ${oversizedVideo.name}`);
-      return;
+    if (oversizedImages.length) {
+      selectionNotices.push(`사진 20MB 초과: ${summarizeNames(oversizedImages)}`);
     }
-    const totalSize = [...selectedFiles, ...mediaFiles]
-      .reduce((sum, item) => sum + (item.file?.size ?? item.size), 0);
-    if (totalSize > MAX_TOTAL_UPLOAD_SIZE) {
-      setUploadError('한 번에 선택한 파일의 전체 용량은 300MB를 초과할 수 없습니다.');
+    if (oversizedVideos.length) {
+      selectionNotices.push(`영상 90MB 초과: ${summarizeNames(oversizedVideos)}`);
+    }
+    if (totalSizeExcludedFiles.length) {
+      selectionNotices.push(`전체 300MB 초과: ${summarizeNames(totalSizeExcludedFiles)}`);
+    }
+
+    if (!mediaFiles.length) {
+      if (selectionNotices.length) {
+        setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
+      }
       return;
     }
     setUploadError('중복 파일을 확인하고 있어요...');
@@ -302,11 +330,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         return !duplicate;
       });
       setUploadError('');
-      if (exceededSelectionLimit) {
-        showToast(`최대 ${MAX_UPLOAD_FILES}개까지만 선택했어요.`, 'warning');
-      }
       if (duplicateNames.length) {
-        showToast(`이미 올린 파일은 제외했어요: ${duplicateNames.join(', ')}`, 'warning');
+        selectionNotices.push(`중복 파일: ${summarizeNames(duplicateNames.map((name) => ({ name })))}`);
+      }
+      if (selectionNotices.length) {
+        setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
       }
     } catch (error) {
       setUploadError(error.message || '중복 파일을 확인하지 못했습니다');
@@ -998,6 +1026,13 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         onClose={() => setUploadFailureMessage('')}
         title="업로드 실패"
         message={uploadFailureMessage}
+        confirmText="확인"
+      />
+      <Modal
+        isOpen={Boolean(fileSelectionNotice)}
+        onClose={() => setFileSelectionNotice('')}
+        title="파일 선택 안내"
+        message={fileSelectionNotice}
         confirmText="확인"
       />
       <Modal

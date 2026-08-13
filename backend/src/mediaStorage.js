@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsPromises = require('fs/promises');
 const os = require('os');
 const path = require('path');
 
@@ -43,10 +44,34 @@ const resolveMediaPath = (storedPath) => {
   return resolved;
 };
 
+const removeEmptyMediaDirectories = async (storedPaths) => {
+  const directories = [...new Set(storedPaths.filter(Boolean).map((storedPath) => (
+    path.dirname(resolveMediaPath(storedPath))
+  )))];
+
+  for (const directory of directories) {
+    let current = directory;
+    while (current !== mediaDirectory && current.startsWith(`${mediaDirectory}${path.sep}`)) {
+      try {
+        await fsPromises.rmdir(current);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          current = path.dirname(current);
+          continue;
+        }
+        if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') break;
+        throw error;
+      }
+      current = path.dirname(current);
+    }
+  }
+};
+
 module.exports = {
   ensureMediaDateDirectory,
   ensureMediaDirectory,
   mediaDirectory,
+  removeEmptyMediaDirectories,
   resolveMediaPath,
   toStoredMediaPath,
 };

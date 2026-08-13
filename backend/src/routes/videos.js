@@ -4,7 +4,7 @@ const path = require('path');
 const pgDb = require('../db');
 const { requireAuth } = require('../authToken');
 const { mapMediaRowToVideo } = require("../responseMappers");
-const { resolveMediaPath } = require('../mediaStorage');
+const { removeEmptyMediaDirectories, resolveMediaPath } = require('../mediaStorage');
 const {
   createMedia,
   deleteMedia,
@@ -224,11 +224,13 @@ router.delete("/deleteVideo/:id", async (req, res) => {
     const access = await getMediaAccess(pgDb, req.params.id, req.query.requesterId);
     if (!access?.can_modify) return res.status(403).json({ error: '미디어 삭제 권한이 없습니다' });
     const deleted = await deleteMedia(req.params.id);
-    for (const storedPath of [deleted.file_path, deleted.thumbnail_path].filter(Boolean)) {
+    const storedPaths = [deleted.file_path, deleted.thumbnail_path].filter(Boolean);
+    for (const storedPath of storedPaths) {
       await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {
         if (error.code !== 'ENOENT') console.error('미디어 파일 삭제 오류:', error);
       });
     }
+    await removeEmptyMediaDirectories(storedPaths);
     res.json({ message: "비디오가 삭제되었습니다", id: req.params.id });
   } catch (error) {
     console.error("비디오 삭제 오류:", error);
@@ -246,13 +248,17 @@ router.delete("/deleteMediaByDate/:date", requireAuth, async (req, res) => {
       return res.status(400).json({ error: '올바른 날짜가 필요합니다' });
     }
     const deleted = await deleteMediaByDate(req.params.date);
+    const storedPaths = [];
     for (const row of deleted) {
-      for (const storedPath of [row.file_path, row.thumbnail_path].filter(Boolean)) {
+      const rowStoredPaths = [row.file_path, row.thumbnail_path].filter(Boolean);
+      storedPaths.push(...rowStoredPaths);
+      for (const storedPath of rowStoredPaths) {
         await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {
           if (error.code !== 'ENOENT') console.error('미디어 파일 삭제 오류:', error);
         });
       }
     }
+    await removeEmptyMediaDirectories(storedPaths);
     return res.json({
       message: `${deleted.length}개의 미디어가 삭제되었습니다`,
       count: deleted.length,

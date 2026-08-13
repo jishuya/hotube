@@ -72,7 +72,7 @@ const Modal = ({
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           )}
 
-          <p className="max-w-full break-words text-gray-600">{message}</p>
+          <p className="max-w-full whitespace-pre-line break-words text-gray-600">{message}</p>
 
           <div className="flex gap-3 w-full mt-2">
             {type === 'confirm' && (
