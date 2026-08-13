@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "test": "node --test",
     "backfill:photo-thumbnails": "node scripts/backfillPhotoThumbnails.js",
+    "backfill:content-hashes": "node scripts/backfillMediaContentHashes.js",
     "migrate:push": "node scripts/migratePushSubscriptions.js",
     "backfill:uploaders": "node scripts/backfillMediaUploader.js"
   },

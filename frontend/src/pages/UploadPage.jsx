@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import { parse as parseExif } from 'exifr';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
+import ToastContainer from '../components/common/Toast';
 import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
-import { addVideo, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
+import { addVideo, checkMediaDuplicates, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 20;
@@ -88,6 +89,22 @@ const extractYouTubeId = (url) => {
   return match?.[1] || '';
 };
 
+const hashFile = async (file) => {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const getUploadFailureMessage = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  if (error instanceof TypeError || message.includes('failed to fetch') || message.includes('networkerror') || message.includes('load failed')) {
+    return '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 후 다시 시도해주세요.';
+  }
+  if (message.includes('too large') || message.includes('파일이 너무 큽니다')) {
+    return '파일 용량이 너무 커서 업로드하지 못했습니다. 더 작은 파일을 선택해주세요.';
+  }
+  return '사진 또는 영상을 업로드하지 못했습니다. 잠시 후 다시 시도해주세요.';
+};
+
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetDate = '', listOnly = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -115,6 +132,19 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadFailureMessage, setUploadFailureMessage] = useState('');
+  const [toasts, setToasts] = useState([]);
+  const showToast = useCallback((message, type = 'info') => {
+    setToasts((current) => [...current, {
+      id: `${Date.now()}-${Math.random()}`,
+      message,
+      type,
+      duration: 5000,
+    }]);
+  }, []);
+  const removeToast = useCallback((id) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
   const totalPages = Math.max(1, Math.ceil(uploads.length / ITEMS_PER_PAGE));
   const paginatedUploads = useMemo(() => uploads.slice(
@@ -160,7 +190,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     };
   }, [listOnly, filterDateFrom, filterDateTo, filterTag, filterSource, filterMediaType, hasActiveFilters, dateFilterError]);
 
-  const addFiles = (files) => {
+  const addFiles = async (files) => {
     const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
     const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     if (availableSlots === 0) {
@@ -185,13 +215,42 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       setUploadError('한 번에 선택한 파일의 전체 용량은 300MB를 초과할 수 없습니다.');
       return;
     }
-    setUploadError(exceededSelectionLimit
-      ? `최대 ${MAX_UPLOAD_FILES}개까지만 선택되어 초과한 파일은 제외했습니다.`
-      : '');
-    Promise.all(mediaFiles.map((file) => new Promise((resolve) => {
+    setUploadError('중복 파일을 확인하고 있어요...');
+    let hashedFiles;
+    try {
+      hashedFiles = [];
+      for (const file of mediaFiles) {
+        hashedFiles.push({ file, contentHash: await hashFile(file) });
+      }
+      const duplicateHashes = new Set(await checkMediaDuplicates(hashedFiles.map(({ contentHash }) => contentHash)));
+      const selectedHashes = new Set(selectedFiles.map((item) => item.contentHash).filter(Boolean));
+      const acceptedHashes = new Set();
+      const duplicateNames = [];
+      hashedFiles = hashedFiles.filter(({ file, contentHash }) => {
+        const duplicate = duplicateHashes.has(contentHash)
+          || selectedHashes.has(contentHash)
+          || acceptedHashes.has(contentHash);
+        if (duplicate) duplicateNames.push(file.name);
+        else acceptedHashes.add(contentHash);
+        return !duplicate;
+      });
+      setUploadError('');
+      if (exceededSelectionLimit) {
+        showToast(`최대 ${MAX_UPLOAD_FILES}개까지만 선택했어요.`, 'warning');
+      }
+      if (duplicateNames.length) {
+        showToast(`이미 올린 파일은 제외했어요: ${duplicateNames.join(', ')}`, 'warning');
+      }
+    } catch (error) {
+      setUploadError(error.message || '중복 파일을 확인하지 못했습니다');
+      return;
+    }
+    const nextCandidates = hashedFiles;
+    Promise.all(nextCandidates.map(({ file, contentHash }) => new Promise((resolve) => {
       if (file.type.startsWith('video/')) {
         getMediaDate(file).then((mediaDate) => resolve({
           file,
+          contentHash,
           name: file.name,
           type: 'video',
           preview: null,
@@ -205,6 +264,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         const mediaDate = await getMediaDate(file);
         resolve({
           file,
+          contentHash,
           name: file.name,
           type: file.type.startsWith('video/') ? 'video' : 'photo',
           preview: reader.result,
@@ -305,8 +365,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const normalizedTags = tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean);
     setUploading(true);
     setUploadError('');
+    setUploadFailureMessage('');
     try {
       const created = [];
+      const duplicateFiles = [];
       if (uploadSource === 'device') {
         const uploadBatchId = crypto.randomUUID();
         for (const item of selectedFiles) {
@@ -314,15 +376,20 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             .map((tag) => tag.trim().replace(/^#/, ''))
             .filter(Boolean);
           const mergedTags = [...new Set([...normalizedTags, ...itemTags])];
-          const saved = await uploadMediaFile(item.file, {
-            title: item.name,
-            uploadedAt: targetDate || item.date || date,
-            tags: mergedTags,
-            uploadedBy: user?.id,
-            sharedWith,
-            uploadBatchId,
-          });
-          created.push(toMemoryMedia(saved));
+          try {
+            const saved = await uploadMediaFile(item.file, {
+              title: item.name,
+              uploadedAt: targetDate || item.date || date,
+              tags: mergedTags,
+              uploadedBy: user?.id,
+              sharedWith,
+              uploadBatchId,
+            });
+            created.push(toMemoryMedia(saved));
+          } catch (error) {
+            if (error.code !== 'DUPLICATE_MEDIA') throw error;
+            duplicateFiles.push(item.name);
+          }
         }
       } else if (youtubeId && youtubeInfo) {
         const saved = await addVideo({
@@ -344,7 +411,12 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         });
         created.push(toMemoryMedia(saved));
       }
-      if (created.length === 0) return;
+      if (created.length === 0) {
+        if (duplicateFiles.length) {
+          setUploadError(`이미 업로드된 파일이라 제외했어요: ${duplicateFiles.join(', ')}`);
+        }
+        return;
+      }
       setUploads((current) => [...created, ...current]);
       resetForm();
       setPage(1);
@@ -356,13 +428,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         replace: true,
         state: {
           returnTo,
-          uploadSuccessMessage: created.length > 1
-            ? `${created.length}개의 미디어가 업로드되었습니다.`
-            : '미디어가 업로드되었습니다.',
+          uploadSuccessMessage: `${created.length}개의 미디어가 업로드되었습니다.${duplicateFiles.length ? ` 중복 파일 ${duplicateFiles.length}개는 제외했어요: ${duplicateFiles.join(', ')}` : ''}`,
         },
       });
     } catch (error) {
-      setUploadError(error.message);
+      setUploadFailureMessage(getUploadFailureMessage(error));
     } finally {
       setUploading(false);
     }
@@ -438,12 +508,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
                         <span className="font-bold">{selectedFiles.length >= MAX_UPLOAD_FILES ? '10개를 모두 선택했어요' : '사진 또는 영상 선택'}</span>
                         <span className="mt-1 text-xs text-text-secondary">현재 {selectedFiles.length}/10개 선택</span>
-                        <span className="mt-4 flex flex-col gap-1.5 rounded-xl border border-orange-300 bg-orange-100 px-4 py-3 text-sm font-extrabold text-orange-700 shadow-sm dark:border-orange-500/50 dark:bg-orange-500/15 dark:text-orange-300">
-                          <span className="flex items-center justify-center gap-1.5">
-                            <Icon icon="mdi:alert-circle-outline" className="shrink-0 text-lg" />
-                            최대 10개까지 올릴 수 있습니다
-                          </span>
-                          <span>영상은 1분 미만으로 올려주세요</span>
+                        <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-extrabold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                          <Icon icon="mdi:information-outline" className="shrink-0 text-base" />
+                          최대 10개 · 영상 1분 미만
                         </span>
                         <input
                           type="file"
@@ -831,6 +898,13 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       ), document.body)}
 
       <Modal
+        isOpen={Boolean(uploadFailureMessage)}
+        onClose={() => setUploadFailureMessage('')}
+        title="업로드 실패"
+        message={uploadFailureMessage}
+        confirmText="확인"
+      />
+      <Modal
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
@@ -839,6 +913,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         type="confirm"
         confirmText="삭제"
       />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   );
 };

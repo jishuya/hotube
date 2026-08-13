@@ -44,7 +44,7 @@ const ToastItem = ({ toast, onRemove }) => {
       className={`flex w-full max-w-sm items-center gap-3 rounded-lg border px-4 py-3 shadow-lg ${config.bg} animate-in fade-in duration-300`}
     >
       <Icon icon={config.icon} className={`text-xl ${config.iconColor} shrink-0`} />
-      <p className={`text-sm font-medium ${config.textColor}`}>{toast.message}</p>
+      <p className={`min-w-0 flex-1 break-words text-sm font-medium ${config.textColor}`}>{toast.message}</p>
       <button
         onClick={() => onRemove(toast.id)}
         className={`ml-auto ${config.iconColor} hover:opacity-70 transition-opacity`}

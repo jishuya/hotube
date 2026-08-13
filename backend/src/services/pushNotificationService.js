@@ -39,6 +39,8 @@ const loadVapidKeys = () => {
 
 const ensurePushSubscriptionSchema = async () => {
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS upload_batch_id TEXT`);
+  await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS content_hash TEXT`);
+  await pgDb.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_media_content_hash ON media (content_hash) WHERE content_hash IS NOT NULL`);
   await pgDb.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id UUID PRIMARY KEY,

@@ -354,6 +354,7 @@ const createFileMedia = async ({
   uploadedBy = null,
   sharedWith = ['dad', 'mom'],
   uploadBatchId = null,
+  contentHash = null,
 }) => {
   let client;
 
@@ -369,10 +370,10 @@ const createFileMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $11)
-    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $12, $12)
+    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, now]);
 
     await replaceMediaTags(client, id, tags);
     const createdMedia = await fetchMediaById(client, id);
@@ -380,6 +381,9 @@ const createFileMedia = async ({
     return createdMedia;
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
+    if (error.code === '23505' && error.constraint === 'idx_media_content_hash') {
+      throw new HttpError(409, '이미 업로드된 사진 또는 영상입니다.', 'DUPLICATE_MEDIA');
+    }
     throw error;
   } finally {
     client?.release();

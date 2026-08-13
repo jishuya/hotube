@@ -1,10 +1,12 @@
 const express = require("express");
+const { createHash, randomUUID } = require('crypto');
+const { createReadStream } = require('fs');
 const fs = require('fs/promises');
 const path = require('path');
-const { randomUUID } = require('crypto');
 const multer = require('multer');
 const pgDb = require('../db');
 const { requireAuth } = require('../authToken');
+const { HttpError } = require('../httpErrors');
 const { mapMediaRowToVideo } = require("../responseMappers");
 const {
   ensureMediaDateDirectory,
@@ -30,6 +32,7 @@ const { fetchUserById } = require('../services/userService');
 const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
+const MAX_UPLOAD_FILES = 10;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 const MAX_MEDIA_SIZE = 90 * 1024 * 1024;
 
@@ -52,11 +55,37 @@ const upload = multer({
 
 const sendRouteError = (res, fallbackMessage, error) => {
   if (error.status) {
-    return res.status(error.status).json({ error: error.message });
+    return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 
   return res.status(500).json({ error: fallbackMessage });
 };
+
+const hashFile = (filePath) => new Promise((resolve, reject) => {
+  const hash = createHash('sha256');
+  const stream = createReadStream(filePath);
+  stream.on('error', reject);
+  stream.on('data', (chunk) => hash.update(chunk));
+  stream.on('end', () => resolve(hash.digest('hex')));
+});
+
+router.post('/checkMediaDuplicates', async (req, res) => {
+  try {
+    const hashes = [...new Set((Array.isArray(req.body.hashes) ? req.body.hashes : [])
+      .map((hash) => String(hash).toLowerCase())
+      .filter((hash) => /^[a-f0-9]{64}$/.test(hash)))]
+      .slice(0, MAX_UPLOAD_FILES);
+    if (!hashes.length) return res.json({ duplicateHashes: [] });
+    const result = await pgDb.query(
+      'SELECT content_hash FROM media WHERE content_hash = ANY($1::text[])',
+      [hashes],
+    );
+    return res.json({ duplicateHashes: result.rows.map((row) => row.content_hash) });
+  } catch (error) {
+    console.error('미디어 중복 확인 오류:', error);
+    return sendRouteError(res, '중복 파일 확인 실패', error);
+  }
+});
 
 router.get('/getMediaDateRange', async (req, res) => {
   try {
@@ -202,6 +231,11 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       error.status = 401;
       throw error;
     }
+    const contentHash = await hashFile(req.file.path);
+    const duplicate = await pgDb.query('SELECT id FROM media WHERE content_hash = $1 LIMIT 1', [contentHash]);
+    if (duplicate.rows.length) {
+      throw new HttpError(409, `이미 업로드된 파일입니다: ${req.file.originalname}`, 'DUPLICATE_MEDIA');
+    }
 
     if (isVideo) {
       const thumbnailFilename = `${randomUUID()}.jpg`;
@@ -230,6 +264,7 @@ router.post('/uploadMedia', upload.single('file'), async (req, res) => {
       uploadedBy: uploader.id,
       sharedWith: JSON.parse(req.body.sharedWith || '["dad","mom"]'),
       uploadBatchId: req.body.uploadBatchId || null,
+      contentHash,
     });
     if (browserVideoPath) await fs.unlink(req.file.path).catch(() => {});
     void notifyNewMedia({

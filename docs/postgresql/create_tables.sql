@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS media (
     channel_title TEXT,
     uploaded_by TEXT,
     upload_batch_id TEXT,
+    content_hash TEXT,
     shared_with TEXT[] NOT NULL DEFAULT ARRAY['dad', 'mom']::TEXT[],
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
@@ -87,6 +88,10 @@ CREATE TABLE IF NOT EXISTS media (
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_content_hash
+    ON media (content_hash)
+    WHERE content_hash IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

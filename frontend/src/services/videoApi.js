@@ -8,12 +8,23 @@ const FUNCTIONS_URL = {
   deleteVideo: `${API_BASE_URL}/deleteVideo`,
   deleteMediaByDate: `${API_BASE_URL}/deleteMediaByDate`,
   uploadMedia: `${API_BASE_URL}/uploadMedia`,
+  checkMediaDuplicates: `${API_BASE_URL}/checkMediaDuplicates`,
   getMediaDateRange: `${API_BASE_URL}/getMediaDateRange`,
   getCalendarMedia: `${API_BASE_URL}/getCalendarMedia`,
   getMediaDetails: `${API_BASE_URL}/getMediaDetails`,
   getFavoriteMedia: `${API_BASE_URL}/getFavoriteMedia`,
   getLikedMedia: `${API_BASE_URL}/getLikedMedia`,
   toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
+};
+
+export const checkMediaDuplicates = async (hashes) => {
+  const response = await fetch(FUNCTIONS_URL.checkMediaDuplicates, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hashes }),
+  });
+  if (!response.ok) throw new Error('중복 파일을 확인하지 못했습니다');
+  return (await response.json()).duplicateHashes || [];
 };
 
 const getViewerId = () => {
@@ -135,7 +146,9 @@ export const uploadMediaFile = async (file, {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || '파일 업로드에 실패했습니다');
+    const uploadError = new Error(error.error || '파일 업로드에 실패했습니다');
+    uploadError.code = error.code;
+    throw uploadError;
   }
   return resolveMediaUrls(await response.json());
 };
