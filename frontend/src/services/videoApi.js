@@ -176,7 +176,7 @@ export const uploadMediaFile = async (file, {
     }
     throw lastError;
   };
-  await Promise.all(Array.from({ length: Math.min(2, missingChunks.length) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(3, missingChunks.length) }, async () => {
     while (nextChunk < missingChunks.length) {
       const index = missingChunks[nextChunk];
       nextChunk += 1;

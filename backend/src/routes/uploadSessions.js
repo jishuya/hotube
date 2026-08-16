@@ -13,7 +13,7 @@ const { notifyNewMedia } = require('../services/pushNotificationService');
 const router = express.Router();
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 90 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 150 * 1024 * 1024;
 const SESSION_ROOT = path.join(mediaDirectory, '.upload-sessions');
 
 const sessionDirectory = (sessionId) => {
@@ -45,7 +45,7 @@ router.post('/uploadMedia/init', async (req, res) => {
     }
     const maxSize = mimeType.startsWith('video/') ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
     if (!Number.isSafeInteger(fileSize) || fileSize < 1 || fileSize > maxSize) {
-      throw new HttpError(400, mimeType.startsWith('video/') ? '영상은 개당 90MB까지 업로드할 수 있습니다' : '사진은 개당 20MB까지 업로드할 수 있습니다');
+      throw new HttpError(400, mimeType.startsWith('video/') ? '영상은 개당 150MB까지 업로드할 수 있습니다' : '사진은 개당 20MB까지 업로드할 수 있습니다');
     }
     const duplicate = await pgDb.query('SELECT 1 FROM media WHERE content_hash = $1', [contentHash]);
     if (duplicate.rows.length) throw new HttpError(409, `이미 업로드된 파일입니다: ${originalName}`, 'DUPLICATE_MEDIA');

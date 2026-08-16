@@ -16,8 +16,8 @@ import { listPendingUploads, removePendingUpload, savePendingUpload } from '../s
 const ITEMS_PER_PAGE = 20;
 const MAX_UPLOAD_FILES = 10;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 90 * 1024 * 1024;
-const MAX_TOTAL_UPLOAD_SIZE = 300 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 150 * 1024 * 1024;
+const MAX_TOTAL_UPLOAD_SIZE = 500 * 1024 * 1024;
 const SHARE_OPTIONS = [
   { value: 'dad', label: '아빠가족' },
   { value: 'mom', label: '엄마가족' },
@@ -298,10 +298,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       selectionNotices.push(`사진 20MB 초과: ${summarizeNames(oversizedImages)}`);
     }
     if (oversizedVideos.length) {
-      selectionNotices.push(`영상 90MB 초과: ${summarizeNames(oversizedVideos)}`);
+      selectionNotices.push(`영상 150MB 초과: ${summarizeNames(oversizedVideos)}`);
     }
     if (totalSizeExcludedFiles.length) {
-      selectionNotices.push(`전체 300MB 초과: ${summarizeNames(totalSizeExcludedFiles)}`);
+      selectionNotices.push(`전체 500MB 초과: ${summarizeNames(totalSizeExcludedFiles)}`);
     }
 
     if (!mediaFiles.length) {
