@@ -205,7 +205,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
     OR m.uploaded_by = $1
   )`;
 
-  const [datesResult, unreadResult] = await Promise.all([
+  const [datesResult, unreadResult, notificationResult] = await Promise.all([
     pgDb.query(`
       SELECT TO_CHAR(m.uploaded_at, 'YYYY-MM-DD') AS date
       FROM media m
@@ -243,11 +243,47 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         )
       ORDER BY m.created_at DESC
     `, params),
+    pgDb.query(`
+      SELECT
+        m.id,
+        m.title,
+        m.media_type,
+        m.content_type,
+        m.youtube_url,
+        m.file_path,
+        m.thumbnail_url,
+        m.thumbnail_path,
+        m.uploaded_at,
+        m.upload_batch_id,
+        m.processing_status,
+        m.processing_error,
+        m.created_at,
+        m.updated_at
+      FROM media m
+      WHERE m.uploaded_at IS NOT NULL
+        AND ${accessCondition}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_media_notification_reads umnr
+          WHERE umnr.user_id = $1
+            AND umnr.notification_key = COALESCE(m.upload_batch_id, m.id)
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_watched_media uwm
+          JOIN media watched_media ON watched_media.id = uwm.media_id
+          WHERE uwm.user_id = $1
+            AND COALESCE(watched_media.upload_batch_id, watched_media.id)
+              = COALESCE(m.upload_batch_id, m.id)
+        )
+      ORDER BY m.created_at DESC
+    `, params),
   ]);
 
   return {
     dates: datesResult.rows.map((row) => row.date),
     unreadMedia: unreadResult.rows,
+    notificationMedia: notificationResult.rows,
   };
 };
 

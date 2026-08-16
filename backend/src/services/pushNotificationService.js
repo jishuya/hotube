@@ -111,6 +111,14 @@ const ensurePushSubscriptionSchema = async () => {
   `);
   await pgDb.query(`CREATE INDEX IF NOT EXISTS idx_user_notifications_unread ON user_notifications (user_id, created_at DESC) WHERE read_at IS NULL`);
   await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS user_media_notification_reads (
+      user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      notification_key TEXT NOT NULL,
+      read_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, notification_key)
+    )
+  `);
+  await pgDb.query(`
     CREATE TABLE IF NOT EXISTS media_notification_batches (
       upload_batch_id TEXT NOT NULL,
       uploader_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -148,6 +156,31 @@ const markInternalNotificationRead = async (userId, notificationId) => {
   `, [notificationId, userId]);
   if (!result.rows.length) throw new HttpError(404, "알림을 찾을 수 없습니다");
   return { id: notificationId, read: true };
+};
+
+const markMediaNotificationsRead = async (userId, mediaIds) => {
+  const ids = [...new Set((Array.isArray(mediaIds) ? mediaIds : [])
+    .map((id) => String(id).trim())
+    .filter(Boolean))]
+    .slice(0, 200);
+  if (!ids.length) throw new HttpError(400, "확인할 미디어 알림이 필요합니다");
+
+  const result = await pgDb.query(`
+    INSERT INTO user_media_notification_reads (user_id, notification_key)
+    SELECT DISTINCT $1, COALESCE(m.upload_batch_id, m.id)
+    FROM media m
+    JOIN users u ON u.id = $1
+    WHERE m.id = ANY($2::text[])
+      AND (
+        u.role IN ('admin', 'sub-admin')
+        OR u.category = ANY(m.shared_with)
+        OR m.uploaded_by = u.id
+      )
+    ON CONFLICT (user_id, notification_key) DO UPDATE
+    SET read_at = CURRENT_TIMESTAMP
+    RETURNING notification_key
+  `, [userId, ids]);
+  return { read: true, notificationKeys: result.rows.map((row) => row.notification_key) };
 };
 
 const configureWebPush = () => {
@@ -312,6 +345,12 @@ const getUnreadNotificationCount = async (userId, mediaSince = null) => {
         AND ($2::timestamptz IS NULL OR m.created_at > $2)
         AND NOT EXISTS (
           SELECT 1
+          FROM user_media_notification_reads umnr
+          WHERE umnr.user_id = u.id
+            AND umnr.notification_key = COALESCE(m.upload_batch_id, m.id)
+        )
+        AND NOT EXISTS (
+          SELECT 1
           FROM user_watched_media uwm
           JOIN media watched_media ON watched_media.id = uwm.media_id
           WHERE uwm.user_id = u.id
@@ -468,6 +507,7 @@ module.exports = {
   getSubscriptionStatus,
   listInternalNotifications,
   markInternalNotificationRead,
+  markMediaNotificationsRead,
   notifyNewComment,
   notifyNewMedia,
   notifySupportCreated,

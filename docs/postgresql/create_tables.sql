@@ -95,6 +95,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_media_content_hash
     ON media (content_hash)
     WHERE content_hash IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS user_media_notification_reads (
+    user_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+    notification_key TEXT NOT NULL,
+    read_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, notification_key)
+);
+
 CREATE TABLE IF NOT EXISTS media_processing_jobs (
     id UUID PRIMARY KEY,
     media_id TEXT NOT NULL UNIQUE REFERENCES media (id) ON UPDATE CASCADE ON DELETE CASCADE,

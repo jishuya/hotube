@@ -5,6 +5,7 @@ const {
   getSubscriptionStatus,
   listInternalNotifications,
   markInternalNotificationRead,
+  markMediaNotificationsRead,
   removeSubscription,
   saveNotificationPreferences,
   saveSubscription,
@@ -56,6 +57,14 @@ router.patch("/push/notifications/:id/read", async (req, res) => {
     return res.json(await markInternalNotificationRead(req.auth.userId, req.params.id));
   } catch (error) {
     return sendError(res, error, "알림을 확인 처리하지 못했습니다");
+  }
+});
+
+router.patch("/push/media-notifications/read", async (req, res) => {
+  try {
+    return res.json(await markMediaNotificationsRead(req.auth.userId, req.body.mediaIds));
+  } catch (error) {
+    return sendError(res, error, "미디어 알림을 확인 처리하지 못했습니다");
   }
 });
 

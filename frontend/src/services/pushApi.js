@@ -54,6 +54,15 @@ export const markInternalNotificationRead = async (notificationId) => parseRespo
   '알림을 확인 처리하지 못했습니다',
 );
 
+export const markMediaNotificationsRead = async (mediaIds) => parseResponse(
+  await fetch(`${API_BASE_URL}/push/media-notifications/read`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ mediaIds }),
+  }),
+  '미디어 알림을 확인 처리하지 못했습니다',
+);
+
 export const savePushSubscription = async (subscription) => parseResponse(
   await fetch(`${API_BASE_URL}/push/subscribe`, {
     method: 'POST',

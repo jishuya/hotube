@@ -70,6 +70,7 @@ router.get('/getCalendarMedia', async (req, res) => {
     return res.json({
       dates: calendar.dates,
       unreadMedia: calendar.unreadMedia.map(mapMediaRowToVideo),
+      notificationMedia: calendar.notificationMedia.map(mapMediaRowToVideo),
     });
   } catch (error) {
     console.error('캘린더 미디어 조회 오류:', error);

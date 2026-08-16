@@ -6,8 +6,8 @@ import ChildInfoModal from './ChildInfoModal';
 import { getChildProfile, saveChildProfile } from '../../services/childProfileApi';
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 import { getCalendarMedia, toMemoryMedia } from '../../services/videoApi';
-import { markAllVideosWatched, markVideoWatched } from '../../services/authApi';
-import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead } from '../../services/pushApi';
+import { markVideoWatched } from '../../services/authApi';
+import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead, markMediaNotificationsRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const DEFAULT_CHILD = {
@@ -196,9 +196,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     let active = true;
     const loadMediaNotifications = () => {
       getCalendarMedia()
-        .then(({ unreadMedia }) => {
+        .then(({ notificationMedia }) => {
           if (active) {
-            setMediaNotifications(unreadMedia.map(toMemoryMedia));
+            setMediaNotifications(notificationMedia.map(toMemoryMedia));
             setMediaNotificationsLoadedFor(user.id);
             setMediaNotificationError('');
           }
@@ -321,9 +321,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
     setMarkingAllMedia(true);
     setMediaNotificationError('');
     try {
-      await markAllVideosWatched(user.id);
       const unreadMediaIds = unreadMedia.map((media) => media.id);
-      markAllWatchedLocal(unreadMediaIds);
+      await markMediaNotificationsRead(unreadMediaIds);
+      setMediaNotifications((current) => current.filter((media) => !unreadMediaIds.includes(media.id)));
       await dismissMediaNotifications(unreadMediaIds);
     } catch (error) {
       setMediaNotificationError(error.message || '전체 미디어 확인 처리에 실패했습니다');

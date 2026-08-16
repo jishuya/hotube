@@ -97,6 +97,7 @@ export const getCalendarMedia = async () => {
   return {
     dates: calendar.dates || [],
     unreadMedia: (calendar.unreadMedia || []).map(resolveMediaUrls),
+    notificationMedia: (calendar.notificationMedia || []).map(resolveMediaUrls),
   };
 };
 
