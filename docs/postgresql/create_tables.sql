@@ -305,6 +305,7 @@ CREATE INDEX IF NOT EXISTS idx_child_profiles_birth_date ON child_profiles (birt
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments (user_id);
 CREATE INDEX IF NOT EXISTS idx_media_title_trgm ON media USING GIN (title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media (uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_media_cursor_order ON media (COALESCE(created_at, 'epoch'::timestamptz) DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_media_year ON media (year);
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags (name);
 CREATE INDEX IF NOT EXISTS idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops);

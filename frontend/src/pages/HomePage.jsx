@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Header from '../components/common/Header';
 import VideoCard from '../components/common/VideoCard';
-import { getAllVideos } from '../services/videoApi';
+import { getMediaPage } from '../services/videoApi';
 
 const PAGE_SIZE = 40;
 
@@ -13,8 +13,12 @@ const HomePage = () => {
   const tabParam = searchParams.get('tab') || 'all';
 
   const [videos, setVideos] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef(null);
+  const loadingMoreRef = useRef(false);
+  const feedVersionRef = useRef(0);
   const [activeTab, setActiveTab] = useState(tabParam); // all, longform, short, timeline
 
   // URL 파라미터로 탭 상태 동기화
@@ -47,19 +51,22 @@ const HomePage = () => {
         ? 'short'
         : null;
     let active = true;
+    feedVersionRef.current += 1;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
     setLoading(true);
-    getAllVideos({
+    getMediaPage({
       contentType,
       search: searchQuery.trim(),
       limit: PAGE_SIZE,
-      offset: 0,
     })
-      .then((fetchedVideos) => {
+      .then((page) => {
         if (!active) return;
-        setVideos(fetchedVideos);
-        setHasMore(fetchedVideos.length === PAGE_SIZE);
+        setVideos(page.items);
+        setNextCursor(page.nextCursor);
+        setHasMore(Boolean(page.nextCursor));
         setExpandedYears(Object.fromEntries(
-          [...new Set(fetchedVideos.map((video) => video.year))].map((year) => [year, true]),
+          [...new Set(page.items.map((video) => video.year))].map((year) => [year, true]),
         ));
         setExpandedMonths({});
       })
@@ -72,33 +79,52 @@ const HomePage = () => {
     };
   }, [activeTab, searchQuery]);
 
-  const loadMoreVideos = async () => {
+  const loadMoreVideos = useCallback(async () => {
+    if (!nextCursor || loadingMoreRef.current) return;
+    const feedVersion = feedVersionRef.current;
     const contentType = activeTab === 'longform'
       ? 'long'
       : activeTab === 'short'
         ? 'short'
         : null;
     try {
+      loadingMoreRef.current = true;
       setLoadingMore(true);
-      const fetchedVideos = await getAllVideos({
+      const page = await getMediaPage({
         contentType,
         search: searchQuery.trim(),
         limit: PAGE_SIZE,
-        offset: videos.length,
+      }, nextCursor);
+      if (feedVersion !== feedVersionRef.current) return;
+      setVideos((current) => {
+        const existingIds = new Set(current.map((video) => video.id));
+        return [...current, ...page.items.filter((video) => !existingIds.has(video.id))];
       });
-      const nextVideos = [...videos, ...fetchedVideos];
-      setVideos(nextVideos);
-      setHasMore(fetchedVideos.length === PAGE_SIZE);
+      setNextCursor(page.nextCursor);
+      setHasMore(Boolean(page.nextCursor));
       setExpandedYears((current) => ({
         ...current,
-        ...Object.fromEntries(fetchedVideos.map((video) => [video.year, true])),
+        ...Object.fromEntries(page.items.map((video) => [video.year, true])),
       }));
     } catch (error) {
-      console.error('Error loading videos:', error);
+      if (feedVersion === feedVersionRef.current) console.error('Error loading videos:', error);
     } finally {
-      setLoadingMore(false);
+      if (feedVersion === feedVersionRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
-  };
+  }, [activeTab, nextCursor, searchQuery]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreVideos();
+    }, { rootMargin: '600px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, loadMoreVideos]);
 
   // 검색 필터링
   const filteredVideos = useMemo(() => {
@@ -459,15 +485,9 @@ const HomePage = () => {
                 )}
 
                 {hasMore && videos.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={loadMoreVideos}
-                    disabled={loadingMore}
-                    className="mx-auto flex min-w-40 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {loadingMore && <Icon icon="mdi:loading" className="animate-spin text-xl" />}
-                    {loadingMore ? '불러오는 중...' : '더 보기'}
-                  </button>
+                  <div ref={loadMoreRef} className="flex min-h-16 items-center justify-center" aria-live="polite">
+                    {loadingMore && <><Icon icon="mdi:loading" className="animate-spin text-xl text-primary" /><span className="ml-2 text-sm text-text-secondary">더 불러오는 중...</span></>}
+                  </div>
                 )}
 
                 {/* 검색 결과 없음 */}

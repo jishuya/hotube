@@ -175,10 +175,9 @@ const MediaVideoPlayer = ({ src, poster }) => {
           ref={videoRef}
           src={src}
           poster={poster}
-          autoPlay
           muted={muted}
           playsInline
-          preload="auto"
+          preload="metadata"
           onPlay={() => {
             setPlaying(true);
             setControlsVisible(true);
@@ -202,6 +201,16 @@ const MediaVideoPlayer = ({ src, poster }) => {
           }}
         />
       </div>
+      {!playing && currentTime === 0 && (
+        <button
+          type="button"
+          onClick={togglePlayback}
+          className="absolute left-1/2 top-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-4xl text-white shadow-xl backdrop-blur-sm transition hover:scale-105 hover:bg-black/75"
+          aria-label="영상 재생"
+        >
+          <Icon icon="mdi:play" />
+        </button>
+      )}
       <div className={`absolute inset-x-2 bottom-1.5 flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-zinc-950/75 px-2.5 text-white shadow-2xl backdrop-blur-md transition-all duration-300 sm:inset-x-3 sm:px-3 ${
         controlsVisible || !playing ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}>
@@ -416,18 +425,37 @@ const MediaViewerPage = () => {
     })
     .catch((loadError) => showToast('error', loadError.message)), [mediaId, showToast, user?.id]);
 
+  const handleCommentCountChange = useCallback((commentCount) => {
+    setDetails((value) => {
+      if (!value || value.commentCount === commentCount) return value;
+      return { ...value, commentCount };
+    });
+  }, []);
+
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setDetails(null);
     const loadMediaItems = Array.isArray(albumMediaIds) && albumMediaIds.length > 0
       ? getAllVideos({ ids: albumMediaIds.join(',') })
       : requestedDate
         ? getAllVideos({ uploadedAt: requestedDate })
         : getVideoById(mediaId).then((item) => [item]);
-    Promise.all([
-      loadMediaItems.then((allMedia) => setMediaItems(allMedia.map(toMemoryMedia))),
-      loadDetails(),
-    ]).finally(() => setLoading(false));
-  }, [albumMediaIds, loadDetails, mediaId, requestedDate, user?.id]);
+    loadMediaItems
+      .then((allMedia) => {
+        if (active) setMediaItems(allMedia.map(toMemoryMedia));
+      })
+      .catch((loadError) => {
+        if (active) showToast('error', loadError.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    void loadDetails();
+    return () => {
+      active = false;
+    };
+  }, [albumMediaIds, loadDetails, mediaId, requestedDate, showToast]);
 
   useEffect(() => {
     getChildProfile()
@@ -735,7 +763,12 @@ const MediaViewerPage = () => {
                 <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} />
               ) : (
                 <button type="button" onClick={() => setPhotoOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
-                  <img src={current.src} alt={current.title} className="block max-h-[75vh] w-full object-contain" />
+                  <img
+                    src={current.thumbnail || current.src}
+                    alt={current.title}
+                    decoding="async"
+                    className="block max-h-[75vh] w-full object-contain"
+                  />
                   <span className="absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/55 text-xl text-white opacity-90 shadow-lg backdrop-blur transition group-hover:scale-105" aria-hidden="true"><Icon icon="mdi:magnify-plus-outline" /></span>
                 </button>
               )}
@@ -841,7 +874,7 @@ const MediaViewerPage = () => {
           <div ref={commentsRef} id="comments">
             <CommentSection
               videoId={mediaId}
-              onCountChange={(commentCount) => setDetails((value) => value ? { ...value, commentCount } : value)}
+              onCountChange={handleCommentCountChange}
             />
           </div>
         </aside>

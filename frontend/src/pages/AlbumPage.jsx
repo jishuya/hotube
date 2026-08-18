@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
-import { deleteVideo, getAllVideos, getFavoriteMedia, getMediaDateRange, toMemoryMedia, toggleFavorite, updateVideo } from '../services/videoApi';
+import { deleteVideo, getFavoriteMedia, getMediaDateRange, getMediaPage, toMemoryMedia, toggleFavorite, updateVideo } from '../services/videoApi';
 import { deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
 import { toggleLike } from '../services/authApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
@@ -14,6 +14,7 @@ import DatePickerField, { DateRangePicker } from '../components/common/DatePicke
 
 const formatMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const currentMonthKey = formatMonthKey(new Date());
+const MEDIA_PAGE_SIZE = 40;
 
 const buildMonthOptions = (minDate, maxDate) => {
   const minKey = minDate?.slice(0, 7) || currentMonthKey;
@@ -94,6 +95,11 @@ const AlbumPage = () => {
   const [noteSaveStatus, setNoteSaveStatus] = useState('');
   const [deletingNoteDate, setDeletingNoteDate] = useState(null);
   const [mediaItems, setMediaItems] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef(null);
+  const loadingMoreRef = useRef(false);
+  const feedVersionRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -174,20 +180,28 @@ const AlbumPage = () => {
   useEffect(() => {
     let active = true;
     const loadMedia = () => {
+      feedVersionRef.current += 1;
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
       setLoading(true);
       setLoadError('');
+      setNextCursor(null);
       if (dateFilterError) {
         setMediaItems([]);
         setLoading(false);
         return;
       }
-      getAllVideos({
+      getMediaPage({
         ...activeMediaRange,
         search: searchQuery.trim().replace(/^#/, ''),
         mediaType,
+        limit: MEDIA_PAGE_SIZE,
       })
-        .then((items) => {
-          if (active) setMediaItems(items.map(toMemoryMedia));
+        .then((page) => {
+          if (active) {
+            setMediaItems(page.items.map(toMemoryMedia));
+            setNextCursor(page.nextCursor);
+          }
         })
         .catch((error) => {
           if (active) setLoadError(error.message);
@@ -205,6 +219,44 @@ const AlbumPage = () => {
       window.removeEventListener('hotube:media-updated', loadMedia);
     };
   }, [activeMediaRange, dateFilterError, mediaType, reloadKey, searchQuery]);
+
+  const loadMoreMedia = useCallback(async () => {
+    if (!nextCursor || loadingMoreRef.current || dateFilterError) return;
+    const feedVersion = feedVersionRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await getMediaPage({
+        ...activeMediaRange,
+        search: searchQuery.trim().replace(/^#/, ''),
+        mediaType,
+        limit: MEDIA_PAGE_SIZE,
+      }, nextCursor);
+      if (feedVersion !== feedVersionRef.current) return;
+      setMediaItems((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.map(toMemoryMedia).filter((item) => !existingIds.has(item.id))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      if (feedVersion === feedVersionRef.current) setLoadError(error.message);
+    } finally {
+      if (feedVersion === feedVersionRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [activeMediaRange, dateFilterError, mediaType, nextCursor, searchQuery]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !nextCursor) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreMedia();
+    }, { rootMargin: '600px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMoreMedia, nextCursor]);
 
   useEffect(() => {
     let active = true;
@@ -883,6 +935,11 @@ const AlbumPage = () => {
                   </article>
                 );
               })}
+              {nextCursor && (
+                <div ref={loadMoreRef} className="flex min-h-20 items-center justify-center" aria-live="polite">
+                  {loadingMore && <><Icon icon="mdi:loading" className="animate-spin text-xl text-primary" /><span className="ml-2 text-sm text-text-secondary">더 불러오는 중...</span></>}
+                </div>
+              )}
             </section>
           ) : (
             <section className="flex min-h-[45vh] flex-col items-center justify-center rounded-xl bg-surface px-6 py-12 text-center shadow-sm">

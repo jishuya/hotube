@@ -82,6 +82,23 @@ export const getAllVideos = async (filters = null) => {
   return (await response.json()).map(resolveMediaUrls);
 };
 
+export const getMediaPage = async (filters = {}, cursor = null) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set('viewerId', getViewerId());
+  searchParams.set('pagination', 'cursor');
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && value !== 'all') searchParams.set(key, value);
+  });
+  if (cursor) searchParams.set('cursor', cursor);
+  const response = await fetch(`${FUNCTIONS_URL.getVideos}?${searchParams.toString()}`);
+  if (!response.ok) throw new Error('미디어 목록을 가져오는데 실패했습니다');
+  const page = await response.json();
+  return {
+    items: (page.items || []).map(resolveMediaUrls),
+    nextCursor: page.nextCursor || null,
+  };
+};
+
 export const getMediaDateRange = async () => {
   const response = await fetch(FUNCTIONS_URL.getMediaDateRange);
   if (!response.ok) throw new Error('미디어 날짜 범위를 가져오는데 실패했습니다');

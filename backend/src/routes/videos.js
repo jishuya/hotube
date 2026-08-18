@@ -10,6 +10,7 @@ const {
   deleteMedia,
   deleteMediaByDate,
   getCalendarMedia,
+  getAccessibleMediaAsset,
   getMedia,
   getMediaAccess,
   getMediaDateRange,
@@ -21,6 +22,22 @@ const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
 const MAX_UPLOAD_FILES = 10;
+
+const decodeMediaCursor = (value) => {
+  if (!value) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+    if (!decoded?.createdAt || !decoded?.id || Number.isNaN(Date.parse(decoded.createdAt))) return null;
+    return { createdAt: decoded.createdAt, id: String(decoded.id) };
+  } catch {
+    return null;
+  }
+};
+
+const encodeMediaCursor = (row) => Buffer.from(JSON.stringify({
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : (row.created_at || '1970-01-01T00:00:00.000Z'),
+  id: row.id,
+})).toString('base64url');
 
 const sendRouteError = (res, fallbackMessage, error) => {
   if (error.status) {
@@ -94,6 +111,8 @@ router.get("/getVideos", async (req, res) => {
       : null;
     const limit = req.query.limit ? Number(req.query.limit) : null;
     const offset = req.query.offset ? Number(req.query.offset) : 0;
+    const cursorPagination = req.query.pagination === 'cursor';
+    const cursor = decodeMediaCursor(req.query.cursor);
     const viewerId = req.query.viewerId || null;
     const viewer = viewerId ? await fetchUserById(viewerId) : null;
     if (!viewer) return res.status(401).json({ error: '로그인 정보가 필요합니다' });
@@ -130,15 +149,30 @@ router.get("/getVideos", async (req, res) => {
     if (!Number.isInteger(offset) || offset < 0) {
       return res.status(400).json({ error: "offset은 0 이상의 정수여야 합니다" });
     }
+    if (req.query.cursor && !cursor) {
+      return res.status(400).json({ error: "유효하지 않은 cursor입니다" });
+    }
+    if (cursorPagination && limit === null) {
+      return res.status(400).json({ error: "cursor 페이지네이션에는 limit이 필요합니다" });
+    }
 
     const videos = await listMedia({
       contentType, search, tag, uploadedAt, dateFrom, dateTo, source, mediaType, year, ids,
       viewerCategory: viewer.category,
       viewerRole: viewer.role,
       viewerId: viewer.id,
-      limit,
+      limit: cursorPagination ? limit + 1 : limit,
       offset,
+      cursor: cursorPagination ? cursor : null,
     });
+    if (cursorPagination) {
+      const hasMore = videos.length > limit;
+      const pageRows = hasMore ? videos.slice(0, limit) : videos;
+      return res.json({
+        items: pageRows.map(mapMediaRowToVideo),
+        nextCursor: hasMore && pageRows.length ? encodeMediaCursor(pageRows[pageRows.length - 1]) : null,
+      });
+    }
     res.json(videos.map(mapMediaRowToVideo));
   } catch (error) {
     console.error("비디오 조회 오류:", error);
@@ -175,9 +209,8 @@ router.post("/createVideo", async (req, res) => {
 
 router.get('/mediaFile/:id', async (req, res) => {
   try {
-    const access = await getMediaAccess(pgDb, req.params.id, req.query.viewerId);
-    if (!access?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
-    const media = await getMedia(req.params.id);
+    const media = await getAccessibleMediaAsset(pgDb, req.params.id, req.query.viewerId);
+    if (!media?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     if (!media.file_path) return res.status(404).json({ error: '파일을 찾을 수 없습니다' });
     const filename = path.basename(media.file_path);
     const absolutePath = resolveMediaPath(media.file_path);
@@ -195,9 +228,8 @@ router.get('/mediaFile/:id', async (req, res) => {
 
 router.get('/mediaThumbnail/:id', async (req, res) => {
   try {
-    const access = await getMediaAccess(pgDb, req.params.id, req.query.viewerId);
-    if (!access?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
-    const media = await getMedia(req.params.id);
+    const media = await getAccessibleMediaAsset(pgDb, req.params.id, req.query.viewerId);
+    if (!media?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     if (!media.thumbnail_path) return res.status(404).json({ error: '썸네일을 찾을 수 없습니다' });
     const absolutePath = resolveMediaPath(media.thumbnail_path);
     res.setHeader('Cache-Control', 'private, max-age=86400');

@@ -58,6 +58,7 @@ const listMedia = async ({
   viewerId = null,
   limit = null,
   offset = 0,
+  cursor = null,
 } = {}) => {
   const conditions = [];
   const params = [];
@@ -76,6 +77,11 @@ const listMedia = async ({
   if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
   if (year) conditions.push(`m.year = ${addParam(year)}`);
   if (Array.isArray(ids) && ids.length > 0) conditions.push(`m.id = ANY(${addParam(ids)}::text[])`);
+  if (cursor) {
+    const cursorCreatedAt = addParam(cursor.createdAt);
+    const cursorId = addParam(cursor.id);
+    conditions.push(`(COALESCE(m.created_at, 'epoch'::timestamptz), m.id) < (${cursorCreatedAt}::timestamptz, ${cursorId}::text)`);
+  }
   if (viewerRole !== 'admin' && viewerRole !== 'sub-admin') {
     if (!viewerCategory) conditions.push('FALSE');
     else {
@@ -117,14 +123,14 @@ const listMedia = async ({
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limitClause = limit
-    ? `LIMIT ${addParam(limit)} OFFSET ${addParam(offset)}`
+    ? `LIMIT ${addParam(limit)}${cursor ? '' : ` OFFSET ${addParam(offset)}`}`
     : '';
 
   const result = await pgDb.query(`
     ${MEDIA_WITH_TAGS_SELECT}
     ${whereClause}
     GROUP BY m.id
-    ORDER BY m.created_at DESC
+    ORDER BY COALESCE(m.created_at, 'epoch'::timestamptz) DESC, m.id DESC
     ${limitClause}
   `, params);
 
@@ -298,6 +304,22 @@ const getMediaAccess = async (db, mediaId, userId) => {
     SELECT m.id, m.uploaded_by, m.shared_with, u.category, u.role,
       (u.role IN ('admin', 'sub-admin') OR u.category = ANY(m.shared_with) OR m.uploaded_by = u.id) AS can_view,
       (u.role IN ('admin', 'sub-admin') OR m.uploaded_by = u.id) AS can_modify
+    FROM media m
+    JOIN users u ON u.id = $2
+    WHERE m.id = $1
+  `, [mediaId, userId]);
+  return result.rows[0] || null;
+};
+
+const getAccessibleMediaAsset = async (db, mediaId, userId) => {
+  if (!userId) return null;
+  const result = await db.query(`
+    SELECT
+      m.id,
+      m.title,
+      m.file_path,
+      m.thumbnail_path,
+      (u.role IN ('admin', 'sub-admin') OR u.category = ANY(m.shared_with) OR m.uploaded_by = u.id) AS can_view
     FROM media m
     JOIN users u ON u.id = $2
     WHERE m.id = $1
@@ -598,6 +620,7 @@ module.exports = {
   getCalendarMedia,
   getMediaDateRange,
   getMediaAccess,
+  getAccessibleMediaAsset,
   listFavoriteMedia,
   listLikedMedia,
   listMedia,
