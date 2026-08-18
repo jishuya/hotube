@@ -8,7 +8,12 @@ const router = express.Router();
 
 router.get('/getFavoriteMedia', async (req, res) => {
   try {
-    const media = await listFavoriteMedia(req.query.userId);
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) return res.status(400).json({ error: 'limit은 1부터 100 사이여야 합니다' });
+    if (!Number.isInteger(offset) || offset < 0) return res.status(400).json({ error: 'offset은 0 이상이어야 합니다' });
+    const media = await listFavoriteMedia(req.query.userId, { limit: limit ? limit + 1 : null, offset });
+    if (limit) return res.json({ items: media.slice(0, limit).map(mapMediaRowToVideo), hasMore: media.length > limit });
     return res.json(media.map(mapMediaRowToVideo));
   } catch (error) {
     console.error('즐겨찾기 목록 조회 오류:', error);
@@ -20,7 +25,12 @@ router.get('/getFavoriteMedia', async (req, res) => {
 
 router.get('/getLikedMedia', async (req, res) => {
   try {
-    const media = await listLikedMedia(req.query.userId);
+    const limit = req.query.limit ? Number(req.query.limit) : null;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) return res.status(400).json({ error: 'limit은 1부터 100 사이여야 합니다' });
+    if (!Number.isInteger(offset) || offset < 0) return res.status(400).json({ error: 'offset은 0 이상이어야 합니다' });
+    const media = await listLikedMedia(req.query.userId, { limit: limit ? limit + 1 : null, offset });
+    if (limit) return res.json({ items: media.slice(0, limit).map(mapMediaRowToVideo), hasMore: media.length > limit });
     return res.json(media.map(mapMediaRowToVideo));
   } catch (error) {
     console.error('좋아요 목록 조회 오류:', error);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
@@ -9,11 +9,11 @@ import ToastContainer from '../components/common/Toast';
 import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
-import { addVideo, checkMediaDuplicates, deleteVideo, getAllVideos, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
+import { addVideo, checkMediaDuplicates, deleteVideo, getMediaPage, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
 import { listPendingUploads, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 30;
 const MAX_UPLOAD_FILES = 10;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 150 * 1024 * 1024;
@@ -124,7 +124,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const { user } = useAuth();
   const navigate = useNavigate();
   const [uploads, setUploads] = useState([]);
-  const [totalUploadCount, setTotalUploadCount] = useState(0);
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(null);
@@ -136,7 +135,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [date, setDate] = useState(initialDate);
   const [tags, setTags] = useState('');
   const [sharedWith, setSharedWith] = useState(ALL_FAMILY_CATEGORIES);
-  const [page, setPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMoreUploads, setLoadingMoreUploads] = useState(false);
+  const uploadListSentinelRef = useRef(null);
+  const loadingMoreUploadsRef = useRef(false);
+  const uploadFeedVersionRef = useRef(0);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
@@ -166,11 +169,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
-  const totalPages = Math.max(1, Math.ceil(uploads.length / ITEMS_PER_PAGE));
-  const paginatedUploads = useMemo(() => uploads.slice(
-    (page - 1) * ITEMS_PER_PAGE,
-    page * ITEMS_PER_PAGE,
-  ), [uploads, page]);
   const hasDateFilter = Boolean(filterDateFrom || filterDateTo);
   const dateFilterError = filterDateFrom && filterDateTo && filterDateFrom > filterDateTo
     ? '종료일은 시작일보다 빠를 수 없어요.'
@@ -233,20 +231,22 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       return undefined;
     }
     const timer = window.setTimeout(() => {
-      getAllVideos({
+      uploadFeedVersionRef.current += 1;
+      loadingMoreUploadsRef.current = false;
+      setLoadingMoreUploads(false);
+      getMediaPage({
         search: filterTag.trim().replace(/^#/, ''),
         dateFrom: filterDateFrom,
         dateTo: addOneDay(filterDateTo),
         source: filterSource,
         mediaType: filterMediaType,
+        limit: ITEMS_PER_PAGE,
       })
-        .then((items) => {
+        .then((result) => {
           if (!active) return;
-          const mappedItems = items.map(toMemoryMedia);
+          const mappedItems = result.items.map(toMemoryMedia);
           setUploads(mappedItems);
-          if (!hasActiveFilters) {
-            setTotalUploadCount(mappedItems.length);
-          }
+          setNextCursor(result.nextCursor);
         })
         .catch((error) => {
           if (active) setUploadError(error.message);
@@ -257,6 +257,46 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       window.clearTimeout(timer);
     };
   }, [listOnly, filterDateFrom, filterDateTo, filterTag, filterSource, filterMediaType, hasActiveFilters, dateFilterError]);
+
+  const loadMoreUploads = useCallback(async () => {
+    if (!nextCursor || loadingMoreUploadsRef.current || dateFilterError) return;
+    const feedVersion = uploadFeedVersionRef.current;
+    loadingMoreUploadsRef.current = true;
+    setLoadingMoreUploads(true);
+    try {
+      const result = await getMediaPage({
+        search: filterTag.trim().replace(/^#/, ''),
+        dateFrom: filterDateFrom,
+        dateTo: addOneDay(filterDateTo),
+        source: filterSource,
+        mediaType: filterMediaType,
+        limit: ITEMS_PER_PAGE,
+      }, nextCursor);
+      if (feedVersion !== uploadFeedVersionRef.current) return;
+      setUploads((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        return [...current, ...result.items.map(toMemoryMedia).filter((item) => !existingIds.has(item.id))];
+      });
+      setNextCursor(result.nextCursor);
+    } catch (error) {
+      if (feedVersion === uploadFeedVersionRef.current) setUploadError(error.message);
+    } finally {
+      if (feedVersion === uploadFeedVersionRef.current) {
+        loadingMoreUploadsRef.current = false;
+        setLoadingMoreUploads(false);
+      }
+    }
+  }, [dateFilterError, filterDateFrom, filterDateTo, filterMediaType, filterSource, filterTag, nextCursor]);
+
+  useEffect(() => {
+    const target = uploadListSentinelRef.current;
+    if (!listOnly || !target || !nextCursor) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreUploads();
+    }, { rootMargin: '500px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [listOnly, loadMoreUploads, nextCursor]);
 
   const addFiles = async (files) => {
     const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
@@ -539,7 +579,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       }
       setUploads((current) => [...created, ...current]);
       resetForm();
-      setPage(1);
       window.dispatchEvent(new Event('hotube:media-updated'));
       const uploadedMedia = created[0];
       const uploadedMonth = uploadedMedia.date?.slice(0, 7);
@@ -580,8 +619,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     try {
       await deleteVideo(deleteTarget.id);
       setUploads((current) => current.filter((item) => item.id !== deleteTarget.id));
-      setTotalUploadCount((current) => Math.max(0, current - 1));
-      setPage(1);
       setDeleteTarget(null);
       window.dispatchEvent(new Event('hotube:media-updated'));
     } catch (error) {
@@ -808,7 +845,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 <div className="flex items-center justify-between gap-4">
                   <h1 className="text-2xl font-extrabold">업로드 목록</h1>
                   <span className="shrink-0 text-sm font-bold text-primary">
-                    {hasActiveFilters ? `${uploads.length}/${totalUploadCount}개` : `${totalUploadCount}개`}
+                    {nextCursor ? `${uploads.length}개 이상` : `${uploads.length}개`}
                   </span>
                 </div>
               </div>
@@ -821,7 +858,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       value={filterTag}
                       onChange={(event) => {
                         setFilterTag(event.target.value);
-                        setPage(1);
                       }}
                       className="h-10 w-full rounded-lg border-border bg-background pl-9 text-sm focus:border-primary focus:ring-primary"
                       placeholder="태그, 제목 검색"
@@ -836,7 +872,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       setFilterSource('all');
                       setFilterMediaType('all');
                       setDateFilterOpen(false);
-                      setPage(1);
                     }}
                     disabled={!hasActiveFilters}
                     className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-secondary transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
@@ -863,7 +898,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     {hasDateFilter && (
                       <button
                         type="button"
-                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
+                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
                         className="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
                         aria-label="날짜 초기화"
                         title="날짜 초기화"
@@ -878,7 +913,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     value={filterSource}
                     onChange={(event) => {
                       setFilterSource(event.target.value);
-                      setPage(1);
                     }}
                     aria-label="업로드 출처"
                     className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
@@ -895,7 +929,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     value={filterMediaType}
                     onChange={(event) => {
                       setFilterMediaType(event.target.value);
-                      setPage(1);
                     }}
                     aria-label="미디어 종류"
                     className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary"
@@ -921,7 +954,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     {hasDateFilter && (
                       <button
                         type="button"
-                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
+                        onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
                         className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
                         aria-label="날짜 초기화"
                         title="날짜 초기화"
@@ -936,7 +969,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     onChange={(range) => {
                       setFilterDateFrom(range.from);
                       setFilterDateTo(range.to);
-                      setPage(1);
                       if (range.to) setDateFilterOpen(false);
                     }}
                   />
@@ -944,9 +976,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 </div>
               )}
 
-              {paginatedUploads.length > 0 ? (
+              {uploads.length > 0 ? (
                 <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-                  {paginatedUploads.map((item) => (
+                  {uploads.map((item) => (
                     <article key={item.id} className="flex items-center gap-3 p-3 transition hover:bg-gray-50 sm:px-4">
                       <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-black/5 sm:size-20">
                         {item.type === 'video' && item.source === 'file' && !item.thumbnail ? (
@@ -985,14 +1017,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 </div>
               )}
 
-              {totalPages > 1 && (
-                <nav className="mt-7 flex items-center justify-center gap-1" aria-label="업로드 목록 페이지">
-                  <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-30"><Icon icon="mdi:chevron-left" /></button>
-                  {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-                    <button key={pageNumber} type="button" onClick={() => setPage(pageNumber)} className={`size-9 rounded-full text-sm font-bold ${page === pageNumber ? 'bg-primary text-white' : 'hover:bg-primary/10'}`}>{pageNumber}</button>
-                  ))}
-                  <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-30"><Icon icon="mdi:chevron-right" /></button>
-                </nav>
+              {nextCursor && (
+                <div ref={uploadListSentinelRef} className="flex min-h-16 items-center justify-center" aria-live="polite">
+                  {loadingMoreUploads && <><Icon icon="mdi:loading" className="animate-spin text-xl text-primary" /><span className="ml-2 text-sm text-text-secondary">더 불러오는 중...</span></>}
+                </div>
               )}
             </section>
           )}

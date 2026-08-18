@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllVideos, getFavoriteMedia, getLikedMedia, toMemoryMedia } from '../services/videoApi';
+import { getFavoriteMediaPage, getLikedMediaPage, getMediaPage, toMemoryMedia } from '../services/videoApi';
 import {
   addMediaToMyAlbum,
   getMyAlbum,
@@ -24,6 +24,10 @@ const MyAlbumDetailPage = () => {
   const isSystemAlbum = isFavorites || isLikes;
   const [album, setAlbum] = useState(null);
   const [media, setMedia] = useState([]);
+  const [systemHasMore, setSystemHasMore] = useState(false);
+  const [systemLoadingMore, setSystemLoadingMore] = useState(false);
+  const systemSentinelRef = useRef(null);
+  const systemLoadingMoreRef = useRef(false);
   const [loadedRequestKey, setLoadedRequestKey] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
@@ -35,6 +39,10 @@ const MyAlbumDetailPage = () => {
   const [pickerMedia, setPickerMedia] = useState([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerNextCursor, setPickerNextCursor] = useState(null);
+  const [pickerLoadingMore, setPickerLoadingMore] = useState(false);
+  const pickerSentinelRef = useRef(null);
+  const pickerLoadingMoreRef = useRef(false);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerError, setPickerError] = useState('');
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
@@ -54,8 +62,11 @@ const MyAlbumDetailPage = () => {
     if (!user?.id) return;
     let active = true;
     const request = isSystemAlbum
-      ? (isFavorites ? getFavoriteMedia(user.id) : getLikedMedia(user.id)).then((items) => {
-        if (active) setMedia(items.map(toMemoryMedia));
+      ? (isFavorites ? getFavoriteMediaPage(user.id) : getLikedMediaPage(user.id)).then((page) => {
+        if (active) {
+          setMedia(page.items.map(toMemoryMedia));
+          setSystemHasMore(page.hasMore);
+        }
       })
       : Promise.all([getMyAlbum(user.id, albumId), getMyAlbumMedia(user.id, albumId)])
         .then(([albumData, mediaItems]) => {
@@ -82,6 +93,66 @@ const MyAlbumDetailPage = () => {
       active = false;
     };
   }, [albumId, isFavorites, isSystemAlbum, requestKey, user?.id]);
+
+  const loadMoreSystemMedia = useCallback(async () => {
+    if (!isSystemAlbum || !systemHasMore || systemLoadingMoreRef.current || !user?.id) return;
+    systemLoadingMoreRef.current = true;
+    setSystemLoadingMore(true);
+    try {
+      const page = await (isFavorites
+        ? getFavoriteMediaPage(user.id, 30, media.length)
+        : getLikedMediaPage(user.id, 30, media.length));
+      setMedia((current) => {
+        const ids = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.map(toMemoryMedia).filter((item) => !ids.has(item.id))];
+      });
+      setSystemHasMore(page.hasMore);
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      systemLoadingMoreRef.current = false;
+      setSystemLoadingMore(false);
+    }
+  }, [isFavorites, isSystemAlbum, media.length, systemHasMore, user?.id]);
+
+  useEffect(() => {
+    const target = systemSentinelRef.current;
+    if (!target || !systemHasMore) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreSystemMedia();
+    }, { rootMargin: '500px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMoreSystemMedia, systemHasMore]);
+
+  const loadMorePickerMedia = useCallback(async () => {
+    if (!pickerNextCursor || pickerLoadingMoreRef.current) return;
+    pickerLoadingMoreRef.current = true;
+    setPickerLoadingMore(true);
+    try {
+      const page = await getMediaPage({ limit: 40 }, pickerNextCursor);
+      setPickerMedia((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.map(toMemoryMedia).filter((item) => !existingIds.has(item.id))];
+      });
+      setPickerNextCursor(page.nextCursor);
+    } catch (loadError) {
+      setPickerError(loadError.message);
+    } finally {
+      pickerLoadingMoreRef.current = false;
+      setPickerLoadingMore(false);
+    }
+  }, [pickerNextCursor]);
+
+  useEffect(() => {
+    const target = pickerSentinelRef.current;
+    if (!pickerOpen || !target || !pickerNextCursor) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMorePickerMedia();
+    }, { rootMargin: '400px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMorePickerMedia, pickerNextCursor, pickerOpen]);
 
   if (loading) {
     return (
@@ -197,8 +268,9 @@ const MyAlbumDetailPage = () => {
     setPickerError('');
     setPickerLoading(true);
     try {
-      const items = await getAllVideos();
-      setPickerMedia(items.map(toMemoryMedia));
+      const page = await getMediaPage({ limit: 40 });
+      setPickerMedia(page.items.map(toMemoryMedia));
+      setPickerNextCursor(page.nextCursor);
     } catch (loadError) {
       setPickerError(loadError.message);
     } finally {
@@ -327,6 +399,11 @@ const MyAlbumDetailPage = () => {
               <h2 className="text-lg font-bold">아직 담긴 사진이 없어요</h2>
               <p className="mt-2 text-sm text-text-secondary">좋아하는 순간을 이 앨범에 추가해 보세요.</p>
             </section>
+          )}
+          {isSystemAlbum && systemHasMore && (
+            <div ref={systemSentinelRef} className="flex min-h-20 items-center justify-center" aria-live="polite">
+              {systemLoadingMore && <><Icon icon="mdi:loading" className="animate-spin text-2xl text-primary" /><span className="ml-2 text-sm text-text-secondary">더 불러오는 중...</span></>}
+            </div>
           )}
           {!isSystemAlbum && (
             <div className="flex justify-center pt-10">
@@ -462,8 +539,9 @@ const MyAlbumDetailPage = () => {
                   <p className="text-sm font-semibold text-error">{pickerError}</p>
                 </div>
               ) : availablePickerMedia.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {availablePickerMedia.map((item) => {
+                <>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {availablePickerMedia.map((item) => {
                     const selected = pickerSelectedIds.includes(item.id);
                     return (
                       <button
@@ -489,8 +567,14 @@ const MyAlbumDetailPage = () => {
                         {item.type === 'video' && <Icon icon="mdi:play-circle" className="absolute bottom-2 left-2 text-2xl text-white drop-shadow" />}
                       </button>
                     );
-                  })}
-                </div>
+                    })}
+                  </div>
+                  {pickerNextCursor && (
+                    <div ref={pickerSentinelRef} className="flex min-h-14 items-center justify-center" aria-live="polite">
+                      {pickerLoadingMore && <Icon icon="mdi:loading" className="animate-spin text-2xl text-primary" />}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="flex h-52 flex-col items-center justify-center text-center">
                   <Icon icon="mdi:check-circle-outline" className="mb-2 text-4xl text-primary/50" />

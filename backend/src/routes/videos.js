@@ -22,6 +22,12 @@ const { notifyNewMedia } = require('../services/pushNotificationService');
 
 const router = express.Router();
 const MAX_UPLOAD_FILES = 10;
+const setPrivateMediaCache = (req, res) => {
+  const versioned = typeof req.query.v === 'string' && req.query.v.length > 0;
+  res.setHeader('Cache-Control', versioned
+    ? 'private, max-age=31536000, immutable'
+    : 'private, max-age=86400');
+};
 
 const decodeMediaCursor = (value) => {
   if (!value) return null;
@@ -214,7 +220,7 @@ router.get('/mediaFile/:id', async (req, res) => {
     if (!media.file_path) return res.status(404).json({ error: '파일을 찾을 수 없습니다' });
     const filename = path.basename(media.file_path);
     const absolutePath = resolveMediaPath(media.file_path);
-    res.setHeader('Cache-Control', 'private, max-age=86400');
+    setPrivateMediaCache(req, res);
     if (req.query.download === '1') {
       const safeTitle = String(media.title || filename).replace(/[\r\n"\\/]/g, '_');
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeTitle)}`);
@@ -232,7 +238,7 @@ router.get('/mediaThumbnail/:id', async (req, res) => {
     if (!media?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     if (!media.thumbnail_path) return res.status(404).json({ error: '썸네일을 찾을 수 없습니다' });
     const absolutePath = resolveMediaPath(media.thumbnail_path);
-    res.setHeader('Cache-Control', 'private, max-age=86400');
+    setPrivateMediaCache(req, res);
     return res.sendFile(absolutePath);
   } catch (error) {
     console.error('미디어 썸네일 조회 오류:', error);
@@ -246,7 +252,7 @@ router.get('/mediaPreview/:id', async (req, res) => {
     if (!media?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
     if (!media.preview_path) return res.status(404).json({ error: '상세 이미지를 찾을 수 없습니다' });
     const absolutePath = resolveMediaPath(media.preview_path);
-    res.setHeader('Cache-Control', 'private, max-age=86400');
+    setPrivateMediaCache(req, res);
     return res.sendFile(absolutePath);
   } catch (error) {
     console.error('미디어 상세 이미지 조회 오류:', error);

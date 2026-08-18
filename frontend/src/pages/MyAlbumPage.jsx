@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { useAuth } from '../contexts/AuthContext';
 import { createMyAlbum, deleteMyAlbum, getMyAlbums, updateMyAlbum } from '../services/myAlbumApi';
-import { getFavoriteMedia, getLikedMedia, toMemoryMedia } from '../services/videoApi';
+import { getFavoriteMediaPage, getLikedMediaPage, toMemoryMedia } from '../services/videoApi';
 
 const SavedMediaSection = ({ id, title, media, loading, icon, emptyIcon, description }) => (
   <section aria-labelledby={`${id}-title`}>
@@ -76,15 +76,15 @@ const MyAlbumPage = () => {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
-    Promise.allSettled([getMyAlbums(user.id), getFavoriteMedia(user.id), getLikedMedia(user.id)])
+    Promise.allSettled([getMyAlbums(user.id), getFavoriteMediaPage(user.id, 6), getLikedMediaPage(user.id, 6)])
       .then(([albumsResult, favoritesResult, likesResult]) => {
         if (!active) return;
         if (albumsResult.status === 'fulfilled') setAlbums(albumsResult.value);
         if (favoritesResult.status === 'fulfilled') {
-          setFavoriteMedia(favoritesResult.value.map(toMemoryMedia));
+          setFavoriteMedia(favoritesResult.value.items.map(toMemoryMedia));
         }
         if (likesResult.status === 'fulfilled') {
-          setLikedMedia(likesResult.value.map(toMemoryMedia));
+          setLikedMedia(likesResult.value.items.map(toMemoryMedia));
         }
         const failedRequests = [albumsResult, favoritesResult, likesResult]
           .filter((result) => result.status === 'rejected');

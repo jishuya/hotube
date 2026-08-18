@@ -137,7 +137,7 @@ const listMedia = async ({
   return result.rows;
 };
 
-const listFavoriteMedia = async (userId) => {
+const listFavoriteMedia = async (userId, { limit = null, offset = 0 } = {}) => {
   if (!userId) throw new HttpError(400, '사용자 정보가 필요합니다');
   const userResult = await pgDb.query('SELECT id, category, role FROM users WHERE id = $1', [userId]);
   if (!userResult.rows.length) throw new HttpError(404, '사용자를 찾을 수 없습니다');
@@ -152,12 +152,13 @@ const listFavoriteMedia = async (userId) => {
         OR m.uploaded_by = $1
       )
     GROUP BY m.id, ufm.created_at
-    ORDER BY ufm.created_at DESC
-  `, [userId, user.role, user.category]);
+    ORDER BY ufm.created_at DESC, m.id DESC
+    ${limit ? 'LIMIT $4 OFFSET $5' : ''}
+  `, limit ? [userId, user.role, user.category, limit, offset] : [userId, user.role, user.category]);
   return result.rows;
 };
 
-const listLikedMedia = async (userId) => {
+const listLikedMedia = async (userId, { limit = null, offset = 0 } = {}) => {
   if (!userId) throw new HttpError(400, '사용자 정보가 필요합니다');
   const userResult = await pgDb.query('SELECT id, category, role FROM users WHERE id = $1', [userId]);
   if (!userResult.rows.length) throw new HttpError(404, '사용자를 찾을 수 없습니다');
@@ -172,8 +173,9 @@ const listLikedMedia = async (userId) => {
         OR m.uploaded_by = $1
       )
     GROUP BY m.id
-    ORDER BY m.created_at DESC
-  `, [userId, user.role, user.category]);
+    ORDER BY COALESCE(m.created_at, 'epoch'::timestamptz) DESC, m.id DESC
+    ${limit ? 'LIMIT $4 OFFSET $5' : ''}
+  `, limit ? [userId, user.role, user.category, limit, offset] : [userId, user.role, user.category]);
   return result.rows;
 };
 

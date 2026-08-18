@@ -12,10 +12,12 @@ const userAlbumRoutes = require('./routes/userAlbums');
 const supportRoutes = require('./routes/support');
 const pushNotificationRoutes = require('./routes/pushNotifications');
 const uploadSessionRoutes = require('./routes/uploadSessions');
+const { performanceMetrics } = require('./performanceMetrics');
 
 const app = express();
 
 app.use(cors({ origin: true }));
+app.use(performanceMetrics);
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (req, res) => {

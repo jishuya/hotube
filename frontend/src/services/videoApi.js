@@ -241,6 +241,22 @@ export const getLikedMedia = async (userId = getViewerId()) => {
   return (await response.json()).map(resolveMediaUrls);
 };
 
+const getSavedMediaPage = async (url, userId, limit, offset) => {
+  const params = new URLSearchParams({ userId, limit: String(limit), offset: String(offset) });
+  const response = await fetch(`${url}?${params}`);
+  if (!response.ok) throw new Error('저장한 미디어 목록을 가져오지 못했습니다');
+  const page = await response.json();
+  return { items: (page.items || []).map(resolveMediaUrls), hasMore: Boolean(page.hasMore) };
+};
+
+export const getFavoriteMediaPage = (userId = getViewerId(), limit = 30, offset = 0) => (
+  getSavedMediaPage(FUNCTIONS_URL.getFavoriteMedia, userId, limit, offset)
+);
+
+export const getLikedMediaPage = (userId = getViewerId(), limit = 30, offset = 0) => (
+  getSavedMediaPage(FUNCTIONS_URL.getLikedMedia, userId, limit, offset)
+);
+
 export const toggleFavorite = async (userId, videoId) => {
   const response = await fetch(FUNCTIONS_URL.toggleFavorite, {
     method: 'POST',

@@ -1,15 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
-import { getAllVideos, addVideo, updateVideo, deleteVideo } from '../services/videoApi';
+import { getMediaPage, addVideo, updateVideo, deleteVideo } from '../services/videoApi';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
 import ToastContainer from '../components/common/Toast';
 import CustomSelect from '../components/common/CustomSelect';
 
+const MEDIA_PAGE_SIZE = 30;
+
 const AdminPage = () => {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef(null);
+  const loadingMoreRef = useRef(false);
   const [editingVideo, setEditingVideo] = useState(null);
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -69,14 +75,44 @@ const AdminPage = () => {
   const loadVideos = async () => {
     try {
       setLoading(true);
-      const fetchedVideos = await getAllVideos();
-      setVideos(fetchedVideos);
+      const page = await getMediaPage({ limit: MEDIA_PAGE_SIZE });
+      setVideos(page.items);
+      setNextCursor(page.nextCursor);
     } catch (error) {
       console.error('Error loading videos:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadMoreVideos = useCallback(async () => {
+    if (!nextCursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await getMediaPage({ limit: MEDIA_PAGE_SIZE }, nextCursor);
+      setVideos((current) => {
+        const existingIds = new Set(current.map((video) => video.id));
+        return [...current, ...page.items.filter((video) => !existingIds.has(video.id))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [nextCursor, showToast]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !nextCursor) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreVideos();
+    }, { rootMargin: '500px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMoreVideos, nextCursor]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -488,6 +524,11 @@ const AdminPage = () => {
                           </tbody>
                         </table>
                       </div>
+                      {nextCursor && (
+                        <div ref={loadMoreRef} className="flex min-h-16 items-center justify-center" aria-live="polite">
+                          {loadingMore && <><Icon icon="mdi:loading" className="animate-spin text-xl text-primary" /><span className="ml-2 text-sm text-slate-500">더 불러오는 중...</span></>}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
