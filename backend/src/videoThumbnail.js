@@ -39,7 +39,7 @@ const createVideoThumbnail = (inputPath, outputPath) => new Promise((resolve, re
 const probeVideo = (inputPath) => new Promise((resolve, reject) => {
   const ffprobe = spawn(ffprobeExecutable, [
     '-v', 'error',
-    '-show_entries', 'format=format_name:stream=codec_type,codec_name,pix_fmt',
+    '-show_entries', 'format=format_name,bit_rate:stream=codec_type,codec_name,pix_fmt,width,height,bit_rate',
     '-of', 'json',
     inputPath,
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -72,6 +72,26 @@ const isBrowserCompatibleVideo = async (inputPath) => {
     && (!audio || audio.codec_name === 'aac'));
 };
 
+const isPlaybackOptimizedVideo = async (inputPath) => {
+  const info = await probeVideo(inputPath);
+  const streams = info.streams || [];
+  const video = streams.find((stream) => stream.codec_type === 'video');
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const isMp4 = String(info.format?.format_name || '').split(',').some((name) => ['mov', 'mp4'].includes(name));
+  const width = Number(video?.width || 0);
+  const height = Number(video?.height || 0);
+  const bitrate = Number(video?.bit_rate || info.format?.bit_rate || 0);
+  const dimensionIsOptimized = width > 0 && height > 0
+    && (width >= height ? width <= 1920 && height <= 1080 : width <= 1080 && height <= 1920);
+  const bitrateIsOptimized = bitrate <= 0 || bitrate <= 6_000_000;
+  return Boolean(isMp4
+    && video?.codec_name === 'h264'
+    && (!video.pix_fmt || video.pix_fmt === 'yuv420p')
+    && (!audio || audio.codec_name === 'aac')
+    && dimensionIsOptimized
+    && bitrateIsOptimized);
+};
+
 /** 사진 원본을 목록용 640px WebP 썸네일로 변환한다. */
 const createImageThumbnail = (inputPath, outputPath) => new Promise((resolve, reject) => {
   const ffmpeg = spawn(ffmpegExecutable, [
@@ -99,6 +119,33 @@ const createImageThumbnail = (inputPath, outputPath) => new Promise((resolve, re
   });
 });
 
+/** 사진 상세 화면용 1920px WebP 이미지를 생성한다. */
+const createImagePreview = (inputPath, outputPath) => new Promise((resolve, reject) => {
+  const ffmpeg = spawn(ffmpegExecutable, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-y',
+    '-i', inputPath,
+    '-frames:v', '1',
+    '-vf', "scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+    '-c:v', 'libwebp',
+    '-quality', '84',
+    '-compression_level', '4',
+    outputPath,
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  let errorOutput = '';
+  ffmpeg.stderr.setEncoding('utf8');
+  ffmpeg.stderr.on('data', (chunk) => {
+    errorOutput = `${errorOutput}${chunk}`.slice(-8192);
+  });
+  ffmpeg.on('error', (error) => reject(new Error(`FFmpeg를 실행할 수 없습니다: ${error.message}`)));
+  ffmpeg.on('close', (code) => {
+    if (code === 0) return resolve();
+    return reject(new Error(`사진 상세 이미지 생성 실패 (FFmpeg ${code}): ${errorOutput.trim()}`));
+  });
+});
+
 /**
  * HEVC 등 브라우저 호환성이 낮은 영상을 H.264/AAC MP4로 변환한다.
  * faststart를 적용해 파일 전체 다운로드 전에도 재생을 시작할 수 있게 한다.
@@ -113,6 +160,9 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
     '-c:v', 'libx264',
     '-preset', 'fast',
     '-crf', '23',
+    '-maxrate', '5M',
+    '-bufsize', '10M',
+    '-vf', "scale='if(gte(iw,ih),min(1920,iw),min(1080,iw))':'if(gte(iw,ih),min(1080,ih),min(1920,ih))':force_original_aspect_ratio=decrease:force_divisible_by=2",
     '-pix_fmt', 'yuv420p',
     '-c:a', 'aac',
     '-b:a', '128k',
@@ -134,7 +184,9 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
 
 module.exports = {
   createBrowserCompatibleVideo,
+  createImagePreview,
   createImageThumbnail,
   createVideoThumbnail,
   isBrowserCompatibleVideo,
+  isPlaybackOptimizedVideo,
 };

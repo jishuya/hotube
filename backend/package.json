@@ -8,6 +8,9 @@
     "start": "node src/server.js",
     "test": "node --test",
     "backfill:photo-thumbnails": "node scripts/backfillPhotoThumbnails.js",
+    "backfill:photo-previews": "node scripts/backfillPhotoThumbnails.js",
+    "audit:video-optimization": "node scripts/queueVideoOptimization.js",
+    "backfill:video-optimization": "node scripts/queueVideoOptimization.js --enqueue",
     "backfill:content-hashes": "node scripts/backfillMediaContentHashes.js",
     "migrate:push": "node scripts/migratePushSubscriptions.js",
     "backfill:uploaders": "node scripts/backfillMediaUploader.js"

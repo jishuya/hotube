@@ -240,6 +240,20 @@ router.get('/mediaThumbnail/:id', async (req, res) => {
   }
 });
 
+router.get('/mediaPreview/:id', async (req, res) => {
+  try {
+    const media = await getAccessibleMediaAsset(pgDb, req.params.id, req.query.viewerId);
+    if (!media?.can_view) return res.status(403).json({ error: '이 미디어를 볼 권한이 없습니다' });
+    if (!media.preview_path) return res.status(404).json({ error: '상세 이미지를 찾을 수 없습니다' });
+    const absolutePath = resolveMediaPath(media.preview_path);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    return res.sendFile(absolutePath);
+  } catch (error) {
+    console.error('미디어 상세 이미지 조회 오류:', error);
+    return sendRouteError(res, '미디어 상세 이미지 조회 실패', error);
+  }
+});
+
 router.put("/updateVideo/:id", async (req, res) => {
   try {
     const access = await getMediaAccess(pgDb, req.params.id, req.body.requesterId);
@@ -257,7 +271,7 @@ router.delete("/deleteVideo/:id", async (req, res) => {
     const access = await getMediaAccess(pgDb, req.params.id, req.query.requesterId);
     if (!access?.can_modify) return res.status(403).json({ error: '미디어 삭제 권한이 없습니다' });
     const deleted = await deleteMedia(req.params.id);
-    const storedPaths = [deleted.file_path, deleted.thumbnail_path].filter(Boolean);
+    const storedPaths = [deleted.file_path, deleted.thumbnail_path, deleted.preview_path].filter(Boolean);
     for (const storedPath of storedPaths) {
       await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {
         if (error.code !== 'ENOENT') console.error('미디어 파일 삭제 오류:', error);
@@ -283,7 +297,7 @@ router.delete("/deleteMediaByDate/:date", requireAuth, async (req, res) => {
     const deleted = await deleteMediaByDate(req.params.date);
     const storedPaths = [];
     for (const row of deleted) {
-      const rowStoredPaths = [row.file_path, row.thumbnail_path].filter(Boolean);
+      const rowStoredPaths = [row.file_path, row.thumbnail_path, row.preview_path].filter(Boolean);
       storedPaths.push(...rowStoredPaths);
       for (const storedPath of rowStoredPaths) {
         await fs.unlink(resolveMediaPath(storedPath)).catch((error) => {

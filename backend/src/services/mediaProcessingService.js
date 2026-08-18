@@ -6,7 +6,7 @@ const { resolveMediaPath, toStoredMediaPath } = require('../mediaStorage');
 const {
   createBrowserCompatibleVideo,
   createVideoThumbnail,
-  isBrowserCompatibleVideo,
+  isPlaybackOptimizedVideo,
 } = require('../videoThumbnail');
 
 let workerRunning = false;
@@ -63,8 +63,8 @@ const processVideoJob = async (job) => {
 
   try {
     await createVideoThumbnail(inputAbsolutePath, thumbnailAbsolutePath);
-    const compatible = await isBrowserCompatibleVideo(inputAbsolutePath);
-    if (!compatible) {
+    const optimized = await isPlaybackOptimizedVideo(inputAbsolutePath);
+    if (!optimized) {
       outputPath = toStoredMediaPath(relativeDirectory, `${randomUUID()}.mp4`);
       outputAbsolutePath = path.join(absoluteDirectory, path.basename(outputPath));
       await createBrowserCompatibleVideo(inputAbsolutePath, outputAbsolutePath);

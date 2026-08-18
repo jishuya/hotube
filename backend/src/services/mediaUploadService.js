@@ -8,7 +8,7 @@ const {
   resolveMediaPath,
   toStoredMediaPath,
 } = require('../mediaStorage');
-const { createImageThumbnail } = require('../videoThumbnail');
+const { createImagePreview, createImageThumbnail } = require('../videoThumbnail');
 const { createFileMedia, deleteMedia } = require('./mediaService');
 const { enqueueVideoProcessing } = require('./mediaProcessingService');
 
@@ -28,6 +28,7 @@ const finalizeMediaFile = async ({
   const mediaType = isVideo ? 'video' : 'photo';
   let storedFilePath = null;
   let thumbnailPath = null;
+  let previewPath = null;
   let createdMedia = null;
   try {
     const duplicate = await pgDb.query('SELECT id FROM media WHERE content_hash = $1 LIMIT 1', [contentHash]);
@@ -44,9 +45,12 @@ const finalizeMediaFile = async ({
       const originalExtension = path.extname(originalName).toLowerCase().replace(/[^.a-z0-9]/g, '');
       const originalFilename = `${randomUUID()}${originalExtension || '.image'}`;
       const thumbnailFilename = `${randomUUID()}.webp`;
+      const previewFilename = `${randomUUID()}.webp`;
       storedFilePath = toStoredMediaPath(relativeDirectory, originalFilename);
       thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
+      previewPath = toStoredMediaPath(relativeDirectory, previewFilename);
       await createImageThumbnail(tempPath, path.join(absoluteDirectory, thumbnailFilename));
+      await createImagePreview(tempPath, path.join(absoluteDirectory, previewFilename));
       await fs.rename(tempPath, path.join(absoluteDirectory, originalFilename));
     }
     createdMedia = await createFileMedia({
@@ -54,6 +58,7 @@ const finalizeMediaFile = async ({
       title: String(title || '').trim() || originalName,
       filePath: storedFilePath,
       thumbnailPath,
+      previewPath,
       mediaType,
       tags,
       uploadedAt,
@@ -69,6 +74,7 @@ const finalizeMediaFile = async ({
     if (createdMedia?.id) await deleteMedia(createdMedia.id).catch(() => {});
     await fs.unlink(tempPath).catch(() => {});
     if (thumbnailPath) await fs.unlink(resolveMediaPath(thumbnailPath)).catch(() => {});
+    if (previewPath) await fs.unlink(resolveMediaPath(previewPath)).catch(() => {});
     if (storedFilePath) await fs.unlink(resolveMediaPath(storedFilePath)).catch(() => {});
     throw error;
   }

@@ -764,7 +764,7 @@ const MediaViewerPage = () => {
               ) : (
                 <button type="button" onClick={() => setPhotoOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
                   <img
-                    src={current.thumbnail || current.src}
+                    src={current.preview || current.thumbnail || current.src}
                     alt={current.title}
                     decoding="async"
                     className="block max-h-[75vh] w-full object-contain"

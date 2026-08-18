@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS media (
     file_path TEXT,
     thumbnail_url TEXT,
     thumbnail_path TEXT,
+    preview_path TEXT,
     year INTEGER,
     uploaded_at DATE,
     duration_seconds INTEGER,

@@ -52,6 +52,7 @@ const resolveMediaUrls = (media) => ({
   ...media,
   fileUrl: resolveApiUrl(addViewerQuery(media.fileUrl)),
   thumbnailUrl: resolveApiUrl(addViewerQuery(media.thumbnailUrl)),
+  previewUrl: resolveApiUrl(addViewerQuery(media.previewUrl)),
 });
 
 export const toMemoryMedia = (media) => ({
@@ -62,6 +63,7 @@ export const toMemoryMedia = (media) => ({
   source: media.mediaType === 'youtube' ? 'youtube' : 'file',
   src: media.mediaType === 'youtube' ? media.youtubeUrl : media.fileUrl,
   thumbnail: media.thumbnailUrl || (media.mediaType === 'photo' ? media.fileUrl : null),
+  preview: media.previewUrl || media.thumbnailUrl || (media.mediaType === 'photo' ? media.fileUrl : null),
 });
 
 // 모든 비디오 조회

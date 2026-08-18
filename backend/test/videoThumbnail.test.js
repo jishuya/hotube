@@ -6,9 +6,11 @@ const { spawn } = require('node:child_process');
 const test = require('node:test');
 const {
   createBrowserCompatibleVideo,
+  createImagePreview,
   createImageThumbnail,
   createVideoThumbnail,
   isBrowserCompatibleVideo,
+  isPlaybackOptimizedVideo,
 } = require('../src/videoThumbnail');
 
 const run = (command, args) => new Promise((resolve, reject) => {
@@ -53,6 +55,23 @@ test('사진에서 WebP 썸네일을 생성한다', async (t) => {
   assert.ok(thumbnail.length > 100);
 });
 
+test('사진에서 상세 화면용 WebP 이미지를 생성한다', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-image-preview-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const imagePath = path.join(directory, 'sample.jpg');
+  const previewPath = path.join(directory, 'preview.webp');
+
+  await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=orange:s=2400x1600', '-frames:v', '1', imagePath,
+  ]);
+  await createImagePreview(imagePath, previewPath);
+
+  const preview = await fs.readFile(previewPath);
+  assert.equal(preview.subarray(0, 4).toString(), 'RIFF');
+  assert.equal(preview.subarray(8, 12).toString(), 'WEBP');
+});
+
 test('브라우저용 MP4 영상을 생성한다', async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-browser-video-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -81,4 +100,5 @@ test('H.264 MP4 영상은 브라우저 호환 영상으로 판별한다', async 
   ]);
 
   assert.equal(await isBrowserCompatibleVideo(videoPath), true);
+  assert.equal(await isPlaybackOptimizedVideo(videoPath), true);
 });

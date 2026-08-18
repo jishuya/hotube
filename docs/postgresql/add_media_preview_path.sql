@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE media
+    ADD COLUMN IF NOT EXISTS preview_path TEXT;
+
+COMMIT;

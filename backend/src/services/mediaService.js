@@ -230,6 +230,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         m.file_path,
         m.thumbnail_url,
         m.thumbnail_path,
+        m.preview_path,
         m.uploaded_at,
         m.upload_batch_id,
         m.processing_status,
@@ -259,6 +260,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
         m.file_path,
         m.thumbnail_url,
         m.thumbnail_path,
+        m.preview_path,
         m.uploaded_at,
         m.upload_batch_id,
         m.processing_status,
@@ -319,6 +321,7 @@ const getAccessibleMediaAsset = async (db, mediaId, userId) => {
       m.title,
       m.file_path,
       m.thumbnail_path,
+      m.preview_path,
       (u.role IN ('admin', 'sub-admin') OR u.category = ANY(m.shared_with) OR m.uploaded_by = u.id) AS can_view
     FROM media m
     JOIN users u ON u.id = $2
@@ -408,6 +411,7 @@ const createFileMedia = async ({
   title,
   filePath,
   thumbnailPath = null,
+  previewPath = null,
   mediaType,
   tags,
   uploadedAt,
@@ -430,12 +434,12 @@ const createFileMedia = async ({
     await client.query(`
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
-        thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
+        thumbnail_url, thumbnail_path, preview_path, year, uploaded_at, duration_seconds,
         view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash,
         processing_status, created_at, updated_at
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, NULL, 0, 0, NULL, $8, $9, $10, $11, $12, $13, $13)
-    `, [id, title, mediaType, filePath, thumbnailPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, $8, NULL, 0, 0, NULL, $9, $10, $11, $12, $13, $14, $14)
+    `, [id, title, mediaType, filePath, thumbnailPath, previewPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now]);
 
     await replaceMediaTags(client, id, tags);
     const createdMedia = await fetchMediaById(client, id);
@@ -540,7 +544,7 @@ const deleteMedia = async (id) => {
     await client.query("BEGIN");
 
     const linkedTags = await client.query('SELECT tag_id FROM media_tags WHERE media_id = $1', [id]);
-    const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id, file_path, thumbnail_path", [id]);
+    const deleted = await client.query("DELETE FROM media WHERE id = $1 RETURNING id, file_path, thumbnail_path, preview_path", [id]);
     if (deleted.rows.length === 0) {
       throw new HttpError(404, "비디오를 찾을 수 없습니다");
     }
@@ -574,7 +578,7 @@ const deleteMediaByDate = async (uploadedAt) => {
     const deleted = await client.query(`
       DELETE FROM media
       WHERE uploaded_at = $1
-      RETURNING id, file_path, thumbnail_path
+      RETURNING id, file_path, thumbnail_path, preview_path
     `, [uploadedAt]);
     await cleanupOrphanTags(client, linkedTags.rows.map((row) => row.tag_id));
     await client.query("COMMIT");
