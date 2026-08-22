@@ -17,6 +17,8 @@ const FUNCTIONS_URL = {
   getLikedMedia: `${API_BASE_URL}/getLikedMedia`,
   toggleFavorite: `${API_BASE_URL}/toggleFavorite`,
 };
+const DETAILS_CACHE_MS = 15 * 1000;
+const detailsCache = new Map();
 
 export const checkMediaDuplicates = async (hashes) => {
   const response = await fetch(FUNCTIONS_URL.checkMediaDuplicates, {
@@ -214,11 +216,16 @@ export const uploadMediaFile = async (file, {
   return resolveMediaUrls(await completeResponse.json());
 };
 
-export const getMediaDetails = async (id, userId) => {
+export const getMediaDetails = async (id, userId, { force = false } = {}) => {
+  const cacheKey = `${id}:${userId || ''}`;
+  const cached = detailsCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.time < DETAILS_CACHE_MS) return cached.data;
   const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
   const response = await fetch(`${FUNCTIONS_URL.getMediaDetails}/${encodeURIComponent(id)}${query}`);
   if (!response.ok) throw new Error('미디어 상세 정보를 가져오지 못했습니다');
-  return response.json();
+  const data = await response.json();
+  detailsCache.set(cacheKey, { data, time: Date.now() });
+  return data;
 };
 
 export const getFavoriteMedia = async (userId = getViewerId()) => {

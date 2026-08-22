@@ -358,6 +358,7 @@ const MediaViewerPage = () => {
   const navigate = useNavigate();
   const commentsRef = useRef(null);
   const commentScrollHandledRef = useRef('');
+  const detailsRequestRef = useRef(0);
   const tagSavingRef = useRef(false);
   const { user, isLiked, toggleLikeLocal, markWatchedLocal } = useAuth();
   const [mediaItems, setMediaItems] = useState([]);
@@ -418,12 +419,19 @@ const MediaViewerPage = () => {
     setToasts([]);
   }, [mediaId]);
 
-  const loadDetails = useCallback(() => getMediaDetails(mediaId, user?.id)
+  const loadDetails = useCallback((force = false) => {
+    const requestId = detailsRequestRef.current + 1;
+    detailsRequestRef.current = requestId;
+    return getMediaDetails(mediaId, user?.id, { force })
     .then((data) => {
+      if (detailsRequestRef.current !== requestId) return;
       setDetails(data);
       setSharedWith(data.sharedWith?.length ? data.sharedWith : ['dad', 'mom']);
     })
-    .catch((loadError) => showToast('error', loadError.message)), [mediaId, showToast, user?.id]);
+    .catch((loadError) => {
+      if (detailsRequestRef.current === requestId) showToast('error', loadError.message);
+    });
+  }, [mediaId, showToast, user?.id]);
 
   const handleCommentCountChange = useCallback((commentCount) => {
     setDetails((value) => {
@@ -503,12 +511,50 @@ const MediaViewerPage = () => {
   }, [current?.processingStatus, mediaId]);
 
   useEffect(() => {
+    if (!current) return undefined;
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return undefined;
+    const resources = [];
+    const preload = () => {
+      [previous, next].filter(Boolean).forEach((item) => {
+        const imageUrl = item.type === 'photo'
+          ? item.preview || item.thumbnail
+          : item.thumbnail;
+        if (imageUrl) {
+          const image = new Image();
+          image.decoding = 'async';
+          image.src = imageUrl;
+          resources.push(image);
+        }
+        if (item === next && item.type === 'video' && item.source === 'file' && item.src) {
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          video.src = item.src;
+          resources.push(video);
+        }
+      });
+    };
+    const timer = window.setTimeout(preload, 400);
+    return () => {
+      window.clearTimeout(timer);
+      resources.forEach((resource) => {
+        if (resource instanceof HTMLVideoElement) {
+          resource.removeAttribute('src');
+          resource.load();
+        } else {
+          resource.src = '';
+        }
+      });
+    };
+  }, [current, next, previous]);
+
+  useEffect(() => {
     if (!current || !user || user.watchedVideos?.includes(current.id)) return;
     markVideoWatched(user.id, current.id)
       .then(async () => {
         markWatchedLocal(current.id);
         await dismissMediaNotifications([current.id]);
-        return loadDetails();
+        return loadDetails(true);
       })
       .catch((watchError) => console.error('시청 기록 추가 실패:', watchError));
   }, [current, loadDetails, markWatchedLocal, user]);

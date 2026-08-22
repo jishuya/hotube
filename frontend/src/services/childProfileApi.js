@@ -1,4 +1,8 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const PROFILE_CACHE_MS = 5 * 60 * 1000;
+let profileCache = null;
+let profileCacheTime = 0;
+let profileRequest = null;
 
 const resolvePhotoUrl = (url) => {
   if (!url || /^(https?:|data:)/.test(url)) return url;
@@ -12,9 +16,19 @@ const parseResponse = async (response) => {
 };
 
 export const getChildProfile = async () => {
-  const response = await fetch(`${API_BASE_URL}/childProfile`);
-  if (response.status === 404) return null;
-  return parseResponse(response);
+  if (Date.now() - profileCacheTime < PROFILE_CACHE_MS) return profileCache;
+  if (profileRequest) return profileRequest;
+  profileRequest = fetch(`${API_BASE_URL}/childProfile`)
+    .then(async (response) => {
+      const profile = response.status === 404 ? null : await parseResponse(response);
+      profileCache = profile;
+      profileCacheTime = Date.now();
+      return profile;
+    })
+    .finally(() => {
+      profileRequest = null;
+    });
+  return profileRequest;
 };
 
 export const saveChildProfile = async (child, updatedBy) => {
@@ -30,5 +44,8 @@ export const saveChildProfile = async (child, updatedBy) => {
       updatedBy,
     }),
   });
-  return parseResponse(response);
+  const saved = await parseResponse(response);
+  profileCache = saved;
+  profileCacheTime = Date.now();
+  return saved;
 };
