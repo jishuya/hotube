@@ -81,9 +81,10 @@ const formatPlaybackTime = (seconds) => {
 
 const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
 
-const MediaVideoPlayer = ({ src, poster }) => {
+const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
   const playerRef = useRef(null);
   const videoRef = useRef(null);
+  const swipeRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -91,6 +92,12 @@ const MediaVideoPlayer = ({ src, poster }) => {
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [videoSize, setVideoSize] = useState({ width: 16, height: 9 });
+  const [renderedVideoWidth, setRenderedVideoWidth] = useState(0);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -106,6 +113,29 @@ const MediaVideoPlayer = ({ src, poster }) => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return undefined;
+    const updateViewportSize = () => setViewportSize({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+    updateViewportSize();
+    window.addEventListener('resize', updateViewportSize);
+    return () => window.removeEventListener('resize', updateViewportSize);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+    const updateRenderedVideoWidth = () => {
+      setRenderedVideoWidth(video.getBoundingClientRect().width);
+    };
+    const resizeObserver = new ResizeObserver(updateRenderedVideoWidth);
+    resizeObserver.observe(video);
+    updateRenderedVideoWidth();
+    return () => resizeObserver.disconnect();
   }, []);
 
   useEffect(() => {
@@ -159,69 +189,121 @@ const MediaVideoPlayer = ({ src, poster }) => {
   };
 
   const isSideways = rotation % 180 !== 0;
+  const fullscreenLayout = useMemo(() => {
+    const sourceRatio = videoSize.width / videoSize.height;
+    const availableWidth = Math.max(1, isSideways
+      ? viewportSize.height
+      : viewportSize.width);
+    const availableHeight = Math.max(1, isSideways
+      ? viewportSize.width
+      : viewportSize.height);
+    const width = Math.min(availableWidth, availableHeight * sourceRatio);
+
+    return {
+      videoWidth: width,
+      videoHeight: width / sourceRatio,
+    };
+  }, [isSideways, videoSize, viewportSize]);
 
   return (
     <div
       ref={playerRef}
-      className={`relative w-full overflow-hidden bg-black ${isFullscreen ? 'flex h-screen items-center justify-center' : 'self-center'}`}
+      className={`relative flex w-full flex-col items-center overflow-hidden ${isFullscreen ? 'h-screen bg-black' : 'self-center bg-transparent'}`}
       onMouseMove={() => setControlsVisible(true)}
       onMouseLeave={() => {
         if (playing) setControlsVisible(false);
       }}
       onTouchStart={() => setControlsVisible(true)}
+      onPointerDown={(event) => {
+        if (!isFullscreen || event.target.closest('button, input')) return;
+        swipeRef.current = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerUp={(event) => {
+        const swipe = swipeRef.current;
+        swipeRef.current = null;
+        if (!swipe || swipe.pointerId !== event.pointerId) return;
+        const deltaX = event.clientX - swipe.x;
+        const deltaY = event.clientY - swipe.y;
+        if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+        if (deltaX < 0) onNext?.();
+        else onPrevious?.();
+      }}
+      onPointerCancel={() => { swipeRef.current = null; }}
+      style={isFullscreen ? { touchAction: 'none' } : undefined}
     >
-      <div className={`flex w-full items-center justify-center bg-black ${isFullscreen ? 'h-full' : ''}`}>
-        <video
-          ref={videoRef}
-          src={src}
-          poster={poster}
-          muted={muted}
-          playsInline
-          preload="metadata"
-          onPlay={() => {
-            setPlaying(true);
-            setControlsVisible(true);
-          }}
-          onPause={() => {
-            setPlaying(false);
-            setControlsVisible(true);
-          }}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-          onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
-          className={`${isFullscreen ? 'h-full w-full' : 'max-h-[70vh] max-w-full'} object-contain`}
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transition: 'transform 200ms ease',
-            ...(isFullscreen && isSideways ? {
-              width: '100dvh',
-              height: '100dvw',
-              maxWidth: '100dvh',
-              maxHeight: '100dvw',
-            } : {}),
-          }}
-        />
-      </div>
-      {!playing && currentTime === 0 && (
-        <button
-          type="button"
-          onClick={togglePlayback}
-          className="absolute left-1/2 top-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-4xl text-white shadow-xl backdrop-blur-sm transition hover:scale-105 hover:bg-black/75"
-          aria-label="영상 재생"
+      <div
+        className={isFullscreen ? 'absolute left-1/2 top-1/2' : 'contents'}
+        style={isFullscreen ? {
+          width: fullscreenLayout.videoWidth,
+          height: fullscreenLayout.videoHeight,
+          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+          transition: 'transform 200ms ease',
+        } : undefined}
+      >
+        <div className={`relative flex items-center justify-center ${isFullscreen ? 'h-full w-full bg-black' : 'w-full bg-transparent'}`}>
+          <video
+            ref={videoRef}
+            src={src}
+            poster={poster}
+            muted={muted}
+            playsInline
+            preload="metadata"
+            onPlay={() => {
+              setPlaying(true);
+              setControlsVisible(true);
+            }}
+            onPause={() => {
+              setPlaying(false);
+              setControlsVisible(true);
+            }}
+            onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+            onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
+            onLoadedMetadata={(event) => {
+              const { videoWidth, videoHeight } = event.currentTarget;
+              if (videoWidth && videoHeight) setVideoSize({ width: videoWidth, height: videoHeight });
+              setPlaying(false);
+              setCurrentTime(0);
+              setDuration(event.currentTarget.duration || 0);
+              setRotation(0);
+              setControlsVisible(true);
+            }}
+            className={`${isFullscreen ? 'h-full w-full' : 'max-h-[70vh] max-w-full'} object-contain`}
+          />
+          {!playing && currentTime === 0 && (
+            <button
+              type="button"
+              onClick={togglePlayback}
+              className="absolute inset-0 z-10 m-auto flex size-16 items-center justify-center rounded-full bg-black/65 text-4xl text-white shadow-xl backdrop-blur-sm transition hover:scale-105 hover:bg-black/75"
+              aria-label="영상 재생"
+            >
+              <Icon icon="mdi:play" />
+            </button>
+          )}
+        </div>
+        <div
+          className={`flex h-11 items-center gap-2 rounded-xl px-2.5 text-white transition-all duration-300 sm:px-3 ${
+            isFullscreen
+              ? 'absolute inset-x-0 bottom-0 z-20 bg-transparent shadow-none'
+              : 'relative shrink-0 border border-zinc-200 bg-zinc-100/90 shadow-sm'
+          } ${
+            controlsVisible || !playing ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+          style={isFullscreen ? undefined : { width: renderedVideoWidth || 'calc(100% - 1rem)' }}
         >
-          <Icon icon="mdi:play" />
-        </button>
-      )}
-      <div className={`absolute inset-x-2 bottom-1.5 flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-zinc-950/75 px-2.5 text-white shadow-2xl backdrop-blur-md transition-all duration-300 sm:inset-x-3 sm:px-3 ${
-        controlsVisible || !playing ? 'opacity-100' : 'pointer-events-none opacity-0'
-      }`}>
-        <button type="button" onClick={togglePlayback} className={playerControlButtonClass} aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
-        <span className="hidden whitespace-nowrap text-xs font-medium tabular-nums text-white/80 sm:inline">
-          {formatPlaybackTime(currentTime)} <span className="text-white/35">/</span> {formatPlaybackTime(duration)}
-        </span>
-        <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
-        <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
-        <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>
-        <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>
+          <button type="button" onClick={togglePlayback} className={playerControlButtonClass} aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
+          <span className={`hidden whitespace-nowrap text-xs font-medium tabular-nums sm:inline ${isFullscreen ? 'text-white/80' : 'text-zinc-600'}`}>
+            {formatPlaybackTime(currentTime)} <span className={isFullscreen ? 'text-white/35' : 'text-zinc-400'}>/</span> {formatPlaybackTime(duration)}
+          </span>
+          <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
+          <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
+          <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>
+          <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>
+        </div>
       </div>
     </div>
   );
@@ -806,7 +888,18 @@ const MediaViewerPage = () => {
                   />
                 </div>
               ) : current.type === 'video' ? (
-                <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} />
+                <MediaVideoPlayer
+                  src={current.src}
+                  poster={current.thumbnail}
+                  onPrevious={previous ? () => {
+                    if (previous.type === 'photo') setPhotoOpen(true);
+                    moveTo(previous);
+                  } : undefined}
+                  onNext={next ? () => {
+                    if (next.type === 'photo') setPhotoOpen(true);
+                    moveTo(next);
+                  } : undefined}
+                />
               ) : (
                 <button type="button" onClick={() => setPhotoOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
                   <img
