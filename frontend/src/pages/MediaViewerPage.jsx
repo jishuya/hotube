@@ -81,7 +81,7 @@ const formatPlaybackTime = (seconds) => {
 
 const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
 
-const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
+const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFullscreenChange }) => {
   const playerRef = useRef(null);
   const videoRef = useRef(null);
   const swipeRef = useRef(null);
@@ -90,7 +90,6 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [videoSize, setVideoSize] = useState({ width: 16, height: 9 });
   const [renderedVideoWidth, setRenderedVideoWidth] = useState(0);
@@ -98,22 +97,6 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
     width: window.innerWidth,
     height: window.innerHeight,
   }));
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-      const playerIsFullscreen = fullscreenElement === playerRef.current;
-      setIsFullscreen(playerIsFullscreen);
-      if (!playerIsFullscreen) setRotation(0);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-    };
-  }, []);
 
   useEffect(() => {
     if (!isFullscreen) return undefined;
@@ -151,40 +134,15 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
     else video.pause();
   };
 
-  const toggleFullscreen = async () => {
-    const player = playerRef.current;
-    const video = videoRef.current;
-    if (!player || !video) return;
-
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fullscreenElement) {
-      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
-      await exitFullscreen?.call(document);
-      return;
-    }
-
-    const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
-    if (requestFullscreen) {
-      await requestFullscreen.call(player);
-    } else {
-      video.webkitEnterFullscreen?.();
-    }
+  const toggleFullscreen = () => {
+    setRotation(0);
+    onFullscreenChange?.(!isFullscreen);
   };
 
-  const rotateVideo = async () => {
-    const player = playerRef.current;
+  const rotateVideo = () => {
     const video = videoRef.current;
-    if (!player || !video) return;
-
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fullscreenElement !== player) {
-      const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
-      if (requestFullscreen) {
-        await requestFullscreen.call(player);
-      } else {
-        video.webkitEnterFullscreen?.();
-      }
-    }
+    if (!video) return;
+    if (!isFullscreen) onFullscreenChange?.(true);
     setRotation((value) => (value + 90) % 360);
   };
 
@@ -208,7 +166,7 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
   return (
     <div
       ref={playerRef}
-      className={`relative flex w-full flex-col items-center overflow-hidden ${isFullscreen ? 'h-screen bg-black' : 'self-center bg-transparent'}`}
+      className={`flex w-full flex-col items-center overflow-hidden ${isFullscreen ? 'fixed inset-0 z-[100] h-[100dvh] bg-black' : 'relative self-center bg-transparent'}`}
       onMouseMove={() => setControlsVisible(true)}
       onMouseLeave={() => {
         if (playing) setControlsVisible(false);
@@ -305,6 +263,16 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext }) => {
           <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>
         </div>
       </div>
+      {isFullscreen && onPrevious && (
+        <button type="button" onClick={onPrevious} className="absolute left-3 top-1/2 z-30 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
+          <Icon icon="mdi:chevron-left" />
+        </button>
+      )}
+      {isFullscreen && onNext && (
+        <button type="button" onClick={onNext} className="absolute right-3 top-1/2 z-30 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
+          <Icon icon="mdi:chevron-right" />
+        </button>
+      )}
     </div>
   );
 };
@@ -409,6 +377,16 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
         <button type="button" onClick={() => applyScale(scale + 0.5)} disabled={scale >= 5} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-35" aria-label="확대"><Icon icon="mdi:plus" /></button>
         <button type="button" onClick={() => applyScale(1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" aria-label="원래 크기"><Icon icon="mdi:restore" /></button>
       </div>
+      {onPrevious && scale === 1 && (
+        <button type="button" onClick={onPrevious} className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
+          <Icon icon="mdi:chevron-left" />
+        </button>
+      )}
+      {onNext && scale === 1 && (
+        <button type="button" onClick={onNext} className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
+          <Icon icon="mdi:chevron-right" />
+        </button>
+      )}
       <div
         className={`flex h-full w-full items-center justify-center overflow-hidden touch-none ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
         onWheel={(event) => {
@@ -439,6 +417,9 @@ const MediaViewerPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const commentsRef = useRef(null);
+  const detailSwipeRef = useRef(null);
+  const suppressDetailClickRef = useRef(false);
+  const internalMediaNavigationRef = useRef(false);
   const commentScrollHandledRef = useRef('');
   const detailsRequestRef = useRef(0);
   const tagSavingRef = useRef(false);
@@ -459,7 +440,7 @@ const MediaViewerPage = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [uploadSuccessOpen, setUploadSuccessOpen] = useState(Boolean(location.state?.uploadSuccessMessage));
-  const [photoOpen, setPhotoOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const requestedDate = searchParams.get('date');
   const focusComments = searchParams.get('focus') === 'comments';
@@ -501,6 +482,13 @@ const MediaViewerPage = () => {
     setToasts([]);
   }, [mediaId]);
 
+  useEffect(() => {
+    if (!viewerOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [viewerOpen]);
+
   const loadDetails = useCallback((force = false) => {
     const requestId = detailsRequestRef.current + 1;
     detailsRequestRef.current = requestId;
@@ -524,7 +512,9 @@ const MediaViewerPage = () => {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const preserveCurrentViewer = internalMediaNavigationRef.current;
+    internalMediaNavigationRef.current = false;
+    if (!preserveCurrentViewer) setLoading(true);
     setDetails(null);
     const loadMediaItems = Array.isArray(albumMediaIds) && albumMediaIds.length > 0
       ? getAllVideos({ ids: albumMediaIds.join(',') })
@@ -642,15 +632,42 @@ const MediaViewerPage = () => {
   }, [current, loadDetails, markWatchedLocal, user]);
 
   const moveTo = (item) => {
-    if (item) navigate(`/media/${item.id}?date=${date}`, { state: { returnTo, albumMediaIds } });
+    if (!item) return;
+    internalMediaNavigationRef.current = true;
+    navigate(`/media/${item.id}?date=${date}`, { state: { returnTo, albumMediaIds } });
+  };
+
+  const handleDetailPointerDown = (event) => {
+    if (event.target.closest('input, iframe')) return;
+    detailSwipeRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleDetailPointerUp = (event) => {
+    const swipe = detailSwipeRef.current;
+    detailSwipeRef.current = null;
+    if (!swipe || swipe.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - swipe.x;
+    const deltaY = event.clientY - swipe.y;
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    const destination = deltaX < 0 ? next : previous;
+    if (!destination) return;
+    suppressDetailClickRef.current = true;
+    moveTo(destination);
+    window.setTimeout(() => { suppressDetailClickRef.current = false; }, 0);
   };
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === 'ArrowLeft' && previous) moveTo(previous);
-      if (event.key === 'ArrowRight' && next) moveTo(next);
+      const photoViewerHandlesArrows = viewerOpen && current?.type === 'photo';
+      if (!photoViewerHandlesArrows && event.key === 'ArrowLeft' && previous) moveTo(previous);
+      if (!photoViewerHandlesArrows && event.key === 'ArrowRight' && next) moveTo(next);
       if (event.key === 'Escape') {
-        if (photoOpen) setPhotoOpen(false);
+        if (viewerOpen) setViewerOpen(false);
         else if (editing) setEditing(false);
         else if (returnTo.startsWith('/my-album/')) navigate(returnTo, { replace: true });
         else navigate(`/calendar/${date}`, { state: { returnTo } });
@@ -861,7 +878,17 @@ const MediaViewerPage = () => {
                 </span>
               </div>
             )}
-            <div className={`relative flex items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}>
+            <div
+              className={`relative flex touch-pan-y items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}
+              onPointerDown={handleDetailPointerDown}
+              onPointerUp={handleDetailPointerUp}
+              onPointerCancel={() => { detailSwipeRef.current = null; }}
+              onClickCapture={(event) => {
+                if (!suppressDetailClickRef.current) return;
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
               {current.processingStatus === 'processing' ? (
                 <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
                   <Icon icon="mdi:movie-open-cog-outline" className="text-6xl text-primary" />
@@ -891,17 +918,13 @@ const MediaViewerPage = () => {
                 <MediaVideoPlayer
                   src={current.src}
                   poster={current.thumbnail}
-                  onPrevious={previous ? () => {
-                    if (previous.type === 'photo') setPhotoOpen(true);
-                    moveTo(previous);
-                  } : undefined}
-                  onNext={next ? () => {
-                    if (next.type === 'photo') setPhotoOpen(true);
-                    moveTo(next);
-                  } : undefined}
+                  isFullscreen={viewerOpen}
+                  onFullscreenChange={setViewerOpen}
+                  onPrevious={previous ? () => moveTo(previous) : undefined}
+                  onNext={next ? () => moveTo(next) : undefined}
                 />
               ) : (
-                <button type="button" onClick={() => setPhotoOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
+                <button type="button" onClick={() => setViewerOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
                   <img
                     src={current.preview || current.thumbnail || current.src}
                     alt={current.title}
@@ -1051,19 +1074,13 @@ const MediaViewerPage = () => {
       )}
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      {photoOpen && current.type === 'photo' && (
+      {viewerOpen && current.type === 'photo' && (
         <PhotoLightbox
           src={current.src}
           alt={current.title}
-          onClose={() => setPhotoOpen(false)}
-          onPrevious={previous ? () => {
-            if (previous.type !== 'photo') setPhotoOpen(false);
-            moveTo(previous);
-          } : undefined}
-          onNext={next ? () => {
-            if (next.type !== 'photo') setPhotoOpen(false);
-            moveTo(next);
-          } : undefined}
+          onClose={() => setViewerOpen(false)}
+          onPrevious={previous ? () => moveTo(previous) : undefined}
+          onNext={next ? () => moveTo(next) : undefined}
         />
       )}
       <Modal
