@@ -338,7 +338,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
         <header className="flex items-center justify-between whitespace-nowrap px-4 sm:px-10 py-3">
           <div className="flex items-center gap-4 shrink-0">
             <Link to="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="HoTube" className="w-8 h-8" />
+              <img src="/logo.png" alt="HoTube" className="w-8 h-8" />
               <h1 className="text-xl font-bold text-[#181411] dark:text-gray-100">HoTube</h1>
             </Link>
           </div>

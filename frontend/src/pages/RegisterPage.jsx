@@ -74,7 +74,7 @@ const RegisterPage = () => {
       {/* Header */}
       <header className="flex h-14 w-full items-center border-b border-zinc-200 bg-background-light px-4 sm:px-10">
         <Link to="/login" className="flex items-center gap-2">
-          <img src="/logo.svg" alt="HoTube" className="w-8 h-8" />
+          <img src="/logo.png" alt="HoTube" className="w-8 h-8" />
           <h1 className="text-xl font-bold text-[#181411]">HoTube</h1>
         </Link>
       </header>
