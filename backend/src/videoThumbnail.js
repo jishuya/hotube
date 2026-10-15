@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const { HttpError } = require('./httpErrors');
 
 const ffmpegExecutable = process.env.FFMPEG_PATH || 'ffmpeg';
 const ffprobeExecutable = process.env.FFPROBE_PATH || 'ffprobe';
@@ -39,7 +40,7 @@ const createVideoThumbnail = (inputPath, outputPath) => new Promise((resolve, re
 const probeVideo = (inputPath) => new Promise((resolve, reject) => {
   const ffprobe = spawn(ffprobeExecutable, [
     '-v', 'error',
-    '-show_entries', 'format=format_name,bit_rate:stream=codec_type,codec_name,pix_fmt,width,height,bit_rate',
+    '-show_entries', 'format=duration,format_name,bit_rate:stream=codec_type,codec_name,pix_fmt,width,height,bit_rate',
     '-of', 'json',
     inputPath,
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -59,6 +60,23 @@ const probeVideo = (inputPath) => new Promise((resolve, reject) => {
     }
   });
 });
+
+const validateVideoDuration = async (inputPath) => {
+  let info;
+  try {
+    info = await probeVideo(inputPath);
+  } catch {
+    throw new HttpError(400, '영상 길이를 확인할 수 없습니다. 다른 영상 파일을 선택해주세요.', 'INVALID_VIDEO_DURATION');
+  }
+  const duration = Number(info.format?.duration);
+  if (!info.streams?.some((stream) => stream.codec_type === 'video') || !Number.isFinite(duration) || duration <= 0) {
+    throw new HttpError(400, '영상 길이를 확인할 수 없습니다. 다른 영상 파일을 선택해주세요.', 'INVALID_VIDEO_DURATION');
+  }
+  if (duration > 90) {
+    throw new HttpError(400, '영상은 90초(1분 30초) 이하만 업로드할 수 있습니다.', 'VIDEO_TOO_LONG');
+  }
+  return duration;
+};
 
 const isBrowserCompatibleVideo = async (inputPath) => {
   const info = await probeVideo(inputPath);
@@ -183,6 +201,7 @@ const createBrowserCompatibleVideo = (inputPath, outputPath) => new Promise((res
 });
 
 module.exports = {
+  validateVideoDuration,
   createBrowserCompatibleVideo,
   createImagePreview,
   createImageThumbnail,

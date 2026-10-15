@@ -645,7 +645,8 @@ const AlbumPage = () => {
                   inputMode="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  aria-label="앨범 검색"
+                  aria-label="앨범 검색: 제목, 태그, 올린이 또는 댓글 작성자"
+                  placeholder="제목, 태그, 엄마, 이모…"
                   className="form-input h-full min-w-0 flex-1 rounded-full rounded-r-none border-none bg-primary/10 px-4 pr-8 text-sm text-text-primary focus:outline-0 focus:ring-2 focus:ring-primary/50"
                 />
                 {searchQuery && (

@@ -92,9 +92,34 @@ const listMedia = async ({
   }
   if (search) {
     const searchParam = addParam(`%${search}%`);
+    const commentViewerParam = addParam(viewerId);
     conditions.push(`(
       m.title ILIKE ${searchParam}
       OR COALESCE(m.description, '') ILIKE ${searchParam}
+      OR EXISTS (
+        SELECT 1
+        FROM users search_uploader
+        WHERE search_uploader.id = m.uploaded_by
+          AND (search_uploader.name ILIKE ${searchParam}
+            OR search_uploader.title ILIKE ${searchParam})
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM comments search_comment
+        LEFT JOIN users search_author ON search_author.id = search_comment.user_id
+        WHERE search_comment.media_id = m.id
+          AND (search_comment.user_name ILIKE ${searchParam}
+            OR search_comment.user_title ILIKE ${searchParam}
+            OR search_author.name ILIKE ${searchParam}
+            OR search_author.title ILIKE ${searchParam})
+          AND EXISTS (
+            SELECT 1 FROM users search_viewer
+            WHERE search_viewer.id = ${commentViewerParam}
+              AND (search_viewer.role IN ('admin', 'sub-admin')
+                OR search_viewer.id = search_comment.user_id
+                OR search_viewer.category = ANY(search_comment.shared_with))
+          )
+      )
       OR EXISTS (
         SELECT 1
         FROM media_tags search_mt

@@ -220,11 +220,11 @@ const CommentSection = ({ videoId, onCountChange }) => {
                   <span className="font-semibold text-zinc-900 dark:text-white">
                     {comment.userName}
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 font-semibold ${getCommentAudience(comment.sharedWith).color}`}>
-                    {getCommentAudience(comment.sharedWith).label}
-                  </span>
                   <span className="text-zinc-500 dark:text-zinc-400">
                     {comment.userTitle}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 font-semibold ${getCommentAudience(comment.sharedWith).color}`}>
+                    {getCommentAudience(comment.sharedWith).label}
                   </span>
                   <span className="text-zinc-400 dark:text-zinc-500">
                     · {formatDate(comment.createdAt)}

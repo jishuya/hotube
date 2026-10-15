@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
 const {
+  validateVideoDuration,
   createBrowserCompatibleVideo,
   createImagePreview,
   createImageThumbnail,
@@ -101,4 +102,30 @@ test('H.264 MP4 영상은 브라우저 호환 영상으로 판별한다', async 
 
   assert.equal(await isBrowserCompatibleVideo(videoPath), true);
   assert.equal(await isPlaybackOptimizedVideo(videoPath), true);
+});
+
+for (const seconds of [89, 90, 90.1]) {
+  test(`영상 업로드 길이 경계 검사: ${seconds}초`, async (t) => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-duration-'));
+    t.after(() => fs.rm(directory, { recursive: true, force: true }));
+    const videoPath = path.join(directory, 'sample.mp4');
+    await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+      '-i', `color=c=orange:s=16x16:r=10:d=${seconds}`,
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoPath,
+    ]);
+    if (seconds <= 90) {
+      assert.equal(await validateVideoDuration(videoPath), seconds);
+    } else {
+      await assert.rejects(validateVideoDuration(videoPath), { status: 400, code: 'VIDEO_TOO_LONG' });
+    }
+  });
+}
+
+test('읽을 수 없는 영상은 길이 검증에서 거절한다', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-invalid-video-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const videoPath = path.join(directory, 'invalid.mp4');
+  await fs.writeFile(videoPath, 'invalid video');
+  await assert.rejects(validateVideoDuration(videoPath), { status: 400, code: 'INVALID_VIDEO_DURATION' });
 });

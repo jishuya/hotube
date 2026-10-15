@@ -21,11 +21,36 @@ const MAX_UPLOAD_FILES = 10;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 150 * 1024 * 1024;
 const MAX_TOTAL_UPLOAD_SIZE = 500 * 1024 * 1024;
+const formatUploadSize = (bytes) => {
+  const mb = bytes / (1024 * 1024);
+  return mb > 0 && mb < 0.1 ? '0.1MB 미만' : `${Number(mb.toFixed(1))}MB`;
+};
+
 const SHARE_OPTIONS = [
   { value: 'dad', label: '아빠가족' },
   { value: 'mom', label: '엄마가족' },
 ];
 const ALL_FAMILY_CATEGORIES = SHARE_OPTIONS.map((option) => option.value);
+
+// 브라우저에서 읽을 수 없는 코덱은 업로드 후 서버에서 길이를 검사한다.
+const readVideoDuration = (file) => new Promise((resolve) => {
+  const video = document.createElement('video');
+  const url = URL.createObjectURL(file);
+  const finish = (duration) => {
+    clearTimeout(timer);
+    video.onloadedmetadata = null;
+    video.onerror = null;
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(url);
+    resolve(duration);
+  };
+  const timer = setTimeout(() => finish(null), 10000);
+  video.preload = 'metadata';
+  video.onloadedmetadata = () => finish(Number.isFinite(video.duration) ? video.duration : null);
+  video.onerror = () => finish(null);
+  video.src = url;
+});
 
 const VideoFramePreview = ({ src, className }) => (
   <video
@@ -179,6 +204,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const removeToast = useCallback((id) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
+  const selectedUploadSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size ?? 0), 0);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
   const hasUnconfirmedDates = !targetDate && selectedFiles.some((item) => !item.dateConfirmed);
   const hasDateFilter = Boolean(filterDateFrom || filterDateTo);
@@ -331,29 +357,32 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const countExcludedFiles = sizeEligibleFiles.slice(availableSlots);
     const countEligibleFiles = sizeEligibleFiles.slice(0, availableSlots);
     const mediaFiles = [];
-    const totalSizeExcludedFiles = [];
-    let totalSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size), 0);
+    let totalSize = selectedUploadSize;
 
-    countEligibleFiles.forEach((file) => {
+    for (const file of countEligibleFiles) {
+      if (file.type.startsWith('video/')) {
+        const duration = await readVideoDuration(file);
+        if (duration !== null && duration > 90) {
+          selectionNotices.push(`영상은 1분 30초 이하만 올릴 수 있어요: ${file.name}`);
+          continue;
+        }
+      }
       if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) {
-        totalSizeExcludedFiles.push(file);
-        return;
+        selectionNotices.push(`${file.name} (${formatUploadSize(file.size)}) · 용량 초과\n남은 용량 ${formatUploadSize(Math.max(0, MAX_TOTAL_UPLOAD_SIZE - totalSize))}. 선택한 파일을 먼저 올려주세요.`);
+        continue;
       }
       mediaFiles.push(file);
       totalSize += file.size;
-    });
+    }
 
     if (countExcludedFiles.length) {
-      selectionNotices.push(`최대 ${MAX_UPLOAD_FILES}개 제한: ${summarizeNames(countExcludedFiles)}`);
+      selectionNotices.push(`한 번에 사진·영상 합쳐 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있어요: ${summarizeNames(countExcludedFiles)}`);
     }
     if (oversizedImages.length) {
-      selectionNotices.push(`사진 20MB 초과: ${summarizeNames(oversizedImages)}`);
+      selectionNotices.push(`사진은 개당 20MB까지 올릴 수 있어요: ${summarizeNames(oversizedImages)}`);
     }
     if (oversizedVideos.length) {
-      selectionNotices.push(`영상 150MB 초과: ${summarizeNames(oversizedVideos)}`);
-    }
-    if (totalSizeExcludedFiles.length) {
-      selectionNotices.push(`전체 500MB 초과: ${summarizeNames(totalSizeExcludedFiles)}`);
+      selectionNotices.push(`영상은 개당 150MB까지 올릴 수 있어요: ${summarizeNames(oversizedVideos)}`);
     }
 
     if (!mediaFiles.length) {
@@ -693,11 +722,15 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       >
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
                         <span className="font-bold">{selectedFiles.length >= MAX_UPLOAD_FILES ? '10개를 모두 선택했어요' : '사진 또는 영상 선택'}</span>
-                        <span className="mt-1 text-xs text-text-secondary">현재 {selectedFiles.length}/10개 선택</span>
-                        <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-extrabold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
-                          <Icon icon="mdi:information-outline" className="shrink-0 text-base" />
-                          최대 10개 · 영상 1분 미만
+                        <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-orange-100 px-3 py-2 text-sm font-extrabold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                          <span>한 번에 최대 10개<br />총 500MB</span>
                         </span>
+                        <span className="mt-2 text-xs text-text-secondary">영상 최대 1분 30초</span>
+                        {selectedFiles.length > 0 && (
+                          <span className="mt-3 text-sm font-bold text-primary" aria-live="polite">
+                            {selectedFiles.length}/{MAX_UPLOAD_FILES}개 · {formatUploadSize(selectedUploadSize)}/500MB
+                          </span>
+                        )}
                         <input
                           type="file"
                           accept="image/*,video/*"
@@ -710,6 +743,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                           }}
                         />
                       </label>
+                      <details className="mt-2 text-xs text-text-secondary">
+                        <summary className="cursor-pointer text-center">파일별 용량 제한</summary>
+                        <p className="mt-2 text-center">사진 20MB · 영상 150MB / 개당</p>
+                      </details>
 
                       {selectedFiles.length > 0 && (
                         <div className="mt-5 space-y-3">

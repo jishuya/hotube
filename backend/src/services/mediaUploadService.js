@@ -8,7 +8,7 @@ const {
   resolveMediaPath,
   toStoredMediaPath,
 } = require('../mediaStorage');
-const { createImagePreview, createImageThumbnail } = require('../videoThumbnail');
+const { createImagePreview, createImageThumbnail, validateVideoDuration } = require('../videoThumbnail');
 const { createFileMedia, deleteMedia } = require('./mediaService');
 const { enqueueVideoProcessing } = require('./mediaProcessingService');
 
@@ -31,6 +31,7 @@ const finalizeMediaFile = async ({
   let previewPath = null;
   let createdMedia = null;
   try {
+    if (isVideo) await validateVideoDuration(tempPath);
     const duplicate = await pgDb.query('SELECT id FROM media WHERE content_hash = $1 LIMIT 1', [contentHash]);
     if (duplicate.rows.length) {
       throw new HttpError(409, `이미 업로드된 파일입니다: ${originalName}`, 'DUPLICATE_MEDIA');
