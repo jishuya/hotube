@@ -135,7 +135,7 @@ const ChildInfoForm = ({ child, label, onSave }) => {
   return (
     <>
         <form onSubmit={handleSubmit} className="px-5 py-5">
-          <h3 className="mb-4 text-lg font-bold text-text-primary">{label} 아이 정보수정</h3>
+          <h3 className="mb-4 text-lg font-bold text-text-primary">{label} 아이 {child.id ? '정보수정' : '정보 추가'}</h3>
           <fieldset disabled={saving}>
           <div className="mb-5 flex flex-col items-center">
             <button type="button" onClick={() => fileInputRef.current?.click()} className="group relative size-24 rounded-full" aria-label="아이 사진 변경">
@@ -267,16 +267,18 @@ const ChildInfoForm = ({ child, label, onSave }) => {
 };
 
 const ChildInfoModal = ({ isOpen, onClose, children: childProfiles, onSave }) => {
-  const [thirdChildDraft, setThirdChildDraft] = useState(null);
+  const [newChildDraft, setNewChildDraft] = useState(() => childProfiles.length === 0
+    ? { index: 0, profile: { name: '', gender: '', birthday: '', profileImage: null } }
+    : null);
   const [savedMessage, setSavedMessage] = useState('');
   const handleSave = async (updatedChild, index) => {
     const savedChild = await onSave(updatedChild, index);
+    setNewChildDraft((current) => current?.index === index ? null : current);
     setSavedMessage(`${CHILD_LABELS[index]} 아이 정보가 저장되었습니다.`);
     return savedChild;
   };
-  const profiles = childProfiles.length < 3 && thirdChildDraft
-    ? [...childProfiles, thirdChildDraft]
-    : childProfiles;
+  const hasDraft = newChildDraft?.index === childProfiles.length;
+  const profiles = hasDraft ? [...childProfiles, newChildDraft.profile] : childProfiles;
   useEffect(() => {
     if (!isOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -301,15 +303,15 @@ const ChildInfoModal = ({ isOpen, onClose, children: childProfiles, onSave }) =>
           {profiles.map((child, index) => (
             <ChildInfoForm key={index} child={child} label={CHILD_LABELS[index]} onSave={(updatedChild) => handleSave(updatedChild, index)} />
           ))}
-          {profiles.length < 3 && (
+          {childProfiles.length < 3 && !hasDraft && (
             <div className="px-5 py-5">
               <button
                 type="button"
-                onClick={() => setThirdChildDraft({ name: '', gender: '', birthday: '', profileImage: null })}
+                onClick={() => setNewChildDraft({ index: childProfiles.length, profile: { name: '', gender: '', birthday: '', profileImage: null } })}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-primary font-bold text-primary transition hover:bg-primary/10"
               >
                 <Icon icon="mdi:plus" className="text-xl" />
-                셋째 추가
+                {CHILD_LABELS[childProfiles.length]} 아이 정보 추가
               </button>
             </div>
           )}

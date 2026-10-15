@@ -131,17 +131,12 @@ router.put('/childProfile', async (req, res) => {
     // Serialize creation so each banner keeps its own ordered profile slot.
     await client.query('LOCK TABLE child_profiles IN EXCLUSIVE MODE');
     const slot = Number(req.query.slot || 0);
-    if (slot === 1) {
-      await client.query(`
-        INSERT INTO child_profiles (name, nickname, gender, birth_date)
-        SELECT '김수호', '수호', 'male', '2023-10-16'::date
-        WHERE NOT EXISTS (SELECT 1 FROM child_profiles)
-      `);
-    }
-    if (slot === 2) {
+    if (slot > 0) {
       const count = await client.query('SELECT COUNT(*)::int AS count FROM child_profiles');
-      if (count.rows[0].count < 2) {
-        const error = new Error('첫째와 둘째 정보를 먼저 저장해주세요.');
+      if (count.rows[0].count < slot) {
+        const error = new Error(slot === 1
+          ? '첫째 정보를 먼저 저장해주세요.'
+          : '첫째와 둘째 정보를 먼저 저장해주세요.');
         error.status = 409;
         throw error;
       }

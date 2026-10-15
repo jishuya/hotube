@@ -417,6 +417,13 @@ const MediaViewerPage = () => {
   const [details, setDetails] = useState(null);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionSaveStatus, setDescriptionSaveStatus] = useState('');
+  const descriptionSavingRef = useRef(false);
+  const activeMediaIdRef = useRef(mediaId);
+  useEffect(() => {
+    activeMediaIdRef.current = mediaId;
+    setDescriptionSaveStatus('');
+  }, [mediaId]);
   const [descriptionTags, setDescriptionTags] = useState([]);
   const [tagDraft, setTagDraft] = useState('');
   const [addingTag, setAddingTag] = useState(false);
@@ -665,6 +672,7 @@ const MediaViewerPage = () => {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]')) return;
       const photoViewerHandlesArrows = viewerOpen && current?.type === 'photo';
       if (!photoViewerHandlesArrows && event.key === 'ArrowLeft' && previous) moveTo(previous);
       if (!photoViewerHandlesArrows && event.key === 'ArrowRight' && next) moveTo(next);
@@ -728,25 +736,40 @@ const MediaViewerPage = () => {
   };
 
   const saveDescription = async () => {
-    if (busyAction) return;
+    if (descriptionSavingRef.current || busyAction || !details?.canModify) return;
     if (descriptionDraft.length > 500) {
+      setDescriptionSaveStatus('error');
       showToast('error', '태그를 제외한 설명은 500자 이내로 작성해주세요.');
       return;
     }
+    const nextDescription = descriptionDraft.trim();
+    const nextTags = [...new Set([...descriptionTags, ...parseTags(tagDraft)])];
+    if (nextDescription === visibleDescription && nextTags.length === visibleTags.length && nextTags.every((tag) => visibleTags.includes(tag))) {
+      setEditingDescription(false);
+      return;
+    }
+    descriptionSavingRef.current = true;
+    setDescriptionSaveStatus('saving');
     setBusyAction('description');
     try {
       const saved = toMemoryMedia(await updateVideo(mediaId, {
-        description: descriptionDraft.trim(),
-        tags: [...new Set([...descriptionTags, ...parseTags(tagDraft)])],
+        description: nextDescription,
+        tags: nextTags,
       }, user?.id));
       setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
-      resetDescriptionDraft(saved);
-      setEditingDescription(false);
+      if (activeMediaIdRef.current === mediaId) {
+        resetDescriptionDraft(saved);
+        setEditingDescription(false);
+        setDescriptionSaveStatus('');
+      }
       window.dispatchEvent(new Event('hotube:media-updated'));
-      showToast('success', '한줄기록을 저장했습니다.');
     } catch (actionError) {
-      showToast('error', actionError.message);
+      if (activeMediaIdRef.current === mediaId) {
+        setDescriptionSaveStatus('error');
+        showToast('error', actionError.message);
+      }
     } finally {
+      descriptionSavingRef.current = false;
       setBusyAction('');
     }
   };
@@ -926,7 +949,7 @@ const MediaViewerPage = () => {
 
             {details?.canModify && (
               <div className="mx-4 mb-1 mt-3 flex items-center justify-between gap-2">
-                <button type="button" onClick={() => { resetDescriptionDraft(current); setEditingDescription((value) => !value); }} disabled={Boolean(busyAction)} aria-expanded={editingDescription} aria-controls="media-description-input" className="inline-flex items-center gap-1 text-xs font-semibold text-text-secondary hover:text-primary disabled:opacity-50">
+                <button type="button" onClick={() => { if (editingDescription) { saveDescription(); } else { resetDescriptionDraft(current); setDescriptionSaveStatus(''); setEditingDescription(true); } }} disabled={Boolean(busyAction)} aria-expanded={editingDescription} aria-controls="media-description-input" className="inline-flex items-center gap-1 text-xs font-semibold text-text-secondary hover:text-primary disabled:opacity-50">
                   <Icon icon="mdi:pencil-box-outline" className="text-base" aria-hidden="true" />
                   {descriptionLabel}
                 </button>
@@ -943,7 +966,9 @@ const MediaViewerPage = () => {
               </div>
             )}
 
-            {(caption.trim() || editingDescription) && <section aria-label={descriptionLabel} className={`px-4 pb-1 text-sm ${editingDescription || details?.canModify ? 'pt-0' : 'pt-3'}`}>
+            {(caption.trim() || editingDescription) && <section aria-label={descriptionLabel} onBlur={(event) => {
+              if (editingDescription && !event.currentTarget.contains(event.relatedTarget)) saveDescription();
+            }} className={`px-4 pb-1 text-sm ${editingDescription || details?.canModify ? 'pt-0' : 'pt-3'}`}>
               {editingDescription ? (
                 <div>
                   <textarea
@@ -951,7 +976,15 @@ const MediaViewerPage = () => {
                     autoFocus
                     aria-label={descriptionLabel}
                     value={descriptionDraft}
-                    onChange={(event) => setDescriptionDraft(event.target.value)}
+                    onChange={(event) => { setDescriptionDraft(event.target.value); setDescriptionSaveStatus(''); }}
+                    onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        saveDescription();
+                      }
+                    }}
+                    disabled={busyAction === 'description'}
                     rows={2}
                     placeholder="이 순간을 남겨보세요."
                     maxLength={500}
@@ -969,17 +1002,13 @@ const MediaViewerPage = () => {
                       <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} onBlur={addDraftTags}
                         onKeyDown={(event) => {
                           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-                          if (event.key === 'Enter') { event.preventDefault(); addDraftTags(); }
+                          if (event.key === 'Enter') { event.preventDefault(); saveDescription(); }
                           if (event.key === 'Escape') { setTagDraft(''); setAddingTag(false); }
                         }}
                         disabled={Boolean(busyAction)} aria-label="해시태그 추가" placeholder="#일상 #가족" className="h-6 w-40 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary" />
                     ) : (
                       <button type="button" disabled={Boolean(busyAction)} onClick={() => { setTagDraft('#'); setAddingTag(true); }} className="font-semibold hover:underline">+ 태그</button>
                     )}
-                  </div>
-                  <div className="mt-2 flex justify-end gap-2">
-                    <button type="button" onClick={() => { resetDescriptionDraft(current); setEditingDescription(false); }} disabled={busyAction === 'description'} className="rounded-lg px-3 py-1.5 text-xs font-bold text-text-secondary hover:bg-background disabled:opacity-50">취소</button>
-                    <button type="button" onClick={saveDescription} disabled={busyAction === 'description' || descriptionLength > 500} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{busyAction === 'description' ? '저장 중…' : '저장'}</button>
                   </div>
                 </div>
               ) : caption ? (
@@ -1005,7 +1034,15 @@ const MediaViewerPage = () => {
                 </div>
               ) : null}
             </section>}
-
+            {descriptionSaveStatus && (
+              <div className="px-4 pb-1 text-xs text-text-secondary" aria-live="polite">
+                {descriptionSaveStatus === 'saving' && '저장 중…'}
+                {descriptionSaveStatus === 'error' && <>
+                  저장하지 못했어요. 입력한 내용은 유지됩니다.
+                  <button type="button" onClick={saveDescription} className="ml-2 font-semibold text-primary underline">다시 시도</button>
+                </>}
+              </div>
+            )}
 
             {current.source === 'youtube' && (
               <h1 className="mx-4 mt-1 truncate text-sm font-semibold">{current.title}</h1>

@@ -120,10 +120,10 @@ const getMediaDate = async (file) => {
         return { date: formatFileDate(capturedDate), source: 'exif' };
       }
     } catch {
-      // 아래에서 파일 수정일을 확인용 후보 날짜로 사용한다.
+      // 촬영정보를 읽을 수 없으면 오늘 날짜를 사용한다.
     }
   }
-  return { date: formatFileDate(file.lastModified || Date.now()), source: 'file' };
+  return { date: getTodayDateKey(), source: 'today' };
 };
 
 const extractYouTubeId = (url) => {
@@ -203,7 +203,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   }, []);
   const selectedUploadSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size ?? 0), 0);
   const selectedFile = selectedFileIndex === null ? null : selectedFiles[selectedFileIndex];
-  const hasUnconfirmedDates = !targetDate && selectedFiles.some((item) => !item.dateConfirmed);
   const hasDateFilter = Boolean(filterDateFrom || filterDateTo);
   const dateFilterError = filterDateFrom && filterDateTo && filterDateFrom > filterDateTo
     ? '종료일은 시작일보다 빠를 수 없어요.'
@@ -486,8 +485,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           file, contentHash, name: file.name,
           type: file.type.startsWith('video/') ? 'video' : 'photo', preview,
           date: targetDate || mediaDate.date,
-          dateSource: targetDate ? 'target' : mediaDate.source,
-          dateConfirmed: Boolean(targetDate) || ['exif', 'video'].includes(mediaDate.source),
           tags: '',
         });
       }
@@ -509,15 +506,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setSelectedFiles((current) => current.map((item, itemIndex) => (
       itemIndex === index ? { ...item, [field]: value } : item
     )));
-  };
-
-  const confirmSelectedFileDate = (index, dateValue) => {
-    setSelectedFiles((current) => current.map((item, itemIndex) => (
-      itemIndex === index
-        ? { ...item, date: dateValue ?? item.date, dateSource: 'manual', dateConfirmed: true }
-        : item
-    )));
-    setUploadError('');
   };
 
   const removeSelectedFile = (index) => {
@@ -595,10 +583,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     if (uploadInProgressRef.current || preparingRef.current) return;
     if (!user?.id) {
       setUploadError('로그인 사용자 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
-      return;
-    }
-    if (uploadSource === 'device' && hasUnconfirmedDates) {
-      setUploadError('촬영일을 읽지 못한 파일의 날짜를 확인해주세요.');
       return;
     }
     const youtubeId = extractYouTubeId(youtubeUrl.trim());
@@ -860,40 +844,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
                           {selectedFile && (
                             <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 sm:grid-cols-2">
-                              <div className="sm:col-span-2">
-                                <p className="truncate text-sm font-bold">{selectedFile.name}</p>
-                              </div>
-                              {!targetDate && (
-                                <div>
-                                  <DatePickerField
-                                    label="촬영일"
-                                    value={selectedFile.date}
-                                    onChange={(value) => confirmSelectedFileDate(selectedFileIndex, value)}
-                                  />
-                                  {['exif', 'video'].includes(selectedFile.dateSource) ? (
-                                    <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary">
-                                      <Icon icon="mdi:check-circle-outline" className="text-base" />
-                                      {selectedFile.dateSource === 'video' ? '동영상' : '사진'}의 촬영정보에서 확인했어요.
-                                    </p>
-                                  ) : selectedFile.dateConfirmed ? (
-                                    <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary">
-                                      <Icon icon="mdi:check-circle-outline" className="text-base" />
-                                      확인한 날짜로 업로드합니다.
-                                    </p>
-                                  ) : (
-                                    <div className="mt-2 rounded-lg bg-orange-100 p-3 text-xs font-semibold text-orange-800 dark:bg-orange-500/15 dark:text-orange-300">
-                                      <p>촬영일을 읽지 못해 파일 날짜를 표시했어요. 정확한 날짜인지 확인해주세요.</p>
-                                      <button
-                                        type="button"
-                                        onClick={() => confirmSelectedFileDate(selectedFileIndex)}
-                                        className="mt-2 rounded-full bg-orange-600 px-3 py-1.5 font-bold text-white transition hover:bg-orange-700"
-                                      >
-                                        이 날짜로 확인
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
                               <label>
                                 <span className="mb-1 block text-xs font-bold">개별 태그</span>
                                 <input value={selectedFile.tags} onChange={(event) => updateSelectedFile(selectedFileIndex, 'tags', event.target.value)} className="h-10 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="#일상 #가족" />
@@ -1007,17 +957,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       );
                     })}
                   </div>
-                  {canShareCouple && sharedWith.length === 0 && <p className="mt-2 text-xs text-text-secondary">엄마와 아빠만 볼 수 있어요.</p>}
                 </fieldset>
               </section>
 
               </fieldset>
               {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}
-              {uploadSource === 'device' && hasUnconfirmedDates && (
-                <p className="rounded-lg bg-orange-100 p-3 text-sm font-semibold text-orange-800 dark:bg-orange-500/15 dark:text-orange-300">
-                  촬영일을 읽지 못한 파일이 있어요. 파일을 선택해 날짜를 확인해주세요.
-                </p>
-              )}
               {(preparing || transfer) && (
                 <div className="space-y-2 rounded-xl bg-primary/5 p-3" role="status">
                   <p className="truncate text-sm font-semibold">{preparing ? preparationMessage : transfer.name}</p>
@@ -1039,7 +983,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 }}>중단된 업로드 다시 시도</button>
               )}
               {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
-              <button type="submit" disabled={uploading || preparing || hasUnconfirmedDates || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
+              <button type="submit" disabled={uploading || preparing || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
                 <Icon icon={uploading ? 'mdi:loading' : 'mdi:cloud-upload'} className={`text-xl ${uploading ? 'animate-spin' : ''}`} />
                 {uploading
                   ? `업로드 중 · ${uploadProgress.completed}/${uploadProgress.total}`

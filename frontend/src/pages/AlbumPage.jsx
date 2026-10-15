@@ -858,6 +858,7 @@ const AlbumPage = () => {
                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
                           {media.map((item) => {
                             const isFeaturedYoutube = item.source === 'youtube' && item.videoType === 'long';
+                            const liked = isLiked(item.id);
                             return (
                               <Link
                               key={item.id}
@@ -919,7 +920,7 @@ const AlbumPage = () => {
                                 </span>
                               )}
                               {isFeaturedYoutube && (
-                                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-3 pt-12 text-white sm:px-5 sm:pb-4">
+                                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent pl-4 pr-12 pb-3 pt-12 text-white sm:pl-5 sm:pr-14 sm:pb-4">
                                   <span className="min-w-0 truncate text-sm font-bold sm:text-lg">{item.title}</span>
                                   <span className="flex shrink-0 items-center gap-1 rounded-full bg-error px-2.5 py-1 text-[11px] font-bold shadow-sm sm:text-xs">
                                     <Icon icon="mdi:youtube" className="text-base" />
@@ -927,6 +928,13 @@ const AlbumPage = () => {
                                   </span>
                                 </span>
                               )}
+                              <span
+                                role="img"
+                                aria-label={liked ? '좋아요 표시됨' : '좋아요 없음'}
+                                className="pointer-events-none absolute bottom-0 right-0 flex size-11 items-center justify-center text-white"
+                              >
+                                <Icon icon={liked ? 'mdi:heart' : 'mdi:heart-outline'} className={`text-base ${liked ? 'text-rose-400' : ''}`} aria-hidden="true" />
+                              </span>
                               </Link>
                             );
                           })}

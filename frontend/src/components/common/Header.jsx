@@ -10,15 +10,6 @@ import { markVideoWatched } from '../../services/authApi';
 import { dismissMediaNotifications, getInternalNotifications, markInternalNotificationRead, markMediaNotificationsRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
-const DEFAULT_CHILD = {
-  name: '김수호',
-  gender: 'male',
-  birthday: '2023-10-16',
-  profileImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBl38ACm_2q5uSKmstxSAhb8ggchgHK9DuZDHXNj_64EA5Ob1jJaP5M0oQ4GX8BlEUYwrsFj6Le0AuBKKslmIeaHS3k0Jh0yolYS1LjHCwu2xPzrolE-8aRgDMgJtwKQT1CwNibs0mSPlzfIjpF-rojpH1M0PatvSF5Xot8sH70No4nr8N4JBgi17ZXeQqrtek5YGP-eug77bmEtgbrjFGfDT9siZ4rCxYKg9BK1UDifS0zQ_2F1hCTDsyvMoLXWvp85bAzDuRla4fy',
-};
-
-const DEFAULT_CHILDREN = [DEFAULT_CHILD, { name: '수윤', gender: 'female', birthday: '', profileImage: null }];
-
 const getAgeSinceBirth = (birthday) => {
   const today = new Date();
   const birthDate = new Date(`${birthday}T00:00:00`);
@@ -61,7 +52,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [children, setChildren] = useState(DEFAULT_CHILDREN);
+  const [children, setChildren] = useState([]);
+  const [childrenStatus, setChildrenStatus] = useState('loading');
+  const [childrenLoadAttempt, setChildrenLoadAttempt] = useState(0);
   const [showChildInfoModal, setShowChildInfoModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [supportRequests, setSupportRequests] = useState([]);
@@ -138,20 +131,22 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      ...DEFAULT_CHILDREN.map((fallback, slot) =>
-        getChildProfile(slot).then((saved) => ({ ...fallback, ...saved }))
-      ),
-      getChildProfile(2),
-    ])
+    setChildrenStatus('loading');
+    Promise.all([0, 1, 2].map((slot) => getChildProfile(slot)))
       .then((savedChildren) => {
-        if (active) setChildren(savedChildren.filter(Boolean));
+        if (active) {
+          setChildren(savedChildren.filter(Boolean));
+          setChildrenStatus('ready');
+        }
       })
-      .catch((error) => console.error('아이 정보 조회 실패:', error));
+      .catch((error) => {
+        console.error('아이 정보 조회 실패:', error);
+        if (active) setChildrenStatus('error');
+      });
     return () => {
       active = false;
     };
-  }, []);
+  }, [childrenLoadAttempt]);
 
   useEffect(() => {
     if (!authIsAdmin || !user?.id) {
@@ -529,7 +524,23 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
           </div>
         </header>
 
-        {showChildBanner && (
+        {showChildBanner && childrenStatus !== 'ready' && (
+          <div className="mx-auto mb-2 flex w-[calc(100%-2rem)] max-w-3xl items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-text-secondary">
+            {childrenStatus === 'loading' ? '아이 정보를 불러오는 중...' : (
+              <>
+                아이 정보를 불러오지 못했어요.
+                <button type="button" onClick={() => setChildrenLoadAttempt((attempt) => attempt + 1)} className="font-bold text-primary">다시 시도</button>
+              </>
+            )}
+          </div>
+        )}
+        {showChildBanner && childrenStatus === 'ready' && children.length === 0 && (
+          <button type="button" onClick={() => setShowChildInfoModal(true)} className="mx-auto mb-2 flex w-[calc(100%-2rem)] max-w-3xl items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/10 px-3 py-3 text-sm font-bold text-primary transition hover:bg-primary/20">
+            <Icon icon="mdi:plus" className="text-xl" />
+            첫째 아이 정보 추가
+          </button>
+        )}
+        {showChildBanner && childrenStatus === 'ready' && children.length > 0 && (
           <div className="mx-auto mb-2 flex w-[calc(100%-2rem)] max-w-3xl items-center gap-1 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/15 via-primary/10 to-amber-100/70 px-2 py-1.5 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:gap-3 sm:px-4 dark:to-primary/5">
             <div className={`flex shrink-0 items-center gap-0 ${children.length === 3 ? 'max-sm:[&_img]:size-8 max-sm:[&_[role=img]]:size-8' : ''}`}>
               {children.map((child, index) => (
@@ -547,22 +558,16 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                 </div>
               ))}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="whitespace-nowrap text-[11px] font-semibold tracking-tight max-[359px]:text-[10px] sm:text-xs text-text-secondary">
-                {getChildGivenName(children[0].name)}와 함께한{' '}
-                <span className="text-orange-500">{getAgeSinceBirth(children[0].birthday).months}개월 {getAgeSinceBirth(children[0].birthday).days}일</span>
-              </p>
-              <p className="whitespace-nowrap text-[11px] font-semibold tracking-tight max-[359px]:text-[10px] sm:text-xs text-text-secondary">
-                {getChildGivenName(children[1].name)}이와 함께한 시간{' '}
-                <span className="inline-block text-orange-500">{children[1].birthday ? `${getAgeSinceBirth(children[1].birthday).months}개월 ${getAgeSinceBirth(children[1].birthday).days}일` : '1개월 12일'}</span>
-              </p>
-              {children[2] && (
-                <p className="whitespace-nowrap text-[11px] font-semibold tracking-tight max-[359px]:text-[10px] sm:text-xs">
-                  {getChildGivenName(children[2].name)}와 함께한{' '}
-                  <span className="text-orange-500">{getAgeSinceBirth(children[2].birthday).months}개월 {getAgeSinceBirth(children[2].birthday).days}일</span>
-                </p>
-              )}
-              <p className="whitespace-nowrap text-sm font-extrabold leading-tight text-text-primary sm:text-[22px]">모든 순간이 선물이야</p>
+            <div className="ml-2 min-w-0 flex-1">
+              {children.map((child, index) => {
+                const age = getAgeSinceBirth(child.birthday);
+                return (
+                  <p key={child.id} className="whitespace-nowrap text-xs font-semibold tracking-tight max-[359px]:text-[11px] sm:text-[13px] text-text-secondary">
+                    {getChildGivenName(child.name)}{index === 1 ? '이와 함께한 시간 ' : '와 함께한 시간 '}
+                    <span className="inline-block text-orange-500">{age.months}개월 {age.days}일</span>
+                  </p>
+                );
+              })}
             </div>
             <button type="button" onClick={() => setShowChildInfoModal(true)} className="flex h-9 w-7 shrink-0 sm:w-9 items-center justify-center rounded-full text-text-secondary transition hover:bg-white/70 hover:text-primary" aria-label="아이 정보 수정" title="아이 정보 수정">
               <Icon icon="mdi:dots-vertical" className="text-xl" />

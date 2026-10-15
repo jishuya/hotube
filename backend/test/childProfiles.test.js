@@ -21,6 +21,7 @@ test('saving Suyun updates only the second profile and returns that profile', as
   const client = {
     query: async (sql, params) => {
       statements.push({ sql, params });
+      if (sql.includes('COUNT(*)')) return { rows: [{ count: 2 }] };
       if (sql.startsWith('SELECT id, photo_path')) {
         assert.deepEqual(params, [1]);
         return { rows: [{ id: 22, photo_path: null }] };
@@ -104,4 +105,52 @@ test('third child cannot occupy the slot of an unsaved second child', async (t) 
   assert.equal(result.error, '첫째와 둘째 정보를 먼저 저장해주세요.');
   assert.ok(statements.includes('ROLLBACK'));
   assert.ok(!statements.some((sql) => /INSERT|UPDATE/.test(sql)));
+});
+
+test('empty database accepts first, second, then third without creating default children', async (t) => {
+  const rows = [];
+  t.mock.method(db, 'getClient', async () => ({
+    async query(sql, params) {
+      if (sql.includes('COUNT(*)')) return { rows: [{ count: rows.length }] };
+      if (sql.startsWith('SELECT id, photo_path')) return { rows: rows.slice(params[0], params[0] + 1) };
+      if (sql.includes('INSERT INTO child_profiles')) {
+        assert.ok(params, 'must not seed hardcoded children');
+        const [name, nickname, gender, birth_date, photo_path] = params;
+        const row = { id: rows.length + 1, name, nickname, gender, birth_date, photo_path };
+        rows.push(row);
+        return { rows: [row] };
+      }
+      return { rows: [] };
+    },
+    release() {},
+  }));
+  t.mock.method(db, 'query', async (_, [id, slot]) => ({
+    rows: id === null ? rows.slice(slot, slot + 1) : rows.filter((row) => row.id === id),
+  }));
+  t.mock.method(console, 'error', () => {});
+  const handler = router.stack.find((layer) => layer.route?.methods.put).route.stack[0].handle;
+  const save = async (slot) => {
+    let status = 200;
+    let body;
+    await handler({ query: { slot: String(slot) }, body: { name: `아이${slot + 1}`, gender: 'female', birthday: '2025-01-01' } }, {
+      status(value) { status = value; return this; },
+      json(value) { body = value; return this; },
+    });
+    return { status, body };
+  };
+  assert.equal(await fetchChildProfile(null, 0), null);
+  const skippedFirst = await save(1);
+  assert.equal(skippedFirst.status, 409);
+  assert.equal(skippedFirst.body.error, '첫째 정보를 먼저 저장해주세요.');
+  assert.equal(rows.length, 0);
+  for (let slot = 0; slot < 3; slot += 1) {
+    const saved = await save(slot);
+    assert.equal(saved.status, 200);
+    assert.equal(rows.length, slot + 1);
+    assert.equal(saved.body.name, `아이${slot + 1}`);
+    const reloaded = await fetchChildProfile(null, slot);
+    assert.equal(reloaded.name, `아이${slot + 1}`);
+    assert.equal(reloaded.photo_path, null);
+  }
+  assert.deepEqual(rows.map((row) => row.name), ['아이1', '아이2', '아이3']);
 });

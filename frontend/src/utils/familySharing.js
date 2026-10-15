@@ -1,5 +1,5 @@
 export const getDefaultSharedWith = (user) => {
-  if (['admin', 'sub-admin'].includes(user?.role)) return ['dad', 'mom'];
+  if (['admin', 'sub-admin'].includes(user?.role)) return [];
   if (['dad', 'mom'].includes(user?.category)) return [user.category];
   return ['dad', 'mom'];
 };
