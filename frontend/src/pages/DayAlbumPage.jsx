@@ -1,3 +1,4 @@
+import { isNewMedia } from '../utils/mediaNotifications';
 import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -24,7 +25,6 @@ const DayAlbumPage = () => {
   const [media, setMedia] = useState([]);
   const [loadedDate, setLoadedDate] = useState(null);
   const loading = loadedDate !== date;
-  const viewedMediaIds = user?.watchedVideos || [];
   const requestedReturnTo = location.state?.returnTo;
   const returnTo = requestedReturnTo === '/album' || requestedReturnTo?.startsWith('/calendar?month=')
     ? requestedReturnTo
@@ -124,7 +124,7 @@ const DayAlbumPage = () => {
                     state={{ returnTo }}
                     className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
                   >
-                    {!viewedMediaIds.includes(item.id) && (
+                    {isNewMedia(item, user) && (
                       <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
                         N
                       </span>

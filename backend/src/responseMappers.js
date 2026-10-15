@@ -86,6 +86,8 @@ const mapUserRowToUser = (row) => ({
   createdAt: toIsoString(row.created_at),
   likedVideos: normalizeArray(row.liked_videos),
   watchedVideos: normalizeArray(row.watched_videos),
+  firstLoginAt: toIsoString(row.first_login_at),
+  notifiedMediaIds: normalizeArray(row.notified_media_ids),
 });
 
 const mapCommentRowToComment = (row) => ({

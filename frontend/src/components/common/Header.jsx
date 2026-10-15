@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,7 +7,7 @@ import { getChildProfile, saveChildProfile } from '../../services/childProfileAp
 import { getSupportRequest, getSupportRequests, markSupportRequestRead } from '../../services/supportApi';
 import { getCalendarMedia, toMemoryMedia } from '../../services/videoApi';
 import { markVideoWatched } from '../../services/authApi';
-import { dismissMediaNotifications, getInternalNotifications, getOrCreateNotificationBaseline, markInternalNotificationRead, markMediaNotificationsRead } from '../../services/pushApi';
+import { dismissMediaNotifications, getInternalNotifications, markInternalNotificationRead, markMediaNotificationsRead } from '../../services/pushApi';
 import { getAvatarStyle, PROFILE_AVATARS } from '../../constants/profileAvatars';
 
 const DEFAULT_CHILD = {
@@ -76,16 +76,9 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
   const [supportDetailLoading, setSupportDetailLoading] = useState(false);
   const { user, isAdmin: authIsAdmin, markAllWatchedLocal } = useAuth();
   const selectedAvatar = PROFILE_AVATARS.find((avatar) => avatar.id === user?.avatar) || PROFILE_AVATARS[2];
-  const notificationBaseline = useMemo(
-    () => getOrCreateNotificationBaseline(user?.id),
-    [user?.id],
-  );
   const unreadSupportRequests = supportRequests.filter((request) => request.status === 'received');
   const unreadSupportCount = unreadSupportRequests.length;
-  const notificationMedia = mediaNotifications.filter((media) => {
-    if (!notificationBaseline || !media.createdAt) return true;
-    return new Date(media.createdAt).getTime() > new Date(notificationBaseline).getTime();
-  });
+  const notificationMedia = mediaNotifications;
   const unreadMediaGroups = [...notificationMedia.reduce((groups, media) => {
     const groupId = media.uploadBatchId || media.id;
     const existing = groups.get(groupId);

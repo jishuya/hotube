@@ -838,7 +838,7 @@ const MediaViewerPage = () => {
             </Link>
           )}
           <div className="text-center">
-            <p className="text-base font-bold tabular-nums">{current.date}</p>
+            <Link to={`/calendar/${current.date}`} state={{ returnTo }} className="rounded px-2 py-1 text-base font-bold tabular-nums transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={`${current.date} 날짜 앨범으로 이동`}>{current.date}</Link>
             <p className="text-xs text-text-secondary">{currentIndex + 1} / {items.length}</p>
           </div>
           {details?.canModify ? (

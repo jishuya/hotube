@@ -78,7 +78,10 @@ export const loginUser = async (credentials) => {
 
 // 사용자 정보 조회
 export const getUser = async (userId) => {
-  const response = await fetch(`${FUNCTIONS_URL.getUser}/${userId}`);
+  const token = JSON.parse(localStorage.getItem('hotube_user') || 'null')?.accessToken;
+  const response = await fetch(`${FUNCTIONS_URL.getUser}/${userId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
   if (!response.ok) {
     throw new Error('사용자 정보를 가져오는데 실패했습니다');

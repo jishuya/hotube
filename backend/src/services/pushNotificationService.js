@@ -39,6 +39,15 @@ const loadVapidKeys = () => {
 };
 
 const ensurePushSubscriptionSchema = async () => {
+  await pgDb.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS first_login_at TIMESTAMPTZ`);
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS user_media_notifications (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, media_id)
+    )
+  `);
   await pgDb.query(`
     CREATE TABLE IF NOT EXISTS manual_media_notifications (
       id UUID PRIMARY KEY,
@@ -364,6 +373,8 @@ const getUnreadNotificationCount = async (userId, mediaSince = null) => {
         OR m.uploaded_by = u.id
       )
         AND NOT m.notifications_suppressed
+        AND m.uploaded_by IS DISTINCT FROM u.id
+        AND EXISTS (SELECT 1 FROM user_media_notifications n WHERE n.user_id = u.id AND n.media_id = m.id)
         AND ($2::timestamptz IS NULL OR m.created_at > $2)
         AND NOT EXISTS (
           SELECT 1
@@ -408,6 +419,18 @@ const notifyNewMedia = async ({ media, uploader, uploadBatchId = null }) => {
         OR category = ANY($2::text[])
       )
   `, [uploader.id, media.shared_with || ["dad", "mom"]]);
+  // Record each media item before batch deduplication, including later items in a batch.
+  await pgDb.query(`
+    INSERT INTO user_media_notifications (user_id, media_id)
+    SELECT u.id, m.id FROM users u
+    CROSS JOIN media m
+    LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
+    WHERE u.id = ANY($1::text[]) AND m.id = $2
+      AND u.first_login_at IS NOT NULL
+      AND m.created_at > u.first_login_at
+      AND COALESCE(unp.media_enabled, TRUE)
+    ON CONFLICT DO NOTHING
+  `, [audience.rows.map(({ id }) => id), media.id]);
   const audienceIds = await claimBatchRecipients({
     uploadBatchId,
     uploaderId: uploader.id,

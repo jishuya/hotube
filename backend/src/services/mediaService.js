@@ -242,6 +242,8 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
       FROM media m
       WHERE m.uploaded_at IS NOT NULL
         AND ${accessCondition}
+        AND EXISTS (SELECT 1 FROM user_media_notifications n WHERE n.user_id = $1 AND n.media_id = m.id)
+        AND m.uploaded_by IS DISTINCT FROM $1
         AND NOT EXISTS (
           SELECT 1
           FROM user_watched_media uwm
@@ -272,6 +274,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
       FROM media m
       WHERE m.uploaded_at IS NOT NULL
         AND ${accessCondition}
+        AND EXISTS (SELECT 1 FROM user_media_notifications n WHERE n.user_id = $1 AND n.media_id = m.id)
         AND NOT m.notifications_suppressed
         AND NOT EXISTS (
           SELECT 1

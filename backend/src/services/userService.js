@@ -3,6 +3,8 @@ const pgDb = require("../db");
 const USER_WITH_RELATIONS_SELECT = `
   SELECT
     u.*,
+    ARRAY(SELECT n.media_id FROM user_media_notifications n
+      WHERE n.user_id = u.id AND n.created_at > u.first_login_at) AS notified_media_ids,
     COALESCE(array_agg(DISTINCT ulm.media_id) FILTER (WHERE ulm.media_id IS NOT NULL), '{}') AS liked_videos,
     COALESCE(array_agg(DISTINCT uwm.media_id) FILTER (WHERE uwm.media_id IS NOT NULL), '{}') AS watched_videos
   FROM users u
@@ -40,7 +42,16 @@ const userExists = async (db, id) => {
   return result.rows.length > 0;
 };
 
+const recordFirstLogin = async (id) => {
+  const result = await pgDb.query(`
+    UPDATE users SET first_login_at = COALESCE(first_login_at, CURRENT_TIMESTAMP)
+    WHERE id = $1 RETURNING first_login_at
+  `, [id]);
+  return result.rows[0]?.first_login_at;
+};
+
 module.exports = {
+  recordFirstLogin,
   fetchCommentAuthorById,
   fetchUserById,
   fetchUserByLoginId,

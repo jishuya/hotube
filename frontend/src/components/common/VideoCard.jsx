@@ -1,3 +1,4 @@
+import { isNewMedia } from '../../utils/mediaNotifications';
 import { Link } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,8 +18,8 @@ const formatDuration = (seconds) => {
 };
 
 const VideoCard = ({ video, isShort = false }) => {
-  const { isWatched, isLiked } = useAuth();
-  const isNew = !isWatched(video.id);
+  const { user, isLiked } = useAuth();
+  const isNew = isNewMedia(video, user);
   const liked = isLiked(video.id);
 
   return (

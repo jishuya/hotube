@@ -42,7 +42,7 @@ export default function MediaDescription({ text, label = '영상 설명', onEdit
             onEdit();
           }
         } : undefined}
-        className={`whitespace-pre-wrap break-words font-caption text-left text-[15px] font-bold leading-5 text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${onEdit ? 'cursor-pointer' : ''} ${expanded ? 'block' : 'line-clamp-2'}`}
+        className={`whitespace-pre-wrap break-words font-caption text-left text-base font-normal leading-5 text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${onEdit ? 'cursor-pointer' : ''} ${expanded ? 'block' : 'line-clamp-2'}`}
       >{text}</div>
       {overflows && (
         <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}

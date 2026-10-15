@@ -72,10 +72,14 @@ export const AuthProvider = ({ children }) => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') refreshUser();
     };
+    const refreshInterval = window.setInterval(refreshUser, 15000);
+    window.addEventListener('hotube:media-updated', refreshUser);
     window.addEventListener('focus', refreshUser);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       active = false;
+      window.clearInterval(refreshInterval);
+      window.removeEventListener('hotube:media-updated', refreshUser);
       window.removeEventListener('focus', refreshUser);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

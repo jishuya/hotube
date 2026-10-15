@@ -3,8 +3,8 @@ const bcrypt = require("bcryptjs");
 const { randomUUID } = require("crypto");
 const pgDb = require("../db");
 const { mapUserRowToUser } = require("../responseMappers");
-const { createAccessToken } = require("../authToken");
-const { fetchUserById, fetchUserByLoginId } = require("../services/userService");
+const { createAccessToken, verifyAccessToken } = require("../authToken");
+const { fetchUserById, fetchUserByLoginId, recordFirstLogin } = require("../services/userService");
 const {
   VALID_TITLES,
   VALID_CATEGORIES,
@@ -59,6 +59,7 @@ router.post("/registerUser", async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `, [id, userId, name, title, category, role, hashedPassword, new Date().toISOString()]);
 
+    await recordFirstLogin(id);
     const createdUser = mapUserRowToUser(await fetchUserById(id));
     res.status(201).json({ ...createdUser, accessToken: createAccessToken(createdUser) });
   } catch (error) {
@@ -85,6 +86,7 @@ router.post("/loginUser", async (req, res) => {
       return res.status(401).json({ error: "아이디 또는 비밀번호가 일치하지 않습니다" });
     }
 
+    userData.first_login_at = await recordFirstLogin(userData.id);
     const user = mapUserRowToUser(userData);
     res.json({ ...user, accessToken: createAccessToken(user) });
   } catch (error) {
@@ -100,6 +102,14 @@ router.get("/getUser/:id", async (req, res) => {
       return res.status(404).json({ error: "사용자를 찾을 수 없습니다" });
     }
 
+    // Existing authenticated sessions establish their baseline once after upgrading.
+    const authorization = req.get('authorization') || '';
+    if (!userData.first_login_at && authorization.startsWith('Bearer ')) {
+      const identity = verifyAccessToken(authorization.slice(7));
+      if (identity.userId === userData.id) {
+        userData.first_login_at = await recordFirstLogin(userData.id);
+      }
+    }
     res.json(mapUserRowToUser(userData));
   } catch (error) {
     console.error("사용자 조회 오류:", error);

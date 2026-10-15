@@ -1,3 +1,4 @@
+import { isNewMedia } from '../utils/mediaNotifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
@@ -118,7 +119,6 @@ const AlbumPage = () => {
   const [toasts, setToasts] = useState([]);
   const { user, isLiked, updateUser } = useAuth();
   const selectionMode = selectionActive;
-  const viewedMediaIds = user?.watchedVideos || [];
   const monthOptions = useMemo(() => buildMonthOptions(
     mediaDateRange.minDate,
     mediaDateRange.maxDate,
@@ -885,7 +885,7 @@ const AlbumPage = () => {
                               }`}
                               aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}`}
                             >
-                              {!viewedMediaIds.includes(item.id) && <NewMediaBadge />}
+                              {isNewMedia(item, user) && <NewMediaBadge />}
                               {selectionMode && (
                                 <span className={`absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                                   selectedMediaIds.includes(item.id)
