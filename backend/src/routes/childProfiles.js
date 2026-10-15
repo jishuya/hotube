@@ -56,12 +56,12 @@ const decodeProfileImage = (photoData) => {
   return { buffer, extension };
 };
 
-const validateProfile = ({ name, nickname, gender, birthday }) => {
-  if (!name?.trim() || !nickname?.trim() || !gender || !birthday) {
-    return '아이 정보를 모두 입력해주세요.';
-  }
-  if (name.trim().length > 100 || nickname.trim().length > 100) {
-    return '이름과 애칭은 100자 이하로 입력해주세요.';
+const validateProfile = ({ name, gender, birthday }) => {
+  if (typeof name !== 'string' || !name.trim()) return '이름을 입력해주세요.';
+  if (!gender) return '성별을 선택해주세요.';
+  if (!birthday) return '태어난 날을 선택해주세요.';
+  if (name.trim().length > 100) {
+    return '이름은 100자 이하로 입력해주세요.';
   }
   if (!['male', 'female'].includes(gender)) {
     return '유효하지 않은 성별입니다.';
@@ -76,9 +76,16 @@ const validateProfile = ({ name, nickname, gender, birthday }) => {
   return null;
 };
 
+router.use('/childProfile', (req, res, next) => {
+  if (req.query.slot !== undefined && !['0', '1', '2'].includes(req.query.slot)) {
+    return res.status(400).json({ error: '유효하지 않은 아이 정보입니다.' });
+  }
+  next();
+});
+
 router.get('/childProfile', async (req, res) => {
   try {
-    const profile = await fetchChildProfile();
+    const profile = await fetchChildProfile(null, Number(req.query.slot || 0));
     if (!profile) return res.status(404).json({ error: '저장된 아이 정보가 없습니다.' });
     return res.json(mapChildProfile(profile));
   } catch (error) {
@@ -104,8 +111,8 @@ router.get('/childProfile/photo/:filename', async (req, res) => {
 });
 
 router.put('/childProfile', async (req, res) => {
-  const { name, nickname, gender, birthday, photoData, updatedBy } = req.body;
-  const validationError = validateProfile({ name, nickname, gender, birthday });
+  const { name, gender, birthday, photoData, updatedBy } = req.body;
+  const validationError = validateProfile({ name, gender, birthday });
   if (validationError) return res.status(400).json({ error: validationError });
 
   let newFilename = null;
@@ -121,7 +128,25 @@ router.put('/childProfile', async (req, res) => {
     }
 
     await client.query('BEGIN');
-    const existing = await client.query('SELECT id, photo_path FROM child_profiles ORDER BY id LIMIT 1 FOR UPDATE');
+    // Serialize creation so each banner keeps its own ordered profile slot.
+    await client.query('LOCK TABLE child_profiles IN EXCLUSIVE MODE');
+    const slot = Number(req.query.slot || 0);
+    if (slot === 1) {
+      await client.query(`
+        INSERT INTO child_profiles (name, nickname, gender, birth_date)
+        SELECT '김수호', '수호', 'male', '2023-10-16'::date
+        WHERE NOT EXISTS (SELECT 1 FROM child_profiles)
+      `);
+    }
+    if (slot === 2) {
+      const count = await client.query('SELECT COUNT(*)::int AS count FROM child_profiles');
+      if (count.rows[0].count < 2) {
+        const error = new Error('첫째와 둘째 정보를 먼저 저장해주세요.');
+        error.status = 409;
+        throw error;
+      }
+    }
+    const existing = await client.query('SELECT id, photo_path FROM child_profiles ORDER BY id LIMIT 1 OFFSET $1 FOR UPDATE', [slot]);
     let profileId;
     if (existing.rows[0]) {
       profileId = existing.rows[0].id;
@@ -132,14 +157,14 @@ router.put('/childProfile', async (req, res) => {
             photo_path = COALESCE($6, photo_path), updated_by = $7,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-      `, [profileId, name.trim(), nickname.trim(), gender, birthday, newFilename, updatedBy || null]);
+      `, [profileId, name.trim(), name.trim(), gender, birthday, newFilename, updatedBy || null]);
     } else {
       const inserted = await client.query(`
         INSERT INTO child_profiles
           (name, nickname, gender, birth_date, photo_path, created_by, updated_by)
         VALUES ($1, $2, $3, $4, $5, $6, $6)
         RETURNING id
-      `, [name.trim(), nickname.trim(), gender, birthday, newFilename, updatedBy || null]);
+      `, [name.trim(), name.trim(), gender, birthday, newFilename, updatedBy || null]);
       profileId = inserted.rows[0].id;
     }
     await client.query('COMMIT');

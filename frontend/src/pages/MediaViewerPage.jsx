@@ -451,6 +451,8 @@ const MediaViewerPage = () => {
     || requestedReturnTo?.startsWith('/calendar?month=')
     ? requestedReturnTo
     : '/calendar';
+  const fromRecentActivity = returnTo.startsWith('/calendar?month=') && returnTo.endsWith('#recent-media-title');
+  const returnDirectly = fromRecentActivity || returnTo.startsWith('/my-album/');
   const albumMediaIds = location.state?.albumMediaIds;
   const current = mediaItems.find((item) => item.id === mediaId);
   const caption = getMediaCaption(current);
@@ -669,7 +671,7 @@ const MediaViewerPage = () => {
       if (event.key === 'Escape') {
         if (viewerOpen) setViewerOpen(false);
         else if (editing) setEditing(false);
-        else if (returnTo.startsWith('/my-album/')) navigate(returnTo, { replace: true });
+        else if (returnDirectly) navigate(returnTo, { replace: true });
         else navigate(`/calendar/${date}`, { state: { returnTo } });
       }
     };
@@ -792,7 +794,7 @@ const MediaViewerPage = () => {
     try {
       await deleteVideo(mediaId, user?.id);
       window.dispatchEvent(new Event('hotube:media-updated'));
-      navigate(returnTo.startsWith('/my-album/') ? returnTo : `/calendar/${date}`, { replace: true, state: { returnTo } });
+      navigate(returnDirectly ? returnTo : `/calendar/${date}`, { replace: true, state: { returnTo } });
     } catch (actionError) {
       showToast('error', actionError.message);
     }
@@ -823,12 +825,12 @@ const MediaViewerPage = () => {
     <main className="min-h-screen bg-background pb-16 text-text-primary">
       <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          {returnTo.startsWith('/my-album/') ? (
+          {returnDirectly ? (
             <button
               type="button"
               onClick={() => navigate(returnTo, { replace: true })}
               className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10"
-              aria-label="내 앨범 상세로 돌아가기"
+              aria-label={fromRecentActivity ? '최근 활동으로 돌아가기' : '내 앨범 상세로 돌아가기'}
             >
               <Icon icon="mdi:arrow-left" className="text-2xl" />
             </button>

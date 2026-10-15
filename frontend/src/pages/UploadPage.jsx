@@ -1,3 +1,5 @@
+import { createUploadPreview } from '../utils/imagePreview';
+import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
 import { getDefaultSharedWith } from '../utils/familySharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,7 +16,7 @@ import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, checkMediaDuplicates, deleteVideo, getMediaPage, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
-import { listPendingUploads, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
+import { listPendingUploadIds, getPendingUpload, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
 
 const ITEMS_PER_PAGE = 30;
 const MAX_UPLOAD_FILES = 10;
@@ -33,11 +35,12 @@ const SHARE_OPTIONS = [
 const ALL_FAMILY_CATEGORIES = SHARE_OPTIONS.map((option) => option.value);
 
 // 브라우저에서 읽을 수 없는 코덱은 업로드 후 서버에서 길이를 검사한다.
-const readVideoDuration = (file) => new Promise((resolve) => {
+const readVideoDuration = (file, signal) => new Promise((resolve) => {
   const video = document.createElement('video');
   const url = URL.createObjectURL(file);
   const finish = (duration) => {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
     video.onloadedmetadata = null;
     video.onerror = null;
     video.removeAttribute('src');
@@ -45,7 +48,10 @@ const readVideoDuration = (file) => new Promise((resolve) => {
     URL.revokeObjectURL(url);
     resolve(duration);
   };
+  const abort = () => finish(null);
   const timer = setTimeout(() => finish(null), 10000);
+  if (signal?.aborted) return finish(null);
+  signal?.addEventListener('abort', abort, { once: true });
   video.preload = 'metadata';
   video.onloadedmetadata = () => finish(Number.isFinite(video.duration) ? video.duration : null);
   video.onerror = () => finish(null);
@@ -125,12 +131,8 @@ const extractYouTubeId = (url) => {
   return match?.[1] || '';
 };
 
-const hashFile = async (file) => {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
 const getUploadFailureMessage = (error) => {
+  if (error.name === 'AbortError') return '업로드를 중지했어요. 다시 누르면 남은 파일을 이어서 올립니다.';
   const message = String(error?.message || '').toLowerCase();
   if (error instanceof TypeError || message.includes('failed to fetch') || message.includes('networkerror') || message.includes('load failed')) {
     return '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 후 다시 시도해주세요.';
@@ -138,21 +140,7 @@ const getUploadFailureMessage = (error) => {
   if (message.includes('too large') || message.includes('파일이 너무 큽니다')) {
     return '파일 용량이 너무 커서 업로드하지 못했습니다. 더 작은 파일을 선택해주세요.';
   }
-  return '사진 또는 영상을 업로드하지 못했습니다. 잠시 후 다시 시도해주세요.';
-};
-
-const mapWithConcurrency = async (items, concurrency, mapper) => {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
+  return error.message || '업로드하지 못했습니다. 다시 누르면 이어서 올립니다.';
 };
 
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetDate = '', listOnly = false }) => {
@@ -185,6 +173,15 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [editingUpload, setEditingUpload] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [preparationMessage, setPreparationMessage] = useState('');
+  const [transfer, setTransfer] = useState(null);
+  const [resumeAvailable, setResumeAvailable] = useState(false);
+  const [queueNotice, setQueueNotice] = useState('');
+  const operationControllerRef = useRef(null);
+  const preparingRef = useRef(false);
+  const manuallyPausedRef = useRef(false);
+  const previewUrlsRef = useRef(new Set());
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
@@ -214,7 +211,21 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const hasActiveFilters = Boolean(hasDateFilter || filterTag.trim() || filterSource !== 'all' || filterMediaType !== 'all');
 
   useEffect(() => {
+    const currentUrls = new Set(selectedFiles.map((item) => item.preview).filter(Boolean));
+    for (const url of previewUrlsRef.current) {
+      if (!currentUrls.has(url)) URL.revokeObjectURL(url);
+    }
+    previewUrlsRef.current = currentUrls;
+  }, [selectedFiles]);
+
+  useEffect(() => () => {
+    operationControllerRef.current?.abort();
+    for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
+  }, []);
+
+  useEffect(() => {
     const handleOnline = () => {
+      if (uploadInProgressRef.current || preparingRef.current || manuallyPausedRef.current) return;
       resumeStartedRef.current = '';
       setResumeVersion((current) => current + 1);
     };
@@ -223,20 +234,34 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   }, []);
 
   useEffect(() => {
-    if (!user?.id || uploadInProgressRef.current || resumeStartedRef.current === user.id) return;
+    if (listOnly || !user?.id || uploadInProgressRef.current || resumeStartedRef.current === user.id) return;
     resumeStartedRef.current = user.id;
     let active = true;
-    listPendingUploads(user.id)
+    let ownsUpload = false;
+    let resumeController;
+    listPendingUploadIds(user.id)
       .then(async (records) => {
-        if (!active || !records.length) return;
+        if (!active || !records.length || uploadInProgressRef.current || preparingRef.current) return;
+        setResumeAvailable(true);
         uploadInProgressRef.current = true;
+        ownsUpload = true;
         setUploading(true);
+        const controller = new AbortController();
+        resumeController = controller;
+        operationControllerRef.current = controller;
         setUploadProgress({ completed: 0, total: records.length });
         let completed = 0;
-        for (const record of records) {
+        for (const id of records) {
+          if (controller.signal.aborted) break;
+          const record = await getPendingUpload(id);
+          if (!record) continue;
           try {
-            await uploadMediaFile(record.file, record.options);
-            await removePendingUpload(record.id);
+            controller.signal.throwIfAborted();
+            await uploadMediaFile(record.file, record.options, {
+              signal: controller.signal,
+              onProgress: (progress) => { if (active) setTransfer({ ...progress, name: record.file.name }); },
+            });
+            await removePendingUpload(record.id).catch(() => {});
             completed += 1;
             setUploadProgress((current) => ({ ...current, completed: current.completed + 1 }));
           } catch (error) {
@@ -244,10 +269,16 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
               await removePendingUpload(record.id);
               continue;
             }
+            if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
+              await removePendingUpload(record.id).catch(() => {});
+              if (active) setUploadFailureMessage(getUploadFailureMessage(error));
+              continue;
+            }
             if (active) setUploadFailureMessage(getUploadFailureMessage(error));
             break;
           }
         }
+        if (active) setResumeAvailable((await listPendingUploadIds(user.id)).length > 0);
         if (active && completed) {
           showToast(`중단된 업로드 ${completed}개를 완료했어요.`, 'success');
           window.dispatchEvent(new Event('hotube:media-updated'));
@@ -255,11 +286,17 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       })
       .catch(() => {})
       .finally(() => {
+        if (!ownsUpload) return;
         uploadInProgressRef.current = false;
-        if (active) setUploading(false);
+        operationControllerRef.current = null;
+        if (active) { setUploading(false); setTransfer(null); }
       });
-    return () => { active = false; };
-  }, [resumeVersion, showToast, user?.id]);
+    return () => {
+      active = false;
+      resumeController?.abort();
+      if (!ownsUpload) resumeStartedRef.current = '';
+    };
+  }, [listOnly, resumeVersion, showToast, user?.id]);
 
   useEffect(() => {
     if (!listOnly) return;
@@ -337,126 +374,135 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   }, [listOnly, loadMoreUploads, nextCursor]);
 
   const addFiles = async (files) => {
-    const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
-    const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
-    if (availableSlots === 0) {
-      setFileSelectionNotice(`이미 ${MAX_UPLOAD_FILES}개를 선택했어요.\n추가로 선택한 파일은 목록에 넣지 않았습니다.`);
-      return;
-    }
-    const selectionNotices = [];
-    const summarizeNames = (items) => {
-      const names = items.slice(0, 3).map((file) => file.name).join(', ');
-      return items.length > 3 ? `${names} 외 ${items.length - 3}개` : names;
-    };
-    const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
-    const oversizedVideos = selectedMediaFiles.filter((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
-    const sizeEligibleFiles = selectedMediaFiles.filter((file) => (
-      !(file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE)
-      && !(file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE)
-    ));
-    const countExcludedFiles = sizeEligibleFiles.slice(availableSlots);
-    const countEligibleFiles = sizeEligibleFiles.slice(0, availableSlots);
-    const mediaFiles = [];
-    let totalSize = selectedUploadSize;
-
-    for (const file of countEligibleFiles) {
-      if (file.type.startsWith('video/')) {
-        const duration = await readVideoDuration(file);
-        if (duration !== null && duration > 90) {
-          selectionNotices.push(`영상은 1분 30초 이하만 올릴 수 있어요: ${file.name}`);
-          continue;
-        }
-      }
-      if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) {
-        selectionNotices.push(`${file.name} (${formatUploadSize(file.size)}) · 용량 초과\n남은 용량 ${formatUploadSize(Math.max(0, MAX_TOTAL_UPLOAD_SIZE - totalSize))}. 선택한 파일을 먼저 올려주세요.`);
-        continue;
-      }
-      mediaFiles.push(file);
-      totalSize += file.size;
-    }
-
-    if (countExcludedFiles.length) {
-      selectionNotices.push(`한 번에 사진·영상 합쳐 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있어요: ${summarizeNames(countExcludedFiles)}`);
-    }
-    if (oversizedImages.length) {
-      selectionNotices.push(`사진은 개당 20MB까지 올릴 수 있어요: ${summarizeNames(oversizedImages)}`);
-    }
-    if (oversizedVideos.length) {
-      selectionNotices.push(`영상은 개당 150MB까지 올릴 수 있어요: ${summarizeNames(oversizedVideos)}`);
-    }
-
-    if (!mediaFiles.length) {
-      if (selectionNotices.length) {
-        setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
-      }
-      return;
-    }
-    setUploadError('중복 파일을 확인하고 있어요...');
-    let hashedFiles;
+    if (preparingRef.current || uploadInProgressRef.current) return;
+    preparingRef.current = true;
+    setPreparing(true);
+    const controller = new AbortController();
+    operationControllerRef.current = controller;
+    setPreparationMessage('파일을 확인하고 있어요…');
+    const newPreviewUrls = [];
+    let selectionCommitted = false;
     try {
-      hashedFiles = [];
-      for (const file of mediaFiles) {
-        hashedFiles.push({ file, contentHash: await hashFile(file) });
-      }
-      const duplicateHashes = new Set(await checkMediaDuplicates(hashedFiles.map(({ contentHash }) => contentHash)));
-      const selectedHashes = new Set(selectedFiles.map((item) => item.contentHash).filter(Boolean));
-      const acceptedHashes = new Set();
-      const duplicateNames = [];
-      hashedFiles = hashedFiles.filter(({ file, contentHash }) => {
-        const duplicate = duplicateHashes.has(contentHash)
-          || selectedHashes.has(contentHash)
-          || acceptedHashes.has(contentHash);
-        if (duplicate) duplicateNames.push(file.name);
-        else acceptedHashes.add(contentHash);
-        return !duplicate;
-      });
-      setUploadError('');
-      if (duplicateNames.length) {
-        selectionNotices.push(`중복 파일: ${summarizeNames(duplicateNames.map((name) => ({ name })))}`);
-      }
-      if (selectionNotices.length) {
-        setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
-      }
-    } catch (error) {
-      setUploadError(error.message || '중복 파일을 확인하지 못했습니다');
-      return;
-    }
-    const nextCandidates = hashedFiles;
-    Promise.all(nextCandidates.map(({ file, contentHash }) => new Promise((resolve) => {
-      if (file.type.startsWith('video/')) {
-        getMediaDate(file).then((mediaDate) => resolve({
-          file,
-          contentHash,
-          name: file.name,
-          type: 'video',
-          preview: null,
-          date: targetDate || mediaDate.date,
-          dateSource: targetDate ? 'target' : mediaDate.source,
-          dateConfirmed: Boolean(targetDate) || ['exif', 'video'].includes(mediaDate.source),
-          tags: '',
-        }));
+      const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
+      const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+      if (availableSlots === 0) {
+        setFileSelectionNotice(`이미 ${MAX_UPLOAD_FILES}개를 선택했어요.\n추가로 선택한 파일은 목록에 넣지 않았습니다.`);
         return;
       }
-      const reader = new FileReader();
-      reader.onload = async () => {
+      const selectionNotices = [];
+      const summarizeNames = (items) => {
+        const names = items.slice(0, 3).map((file) => file.name).join(', ');
+        return items.length > 3 ? `${names} 외 ${items.length - 3}개` : names;
+      };
+      const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
+      const oversizedVideos = selectedMediaFiles.filter((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
+      const sizeEligibleFiles = selectedMediaFiles.filter((file) => (
+        !(file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE)
+        && !(file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE)
+      ));
+      const countExcludedFiles = sizeEligibleFiles.slice(availableSlots);
+      const countEligibleFiles = sizeEligibleFiles.slice(0, availableSlots);
+      const mediaFiles = [];
+      let totalSize = selectedUploadSize;
+
+      for (const file of countEligibleFiles) {
+        if (file.type.startsWith('video/')) {
+          setPreparationMessage(`영상 길이 확인 중 · ${file.name}`);
+          controller.signal.throwIfAborted();
+          const duration = await readVideoDuration(file, controller.signal);
+          controller.signal.throwIfAborted();
+          if (duration !== null && duration > 90) {
+            selectionNotices.push(`영상은 1분 30초 이하만 올릴 수 있어요: ${file.name}`);
+            continue;
+          }
+        }
+        if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) {
+          selectionNotices.push(`${file.name} (${formatUploadSize(file.size)}) · 용량 초과\n남은 용량 ${formatUploadSize(Math.max(0, MAX_TOTAL_UPLOAD_SIZE - totalSize))}. 선택한 파일을 먼저 올려주세요.`);
+          continue;
+        }
+        mediaFiles.push(file);
+        totalSize += file.size;
+      }
+
+      if (countExcludedFiles.length) {
+        selectionNotices.push(`한 번에 사진·영상 합쳐 최대 ${MAX_UPLOAD_FILES}개까지 선택할 수 있어요: ${summarizeNames(countExcludedFiles)}`);
+      }
+      if (oversizedImages.length) {
+        selectionNotices.push(`사진은 개당 20MB까지 올릴 수 있어요: ${summarizeNames(oversizedImages)}`);
+      }
+      if (oversizedVideos.length) {
+        selectionNotices.push(`영상은 개당 150MB까지 올릴 수 있어요: ${summarizeNames(oversizedVideos)}`);
+      }
+
+      if (!mediaFiles.length) {
+        if (selectionNotices.length) {
+          setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
+        }
+        return;
+      }
+      setPreparationMessage('중복 파일을 확인하고 있어요…');
+      let hashedFiles;
+      try {
+        hashedFiles = [];
+        for (const file of mediaFiles) {
+          const contentHash = await hashFile(file, (loaded) => {
+            setPreparationMessage(`파일 확인 ${Math.round(loaded / file.size * 100)}% · ${file.name}`);
+          }, controller.signal);
+          hashedFiles.push({ file, contentHash });
+        }
+        const duplicateHashes = new Set(await checkMediaDuplicates(hashedFiles.map(({ contentHash }) => contentHash), controller.signal));
+        const selectedHashes = new Set(selectedFiles.map((item) => item.contentHash).filter(Boolean));
+        const acceptedHashes = new Set();
+        const duplicateNames = [];
+        hashedFiles = hashedFiles.filter(({ file, contentHash }) => {
+          const duplicate = duplicateHashes.has(contentHash)
+            || selectedHashes.has(contentHash)
+            || acceptedHashes.has(contentHash);
+          if (duplicate) duplicateNames.push(file.name);
+          else acceptedHashes.add(contentHash);
+          return !duplicate;
+        });
+        setUploadError('');
+        if (duplicateNames.length) {
+          selectionNotices.push(`중복 파일: ${summarizeNames(duplicateNames.map((name) => ({ name })))}`);
+        }
+        if (selectionNotices.length) {
+          setFileSelectionNotice(`선택 목록에서 제외한 파일이 있어요.\n\n${selectionNotices.join('\n')}`);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') setUploadError(error.message || '중복 파일을 확인하지 못했습니다');
+        return;
+      }
+      const nextFiles = [];
+      for (const { file, contentHash } of hashedFiles) {
+        controller.signal.throwIfAborted();
+        setPreparationMessage(`촬영일 확인 중 · ${file.name}`);
         const mediaDate = await getMediaDate(file);
-        resolve({
-          file,
-          contentHash,
-          name: file.name,
-          type: file.type.startsWith('video/') ? 'video' : 'photo',
-          preview: reader.result,
+        controller.signal.throwIfAborted();
+        const preview = file.type.startsWith('image/') ? await createUploadPreview(file) : null;
+        if (preview) { previewUrlsRef.current.add(preview); newPreviewUrls.push(preview); }
+        controller.signal.throwIfAborted();
+        nextFiles.push({
+          file, contentHash, name: file.name,
+          type: file.type.startsWith('video/') ? 'video' : 'photo', preview,
           date: targetDate || mediaDate.date,
           dateSource: targetDate ? 'target' : mediaDate.source,
           dateConfirmed: Boolean(targetDate) || ['exif', 'video'].includes(mediaDate.source),
           tags: '',
         });
-      };
-      reader.readAsDataURL(file);
-    }))).then((nextFiles) => {
+      }
+      selectionCommitted = true;
       setSelectedFiles((current) => [...current, ...nextFiles]);
       if (nextFiles.length > 0) setSelectedFileIndex((current) => current ?? 0);
-    });
+    } catch (error) {
+      if (error.name !== 'AbortError') setUploadError(error.message || '파일을 확인하지 못했습니다.');
+    } finally {
+      if (!selectionCommitted) for (const url of newPreviewUrls) { URL.revokeObjectURL(url); previewUrlsRef.current.delete(url); }
+      preparingRef.current = false;
+      operationControllerRef.current = null;
+      setPreparing(false);
+      setPreparationMessage('');
+    }
   };
 
   const updateSelectedFile = (index, field, value) => {
@@ -546,6 +592,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
   const handleUpload = async (event) => {
     event.preventDefault();
+    if (uploadInProgressRef.current || preparingRef.current) return;
     if (!user?.id) {
       setUploadError('로그인 사용자 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
       return;
@@ -557,6 +604,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const youtubeId = extractYouTubeId(youtubeUrl.trim());
     const normalizedTags = parseTags(tags);
     setUploading(true);
+    manuallyPausedRef.current = false;
+    const controller = new AbortController();
+    operationControllerRef.current = controller;
+    setQueueNotice('');
     uploadInProgressRef.current = true;
     setUploadProgress({ completed: 0, total: uploadSource === 'device' ? selectedFiles.length : 1 });
     setUploadError('');
@@ -578,34 +629,53 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             contentHash: item.contentHash,
           };
         };
-        await Promise.all(selectedFiles.map((item) => savePendingUpload({
-          id: `${user.id}:${item.contentHash}`,
-          userId: user.id,
-          file: item.file,
-          options: optionsFor(item),
-        }).catch(() => {})));
-        const uploadItem = async (item) => {
+        let completed = 0;
+        const failures = [];
+        for (const item of selectedFiles) {
+          if (controller.signal.aborted) break;
           const pendingId = `${user.id}:${item.contentHash}`;
+          setTransfer({ phase: 'saving', loaded: 0, total: item.file.size, name: item.name });
           try {
-            const saved = await uploadMediaFile(item.file, optionsFor(item));
-            await removePendingUpload(pendingId).catch(() => {});
-            return toMemoryMedia(saved);
+            // Persist only the file about to be sent, rather than copying the whole batch first.
+            await savePendingUpload({ id: pendingId, userId: user.id, file: item.file, options: optionsFor(item) }, controller.signal);
           } catch (error) {
-            if (error.code !== 'DUPLICATE_MEDIA') throw error;
-            await removePendingUpload(pendingId).catch(() => {});
-            duplicateFiles.push(item.name);
-            return null;
-          } finally {
-            setUploadProgress((current) => ({ ...current, completed: current.completed + 1 }));
+            if (error.name !== 'AbortError') setQueueNotice('이 기기에 임시 저장할 수 없어 앱을 닫으면 파일을 다시 선택해야 해요.');
           }
-        };
-        const photos = selectedFiles.filter((item) => item.type === 'photo');
-        const videos = selectedFiles.filter((item) => item.type === 'video');
-        const [uploadedPhotos, uploadedVideos] = await Promise.all([
-          mapWithConcurrency(photos, 3, uploadItem),
-          mapWithConcurrency(videos, 1, uploadItem),
-        ]);
-        created.push(...uploadedPhotos.filter(Boolean), ...uploadedVideos.filter(Boolean));
+          try {
+            controller.signal.throwIfAborted();
+            const saved = await uploadMediaFile(item.file, optionsFor(item), {
+              signal: controller.signal,
+              onProgress: (progress) => setTransfer({ ...progress, name: item.name }),
+            });
+            created.push(toMemoryMedia(saved));
+            await removePendingUpload(pendingId).catch(() => {});
+          } catch (error) {
+            if (error.code === 'DUPLICATE_MEDIA') {
+              duplicateFiles.push(item.name);
+              await removePendingUpload(pendingId).catch(() => {});
+            } else {
+              failures.push(`${item.name}: ${getUploadFailureMessage(error)}`);
+              if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
+                await removePendingUpload(pendingId).catch(() => {});
+              }
+              // Keep this file and all remaining files selected for retry. No background workers remain.
+              break;
+            }
+          }
+          completed += 1;
+          setUploadProgress((current) => ({ ...current, completed }));
+          setSelectedFiles((current) => current.filter((entry) => entry.contentHash !== item.contentHash));
+          setSelectedFileIndex(0);
+        }
+        if (failures.length || controller.signal.aborted) {
+          if (created.length) {
+            setUploads((current) => [...created, ...current]);
+            window.dispatchEvent(new Event('hotube:media-updated'));
+            showToast(`${created.length}개 업로드 완료. 남은 파일만 다시 올릴 수 있어요.`, 'info');
+          }
+          setUploadFailureMessage(failures.join('\n') || '업로드를 중지했어요. 남은 파일은 다시 누르면 이어서 올립니다.');
+          return;
+        }
       } else if (youtubeId && youtubeInfo) {
         const saved = await addVideo({
           videoId: youtubeInfo.videoId,
@@ -651,6 +721,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       setUploadFailureMessage(getUploadFailureMessage(error));
     } finally {
       uploadInProgressRef.current = false;
+      operationControllerRef.current = null;
+      setTransfer(null);
       setUploading(false);
     }
   };
@@ -685,10 +757,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   return (
     <>
       {!embedded && <Header showSearch={false} />}
-      <main className={`${embedded ? 'bg-surface px-4 pb-8 pt-4' : 'min-h-screen bg-background px-4 pb-16 pt-0'} text-text-primary`}>
+      <main className={`${embedded ? 'bg-surface px-4 pb-8 pt-4' : 'min-h-screen bg-background px-4 pb-32 pt-0'} text-text-primary`}>
         <div className="mx-auto max-w-4xl bg-transparent">
           {!listOnly ? (
             <form onSubmit={handleUpload} className="space-y-5">
+              <fieldset disabled={uploading || preparing} className="space-y-5 min-w-0">
               {targetDate && (
                 <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-3 text-sm font-bold text-primary">
                   <Icon icon="mdi:calendar-check" className="text-xl" />
@@ -938,17 +1011,39 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 </fieldset>
               </section>
 
+              </fieldset>
               {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}
               {uploadSource === 'device' && hasUnconfirmedDates && (
                 <p className="rounded-lg bg-orange-100 p-3 text-sm font-semibold text-orange-800 dark:bg-orange-500/15 dark:text-orange-300">
                   촬영일을 읽지 못한 파일이 있어요. 파일을 선택해 날짜를 확인해주세요.
                 </p>
               )}
-              <button type="submit" disabled={uploading || hasUnconfirmedDates || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
+              {(preparing || transfer) && (
+                <div className="space-y-2 rounded-xl bg-primary/5 p-3" role="status">
+                  <p className="truncate text-sm font-semibold">{preparing ? preparationMessage : transfer.name}</p>
+                  {transfer && <>
+                    <p className="text-sm">{({ saving: '파일 준비 중', connecting: '서버 연결 중', uploading: '전송 중', retrying: '연결 재시도 중', processing: '서버 처리 중' })[transfer.phase]} · {formatUploadSize(transfer.loaded)} / {formatUploadSize(transfer.total)}</p>
+                    <progress className="h-2 w-full accent-primary" max={transfer.total || 1} value={transfer.loaded} aria-label="현재 파일 전송량" />
+                    <p className="text-xs text-text-secondary">완료 {uploadProgress.completed}/{uploadProgress.total}개 · 앱을 열어두세요</p>
+                  </>}
+                  <button type="button" className="text-sm font-bold text-primary underline" onClick={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}>
+                    {preparing ? '파일 확인 취소' : '업로드 중지'}
+                  </button>
+                </div>
+              )}
+              {!uploading && !preparing && resumeAvailable && selectedFiles.length === 0 && (
+                <button type="button" className="text-sm font-bold text-primary underline" onClick={() => {
+                  manuallyPausedRef.current = false;
+                  resumeStartedRef.current = '';
+                  setResumeVersion((current) => current + 1);
+                }}>중단된 업로드 다시 시도</button>
+              )}
+              {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
+              <button type="submit" disabled={uploading || preparing || hasUnconfirmedDates || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
                 <Icon icon={uploading ? 'mdi:loading' : 'mdi:cloud-upload'} className={`text-xl ${uploading ? 'animate-spin' : ''}`} />
                 {uploading
                   ? `업로드 중 · ${uploadProgress.completed}/${uploadProgress.total}`
-                  : '업로드하기'}
+                  : preparing ? '파일 확인 중…' : '업로드하기'}
               </button>
             </form>
           ) : (

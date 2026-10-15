@@ -1,4 +1,5 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import { uploadRequest, retryUploadChunk } from './uploadTransport.js';
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const FUNCTIONS_URL = {
   getVideos: `${API_BASE_URL}/getVideos`,
@@ -20,14 +21,9 @@ const FUNCTIONS_URL = {
 const DETAILS_CACHE_MS = 15 * 1000;
 const detailsCache = new Map();
 
-export const checkMediaDuplicates = async (hashes) => {
-  const response = await fetch(FUNCTIONS_URL.checkMediaDuplicates, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hashes }),
-  });
-  if (!response.ok) throw new Error('중복 파일을 확인하지 못했습니다');
-  return (await response.json()).duplicateHashes || [];
+export const checkMediaDuplicates = async (hashes, signal) => {
+  const data = await uploadRequest(FUNCTIONS_URL.checkMediaDuplicates, { body: { hashes }, signal, timeout: 30000 });
+  return data.duplicateHashes || [];
 };
 
 const getViewerId = () => {
@@ -153,67 +149,34 @@ export const addVideo = async (videoData) => {
 
 export const uploadMediaFile = async (file, {
   title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'], uploadBatchId, contentHash,
-}) => {
-  const parseUploadError = async (response, fallback) => {
-    const body = await response.json().catch(() => ({}));
-    const error = new Error(body.error || fallback);
-    error.code = body.code;
-    throw error;
-  };
-  const initResponse = await fetch(FUNCTIONS_URL.initMediaUpload, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userId: uploadedBy,
-      contentHash,
-      originalName: file.name,
-      mimeType: file.type,
-      fileSize: file.size,
-      metadata: { title: title || file.name, uploadedAt, tags: tags || [], sharedWith, uploadBatchId },
-    }),
+}, { signal, onProgress = () => {} } = {}) => {
+  onProgress({ phase: 'connecting', loaded: 0, total: file.size });
+  const session = await uploadRequest(FUNCTIONS_URL.initMediaUpload, {
+    signal,
+    body: { userId: uploadedBy, contentHash, originalName: file.name, mimeType: file.type,
+      fileSize: file.size, metadata: { title: title || file.name, uploadedAt, tags: tags || [], sharedWith, uploadBatchId } },
   });
-  if (!initResponse.ok) await parseUploadError(initResponse, '업로드를 시작하지 못했습니다');
-  const session = await initResponse.json();
   const uploaded = new Set(session.uploadedChunks || []);
-  const missingChunks = Array.from({ length: session.totalChunks }, (_, index) => index)
-    .filter((index) => !uploaded.has(index));
-  let nextChunk = 0;
-  const uploadChunk = async (index) => {
-    const start = index * session.chunkSize;
-    const body = file.slice(start, Math.min(file.size, start + session.chunkSize));
-    let lastError;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        const response = await fetch(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/chunks/${index}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/octet-stream' },
-          body,
-        });
-        if (!response.ok) await parseUploadError(response, '파일 일부를 올리지 못했습니다');
-        return;
-      } catch (error) {
-        lastError = error;
-        if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 1000));
-      }
-    }
-    throw lastError;
-  };
-  await Promise.all(Array.from({ length: Math.min(3, missingChunks.length) }, async () => {
-    while (nextChunk < missingChunks.length) {
-      const index = missingChunks[nextChunk];
-      nextChunk += 1;
-      await uploadChunk(index);
-    }
-  }));
-  const completeResponse = await fetch(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/complete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  if (!completeResponse.ok) {
-    await parseUploadError(completeResponse, '업로드를 완료하지 못했습니다');
+  let loaded = [...uploaded].reduce((sum, index) => sum + Math.min(session.chunkSize, file.size - index * session.chunkSize), 0);
+  onProgress({ phase: 'uploading', loaded, total: file.size });
+  // One chunk at a time bounds memory and leaves the connection available for the app.
+  for (let index = 0; index < session.totalChunks; index += 1) {
+    if (uploaded.has(index)) continue;
+    signal?.throwIfAborted();
+    const chunk = file.slice(index * session.chunkSize, Math.min(file.size, (index + 1) * session.chunkSize));
+    await retryUploadChunk(() => uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/chunks/${index}`, {
+      method: 'PUT', body: chunk, signal,
+      onProgress: (bytes) => onProgress({ phase: 'uploading', loaded: loaded + Math.min(bytes, chunk.size), total: file.size }),
+    }), signal, () => onProgress({ phase: 'retrying', loaded, total: file.size }));
+    loaded += chunk.size;
+    onProgress({ phase: 'uploading', loaded, total: file.size });
   }
-  return resolveMediaUrls(await completeResponse.json());
+  signal?.throwIfAborted();
+  onProgress({ phase: 'processing', loaded: file.size, total: file.size });
+  const media = await uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/complete`, {
+    signal, timeout: 120000,
+  });
+  return resolveMediaUrls(media);
 };
 
 export const getMediaDetails = async (id, userId, { force = false } = {}) => {
