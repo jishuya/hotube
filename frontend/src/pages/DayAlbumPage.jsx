@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { getAllVideos, toMemoryMedia } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
+import useMediaSelection from '../hooks/useMediaSelection';
 
 const parseDate = (dateString) => {
   const date = new Date(`${dateString}T00:00:00`);
@@ -17,13 +18,22 @@ const formatDateKey = (date) => [
   String(date.getDate()).padStart(2, '0'),
 ].join('-');
 
-const DayAlbumPage = () => {
-  const { date } = useParams();
+const DayAlbumContent = ({ date }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const [media, setMedia] = useState([]);
   const [loadedDate, setLoadedDate] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const {
+    selectionMode, selectedMediaIds, selectionBusy, selectionError, selectionUI,
+    toggleDateMediaSelection, beginLongPress, trackLongPress, endLongPress, handleMediaClick,
+  } = useMediaSelection({
+    mediaItems: media,
+    setMediaItems: setMedia,
+    onMediaChanged: () => setReloadKey((current) => current + 1),
+  });
+  const allSelected = media.length > 0 && media.every((item) => selectedMediaIds.includes(item.id));
   const loading = loadedDate !== date;
   const requestedReturnTo = location.state?.returnTo;
   const returnTo = requestedReturnTo === '/album' || requestedReturnTo?.startsWith('/calendar?month=')
@@ -47,7 +57,7 @@ const DayAlbumPage = () => {
       active = false;
       window.removeEventListener('hotube:media-updated', refreshMedia);
     };
-  }, [date]);
+  }, [date, reloadKey]);
 
   const moveDate = (amount) => {
     const currentDate = parseDate(date);
@@ -59,7 +69,7 @@ const DayAlbumPage = () => {
   return (
     <>
       <Header showSearch={false} />
-      <main className="min-h-screen bg-background pb-16 text-text-primary">
+      <main className={`min-h-screen bg-background text-text-primary ${selectionMode ? 'pb-60' : 'pb-16'}`}>
         <div className="border-b border-border bg-surface">
           <div className="mx-auto grid h-16 max-w-container grid-cols-[44px_1fr_44px] items-center px-4 sm:h-20">
           <button
@@ -100,6 +110,7 @@ const DayAlbumPage = () => {
         </div>
 
         <div className="mx-auto max-w-container px-4 pt-6">
+          {selectionError && <p role="alert" className="mb-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{selectionError}</p>}
           {loading ? (
             <section className="flex min-h-[58vh] items-center justify-center" aria-label="미디어 불러오는 중">
               <Icon icon="mdi:loading" className="animate-spin text-4xl text-primary" />
@@ -116,14 +127,43 @@ const DayAlbumPage = () => {
                   기록 추가하기
                 </Link>
               </div>
+              <div className="mb-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => toggleDateMediaSelection(media)}
+                  disabled={Boolean(selectionBusy)}
+                  aria-pressed={allSelected}
+                  className="inline-flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-bold text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
+                >
+                  <span>전체 선택</span>
+                  <Icon
+                    icon={allSelected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'}
+                    className={`text-xl ${allSelected ? 'text-primary' : 'text-text-secondary'}`}
+                  />
+                </button>
+              </div>
               <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="해당 날의 사진과 영상">
                 {media.map((item) => (
                   <Link
                     key={item.id}
                     to={`/media/${item.id}?date=${date}`}
                     state={{ returnTo }}
-                    className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
+                    onPointerDown={(event) => beginLongPress(event, item.id)}
+                    onPointerMove={trackLongPress}
+                    onPointerUp={endLongPress}
+                    onPointerCancel={endLongPress}
+                    onPointerLeave={endLongPress}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onDragStart={(event) => event.preventDefault()}
+                    onClick={(event) => handleMediaClick(event, item.id)}
+                    aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}${selectionMode ? selectedMediaIds.includes(item.id) ? ', 선택됨' : ', 선택 안 됨' : ''}`}
+                    className={`group relative aspect-square select-none overflow-hidden rounded-xl bg-surface shadow-sm transition ${selectedMediaIds.includes(item.id) ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background' : ''}`}
                   >
+                    {selectionMode && (
+                      <span aria-hidden="true" className={`absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${selectedMediaIds.includes(item.id) ? 'border-primary bg-primary text-white' : 'border-white bg-black/35 text-transparent'}`}>
+                        <Icon icon="mdi:check" className="text-lg" />
+                      </span>
+                    )}
                     {isNewMedia(item, user) && (
                       <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
                         N
@@ -162,8 +202,14 @@ const DayAlbumPage = () => {
           )}
         </div>
       </main>
+      {selectionUI}
     </>
   );
+};
+
+const DayAlbumPage = () => {
+  const { date } = useParams();
+  return <DayAlbumContent key={date} date={date} />;
 };
 
 export default DayAlbumPage;

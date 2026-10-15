@@ -558,16 +558,19 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                 </div>
               ))}
             </div>
-            <div className="ml-2 min-w-0 flex-1">
-              {children.map((child, index) => {
-                const age = getAgeSinceBirth(child.birthday);
-                return (
-                  <p key={child.id} className="whitespace-nowrap text-xs font-semibold tracking-tight max-[359px]:text-[11px] sm:text-[13px] text-text-secondary">
-                    {getChildGivenName(child.name)}{index === 1 ? '이와 함께한 시간 ' : '와 함께한 시간 '}
-                    <span className="inline-block text-orange-500">{age.months}개월 {age.days}일</span>
-                  </p>
-                );
-              })}
+            <div className="ml-2 min-w-0 flex-1 text-xs font-semibold tracking-tight text-text-secondary max-[359px]:text-[11px] sm:text-[13px]">
+              <div className="flex flex-nowrap items-center gap-x-1 overflow-x-auto whitespace-nowrap sm:gap-x-2">
+                {children.map((child) => {
+                  const age = getAgeSinceBirth(child.birthday);
+                  return (
+                    <span key={child.id} className="whitespace-nowrap">
+                      {getChildGivenName(child.name)}{' '}
+                      <span className="inline-block text-orange-500">{age.months}개월 {age.days}일</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-base font-bold text-black sm:text-lg">태어나줘서 고마워</p>
             </div>
             <button type="button" onClick={() => setShowChildInfoModal(true)} className="flex h-9 w-7 shrink-0 sm:w-9 items-center justify-center rounded-full text-text-secondary transition hover:bg-white/70 hover:text-primary" aria-label="아이 정보 수정" title="아이 정보 수정">
               <Icon icon="mdi:dots-vertical" className="text-xl" />
