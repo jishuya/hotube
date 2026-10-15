@@ -1,3 +1,4 @@
+const { isDeveloperMode } = require("./developerModeService");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -38,6 +39,26 @@ const loadVapidKeys = () => {
 };
 
 const ensurePushSubscriptionSchema = async () => {
+  await pgDb.query(`
+    CREATE TABLE IF NOT EXISTS manual_media_notifications (
+      id UUID PRIMARY KEY,
+      actor_id TEXT NOT NULL REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
+      groups TEXT[] NOT NULL,
+      result JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pgDb.query(`ALTER TABLE comments ADD COLUMN IF NOT EXISTS shared_with TEXT[] NOT NULL DEFAULT ARRAY['dad', 'mom']::text[]`);
+  // 기존 일반 가족의 댓글에도 가족별 공개 범위를 적용한다.
+  await pgDb.query(`
+    UPDATE comments c
+    SET shared_with = ARRAY[c.user_category]::text[]
+    WHERE c.user_category IN ('dad', 'mom', 'etc')
+      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = c.user_id AND u.role IN ('admin', 'sub-admin'))
+      AND c.shared_with IS DISTINCT FROM ARRAY[c.user_category]::text[]
+  `);
+  await pgDb.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS developer_mode BOOLEAN NOT NULL DEFAULT FALSE`);
+  await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS notifications_suppressed BOOLEAN NOT NULL DEFAULT FALSE`);
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS upload_batch_id TEXT`);
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS content_hash TEXT`);
   await pgDb.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'ready'`);
@@ -342,6 +363,7 @@ const getUnreadNotificationCount = async (userId, mediaSince = null) => {
         OR u.category = ANY(m.shared_with)
         OR m.uploaded_by = u.id
       )
+        AND NOT m.notifications_suppressed
         AND ($2::timestamptz IS NULL OR m.created_at > $2)
         AND NOT EXISTS (
           SELECT 1
@@ -376,6 +398,7 @@ const claimBatchRecipients = async ({ uploadBatchId, uploaderId, userIds }) => {
 };
 
 const notifyNewMedia = async ({ media, uploader, uploadBatchId = null }) => {
+  if (media.notifications_suppressed) return { sent: 0, failed: 0, suppressed: true };
   const audience = await pgDb.query(`
     SELECT id
     FROM users
@@ -418,7 +441,8 @@ const notifyNewMedia = async ({ media, uploader, uploadBatchId = null }) => {
   }), { sent: 0, failed: 0 });
 };
 
-const notifyNewComment = async ({ mediaId, commenter, content }) => {
+const notifyNewComment = async ({ mediaId, commenter, content, sharedWith = ['dad', 'mom'] }) => {
+  if (await isDeveloperMode(commenter.id)) return { sent: 0, failed: 0, suppressed: true };
   const result = await pgDb.query(`
     SELECT DISTINCT u.id, m.title
     FROM media m
@@ -437,7 +461,8 @@ const notifyNewComment = async ({ mediaId, commenter, content }) => {
         OR u.category = ANY(m.shared_with)
         OR m.uploaded_by = u.id
       )
-  `, [mediaId, commenter.id]);
+      AND (u.role IN ('admin', 'sub-admin') OR u.category = ANY($3::text[]))
+  `, [mediaId, commenter.id, sharedWith]);
   const recipientIds = result.rows.map(({ id }) => id);
   if (recipientIds.length === 0) return { sent: 0, failed: 0 };
   const mediaTitle = result.rows[0]?.title;
@@ -473,14 +498,18 @@ const notifyNewComment = async ({ mediaId, commenter, content }) => {
   }), { sent: 0, failed: 0 });
 };
 
-const notifySupportCreated = async ({ request, user }) => sendToRoles(["admin"], {
+const notifySupportCreated = async ({ request, user }) => {
+  if (await isDeveloperMode(user.id)) return { sent: 0, failed: 0, suppressed: true };
+  return sendToRoles(["admin"], {
   title: "새 고객의 소리가 접수됐어요",
   body: `${user.name || user.title || user.user_id}: ${String(request.message).slice(0, 80)}`,
   url: "/support-management",
   tag: `support-${request.id}`,
-});
+  });
+};
 
-const notifySupportStatus = async ({ requestId, status }) => {
+const notifySupportStatus = async ({ requestId, status, actorId }) => {
+  if (await isDeveloperMode(actorId)) return { sent: 0, failed: 0, suppressed: true };
   const result = await pgDb.query(
     "SELECT user_id FROM support_requests WHERE id = $1",
     [requestId],

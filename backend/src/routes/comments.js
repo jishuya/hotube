@@ -1,3 +1,4 @@
+const { resolveCommentSharing } = require('../services/familySharing');
 const express = require("express");
 const { randomUUID } = require("crypto");
 const pgDb = require("../db");
@@ -30,9 +31,10 @@ router.post("/createComment", async (req, res) => {
     const access = await getMediaAccess(pgDb, videoId, userId);
     if (!access?.can_view) return res.status(403).json({ error: '이 미디어에 댓글을 작성할 권한이 없습니다' });
 
+    const sharedWith = resolveCommentSharing(req.body.sharedWith, userData);
     const created = await pgDb.query(`
-      INSERT INTO comments (id, media_id, user_id, user_name, user_title, user_category, content, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+      INSERT INTO comments (id, media_id, user_id, user_name, user_title, user_category, content, created_at, updated_at, shared_with)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9)
       RETURNING *
     `, [
       randomUUID(),
@@ -43,12 +45,14 @@ router.post("/createComment", async (req, res) => {
       userData.category,
       normalizedContent,
       new Date().toISOString(),
+      sharedWith,
     ]);
 
     await notifyNewComment({
       mediaId: videoId,
       commenter: userData,
       content: normalizedContent,
+      sharedWith,
     }).catch((error) => {
       console.error("새 댓글 푸시 알림 오류:", error);
     });
@@ -59,7 +63,7 @@ router.post("/createComment", async (req, res) => {
     }));
   } catch (error) {
     console.error("댓글 작성 오류:", error);
-    res.status(500).json({ error: "댓글 작성 실패" });
+    res.status(error.status || 500).json({ error: error.status ? error.message : "댓글 작성 실패" });
   }
 });
 
@@ -79,8 +83,11 @@ router.get("/getComments", async (req, res) => {
        FROM comments c
        LEFT JOIN users u ON u.id = c.user_id
        WHERE c.media_id = $1
+         AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = $2
+           AND (viewer.role IN ('admin', 'sub-admin') OR viewer.id = c.user_id
+             OR viewer.category = ANY(c.shared_with)))
        ORDER BY c.created_at DESC`,
-      [videoId],
+      [videoId, userId],
     );
 
     res.json(result.rows.map(mapCommentRowToComment));

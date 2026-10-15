@@ -462,3 +462,25 @@ body {
 .bottom-navigation-layout {
   padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }
+
+/* Rounded lettering for photo and video captions only. */
+@font-face {
+  font-family: 'Hotube Gaegu';
+  src: url('/fonts/gaegu/Gaegu-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+.font-caption {
+  font-family: 'Hotube Gaegu', var(--font-family);
+  font-synthesis: none;
+}
+
+@font-face {
+  font-family: 'Hotube Gaegu';
+  src: url('/fonts/gaegu/Gaegu-Bold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}

@@ -180,9 +180,12 @@ router.get('/getMediaDetails/:id', async (req, res) => {
         WHERE uwm.media_id = $1 ORDER BY u.name
       `, [mediaId]),
       pgDb.query(`SELECT
-        (SELECT COUNT(*)::int FROM comments WHERE media_id = $1) AS comment_count,
+        (SELECT COUNT(*)::int FROM comments c WHERE c.media_id = $1
+          AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = $2
+            AND (viewer.role IN ('admin', 'sub-admin') OR viewer.id = c.user_id
+              OR viewer.category = ANY(c.shared_with)))) AS comment_count,
         (SELECT COUNT(*)::int FROM user_liked_media WHERE media_id = $1) AS like_count
-      `, [mediaId]),
+      `, [mediaId, userId]),
       userId
         ? pgDb.query('SELECT 1 FROM user_favorite_media WHERE user_id = $1 AND media_id = $2', [userId, mediaId])
         : Promise.resolve({ rows: [] }),

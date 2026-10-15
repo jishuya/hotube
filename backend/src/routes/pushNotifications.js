@@ -12,12 +12,42 @@ const {
   sendToUserIds,
 } = require("../services/pushNotificationService");
 
+const { sendManualMediaNotification } = require('../services/manualMediaNotificationService');
+const { getDeveloperMode, setDeveloperMode } = require('../services/developerModeService');
 const router = express.Router();
 router.use("/push", requireAuth);
 
 const sendError = (res, error, fallback) => res
   .status(error.status || 500)
   .json({ error: error.status ? error.message : fallback });
+
+router.get('/push/developer-mode', async (req, res) => {
+  try {
+    return res.json(await getDeveloperMode(req.auth.userId));
+  } catch (error) {
+    return sendError(res, error, '개발자 모드를 불러오지 못했습니다');
+  }
+});
+
+router.put('/push/developer-mode', async (req, res) => {
+  try {
+    return res.json(await setDeveloperMode(req.auth.userId, req.body.enabled));
+  } catch (error) {
+    return sendError(res, error, '개발자 모드를 저장하지 못했습니다');
+  }
+});
+
+router.post('/push/developer-mode/notify-media', async (req, res) => {
+  try {
+    return res.json(await sendManualMediaNotification({
+      actorId: req.auth.userId,
+      groups: req.body.groups,
+      requestId: req.body.requestId,
+    }));
+  } catch (error) {
+    return sendError(res, error, '알림 발송 결과를 확인하지 못했습니다. 같은 요청을 다시 확인해주세요');
+  }
+});
 
 router.get("/push/vapid-public-key", (req, res) => {
   try {

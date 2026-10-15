@@ -432,11 +432,11 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                       )}
                       {internalNotifications.length > 0 && (
                         <div>
-                          <h3 className="border-b border-border bg-background px-4 py-2 text-xs font-bold text-text-secondary">댓글 및 문의</h3>
+                          <h3 className="border-b border-border bg-background px-4 py-2 text-xs font-bold text-text-secondary">새 소식 · 댓글 · 문의</h3>
                           {internalNotifications.map((notification) => (
                             <button key={`internal-${notification.id}`} type="button" onClick={() => handleInternalNotificationClick(notification)} className="flex w-full items-center gap-3 border-b border-border bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10">
                               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                                <Icon icon={notification.type === 'comment' ? 'mdi:comment-text-outline' : 'mdi:message-check-outline'} className="text-xl" />
+                                <Icon icon={notification.type === 'comment' ? 'mdi:comment-text-outline' : notification.type === 'media_announcement' ? 'mdi:image-multiple-outline' : 'mdi:message-check-outline'} className="text-xl" />
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-semibold">{notification.title}</span>

@@ -272,6 +272,7 @@ const getCalendarMedia = async ({ viewerId, viewerCategory, viewerRole }) => {
       FROM media m
       WHERE m.uploaded_at IS NOT NULL
         AND ${accessCondition}
+        AND NOT m.notifications_suppressed
         AND NOT EXISTS (
           SELECT 1
           FROM user_media_notification_reads umnr
@@ -369,9 +370,9 @@ const createMedia = async ({
       INSERT INTO media (
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, year, uploaded_at, duration_seconds,
-        view_count, like_count, channel_title, uploaded_by, shared_with, created_at, updated_at
+        view_count, like_count, channel_title, uploaded_by, shared_with, created_at, updated_at, notifications_suppressed
       )
-      VALUES ($1, $2, $3, $4, 'youtube', $5, NULL, $6, NULL, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      VALUES ($1, $2, $3, $4, 'youtube', $5, NULL, $6, NULL, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE((SELECT role = 'admin' AND developer_mode FROM users WHERE id = $13), FALSE))
     `, [
       videoId,
       title,
@@ -386,7 +387,7 @@ const createMedia = async ({
       likeCount || 0,
       channelTitle || null,
       uploadedBy || null,
-      Array.isArray(sharedWith) && sharedWith.length ? sharedWith : ['dad', 'mom'],
+      Array.isArray(sharedWith) ? sharedWith : ['dad', 'mom'],
       now,
       now,
     ]);
@@ -438,9 +439,9 @@ const createFileMedia = async ({
         id, title, description, content_type, media_type, youtube_url, file_path,
         thumbnail_url, thumbnail_path, preview_path, year, uploaded_at, duration_seconds,
         view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash,
-        processing_status, created_at, updated_at
+        processing_status, created_at, updated_at, notifications_suppressed
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, $8, NULL, 0, 0, NULL, $9, $10, $11, $12, $13, $14, $14)
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, $8, NULL, 0, 0, NULL, $9, $10, $11, $12, $13, $14, $14, COALESCE((SELECT role = 'admin' AND developer_mode FROM users WHERE id = $9), FALSE))
     `, [id, title, mediaType, filePath, thumbnailPath, previewPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now]);
 
     await replaceMediaTags(client, id, tags);

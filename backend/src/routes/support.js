@@ -1,4 +1,5 @@
 const express = require('express');
+const { isDeveloperMode } = require('../services/developerModeService');
 const fs = require('fs/promises');
 const path = require('path');
 const { randomUUID } = require('crypto');
@@ -51,9 +52,11 @@ router.post('/createSupportRequest', upload.array('files', 5), async (req, res) 
     });
     let emailSent = false;
     try {
-      await sendSupportEmail(result);
-      emailSent = true;
-      await updateEmailResult(result.request.id, true);
+      if (!(await isDeveloperMode(result.user.id))) {
+        await sendSupportEmail(result);
+        emailSent = true;
+        await updateEmailResult(result.request.id, true);
+      }
     } catch (emailError) {
       console.error('문의 메일 발송 오류:', emailError);
       await updateEmailResult(result.request.id, false, emailError).catch(() => {});
@@ -132,6 +135,7 @@ router.patch('/supportRequests/:id/status', async (req, res) => {
     void notifySupportStatus({
       requestId: req.params.id,
       status: request.status,
+      actorId: req.body.adminId,
     }).catch((error) => {
       console.error('문의 상태 푸시 알림 오류:', error);
     });

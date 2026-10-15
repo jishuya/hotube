@@ -8,13 +8,13 @@ const FUNCTIONS_URL = {
 };
 
 // 댓글 작성
-export const createComment = async (videoId, userId, content) => {
+export const createComment = async (videoId, userId, content, sharedWith) => {
   const response = await fetch(FUNCTIONS_URL.createComment, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ videoId, userId, content }),
+    body: JSON.stringify({ videoId, userId, content, sharedWith }),
   });
 
   const data = await response.json();

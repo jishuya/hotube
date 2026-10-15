@@ -1,3 +1,6 @@
+import MediaDescription from '../components/common/MediaDescription';
+import { parseTags } from '../utils/tags';
+import { getMediaCaption, parseCaption, removeCaptionTag } from '../utils/caption';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -17,7 +20,6 @@ import {
 import { markVideoWatched, toggleLike } from '../services/authApi';
 import { dismissMediaNotifications } from '../services/pushApi';
 import { extractVideoId } from '../services/youtubeService';
-import { getChildProfile } from '../services/childProfileApi';
 import { useAuth } from '../contexts/AuthContext';
 import { AVATAR_POSITIONS } from '../constants/profileAvatars';
 
@@ -47,26 +49,14 @@ const FamilyAvatar = ({ person, className = 'size-8' }) => {
   );
 };
 
-const formatChildDay = (birthday, mediaDate) => {
-  if (!birthday || !mediaDate) return { day: null, date: mediaDate };
-  const birth = new Date(`${birthday}T00:00:00Z`);
-  const captured = new Date(`${mediaDate}T00:00:00Z`);
-  const days = Math.round((captured - birth) / 86400000);
-  const sign = days >= 0 ? '+' : '-';
-  return {
-    day: `D${sign}${String(Math.abs(days)).padStart(2, '0')}`,
-    date: mediaDate,
-  };
-};
-
 const ActionButton = ({ icon, label, active = false, count, onClick, href, disabled = false }) => {
-  const className = `flex min-w-16 flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+  const className = `flex min-h-10 min-w-12 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition ${
     active ? 'bg-primary/10 text-primary' : 'text-text-secondary hover:bg-primary/10 hover:text-primary'
   } ${disabled ? 'pointer-events-none opacity-40' : ''}`;
   const content = (
     <>
       <Icon icon={icon} className="text-2xl" />
-      <span>{label}{count !== undefined ? ` ${count}` : ''}</span>
+      <span className="whitespace-nowrap">{label}{count !== undefined ? ` ${count}` : ''}</span>
     </>
   );
   return href ? <a href={href} download className={className}>{content}</a> : (
@@ -422,15 +412,26 @@ const MediaViewerPage = () => {
   const internalMediaNavigationRef = useRef(false);
   const commentScrollHandledRef = useRef('');
   const detailsRequestRef = useRef(0);
-  const tagSavingRef = useRef(false);
   const { user, isLiked, toggleLikeLocal, markWatchedLocal } = useAuth();
   const [mediaItems, setMediaItems] = useState([]);
   const [details, setDetails] = useState(null);
-  const [child, setChild] = useState(null);
-  const [tagDraft, setTagDraft] = useState('');
-  const [addingTag, setAddingTag] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionTags, setDescriptionTags] = useState([]);
+  const [tagDraft, setTagDraft] = useState('');
+  const [addingTag, setAddingTag] = useState(false);
+  const resetDescriptionDraft = useCallback((media) => {
+    const parsed = parseCaption(getMediaCaption(media));
+    setDescriptionDraft(parsed.parts.filter((part) => !part.tag).map((part) => part.text).join('').trim());
+    setDescriptionTags(parsed.tags);
+    setTagDraft('');
+    setAddingTag(false);
+  }, []);
+  const addDraftTags = () => {
+    setDescriptionTags((tags) => [...new Set([...tags, ...parseTags(tagDraft)])]);
+    setTagDraft('');
+    setAddingTag(false);
+  };
   const [descriptionDeleteOpen, setDescriptionDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState('');
@@ -452,6 +453,11 @@ const MediaViewerPage = () => {
     : '/calendar';
   const albumMediaIds = location.state?.albumMediaIds;
   const current = mediaItems.find((item) => item.id === mediaId);
+  const caption = getMediaCaption(current);
+  const parsedCaption = parseCaption(caption);
+  const visibleDescription = parsedCaption.parts.filter((part) => !part.tag).map((part) => part.text).join('').trim();
+  const visibleTags = parsedCaption.tags;
+  const descriptionLength = descriptionDraft.length;
   const isYoutubeShort = current?.source === 'youtube'
     && (current.videoType === 'short' || current.src?.includes('/shorts/'));
   const date = requestedDate || current?.date;
@@ -496,7 +502,7 @@ const MediaViewerPage = () => {
     .then((data) => {
       if (detailsRequestRef.current !== requestId) return;
       setDetails(data);
-      setSharedWith(data.sharedWith?.length ? data.sharedWith : ['dad', 'mom']);
+      setSharedWith(Array.isArray(data.sharedWith) ? data.sharedWith : ['dad', 'mom']);
     })
     .catch((loadError) => {
       if (detailsRequestRef.current === requestId) showToast('error', loadError.message);
@@ -538,12 +544,6 @@ const MediaViewerPage = () => {
   }, [albumMediaIds, loadDetails, mediaId, requestedDate, showToast]);
 
   useEffect(() => {
-    getChildProfile()
-      .then(setChild)
-      .catch((profileError) => console.error('아이 정보 조회 실패:', profileError));
-  }, []);
-
-  useEffect(() => {
     if (!focusComments) {
       commentScrollHandledRef.current = '';
       return undefined;
@@ -561,9 +561,9 @@ const MediaViewerPage = () => {
   useEffect(() => {
     if (!current) return;
     setEditDate(current.date || '');
-    setDescriptionDraft(current.description || '');
+    resetDescriptionDraft(current);
     setEditingDescription(false);
-  }, [current]);
+  }, [current, resetDescriptionDraft]);
 
   useEffect(() => {
     if (current?.processingStatus !== 'processing') return undefined;
@@ -711,36 +711,11 @@ const MediaViewerPage = () => {
       : [...value, category]);
   };
 
-  const submitTag = async (event) => {
-    event.preventDefault();
-    if (tagSavingRef.current) return;
-    const tag = tagDraft.trim().replace(/^#/, '');
-    if (!tag || current.tags?.includes(tag)) {
-      setTagDraft('');
-      setAddingTag(false);
-      return;
-    }
-    tagSavingRef.current = true;
-    try {
-      const saved = toMemoryMedia(await updateVideo(mediaId, {
-        tags: [...(current.tags || []), tag],
-      }, user?.id));
-      setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
-      setTagDraft('');
-      setAddingTag(false);
-      window.dispatchEvent(new Event('hotube:media-updated'));
-      showToast('success', '태그를 추가했습니다.');
-    } catch (tagError) {
-      showToast('error', tagError.message);
-    } finally {
-      tagSavingRef.current = false;
-    }
-  };
-
   const removeTag = async (tag) => {
     try {
       const saved = toMemoryMedia(await updateVideo(mediaId, {
-        tags: (current.tags || []).filter((item) => item !== tag),
+        description: removeCaptionTag(current.description, tag),
+        tags: parseCaption(removeCaptionTag(getMediaCaption(current), tag)).tags,
       }, user?.id));
       setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
       window.dispatchEvent(new Event('hotube:media-updated'));
@@ -752,13 +727,18 @@ const MediaViewerPage = () => {
 
   const saveDescription = async () => {
     if (busyAction) return;
+    if (descriptionDraft.length > 500) {
+      showToast('error', '태그를 제외한 설명은 500자 이내로 작성해주세요.');
+      return;
+    }
     setBusyAction('description');
     try {
       const saved = toMemoryMedia(await updateVideo(mediaId, {
         description: descriptionDraft.trim(),
+        tags: [...new Set([...descriptionTags, ...parseTags(tagDraft)])],
       }, user?.id));
       setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
-      setDescriptionDraft(saved.description || '');
+      resetDescriptionDraft(saved);
       setEditingDescription(false);
       window.dispatchEvent(new Event('hotube:media-updated'));
       showToast('success', '한줄기록을 저장했습니다.');
@@ -788,7 +768,7 @@ const MediaViewerPage = () => {
   };
 
   const saveMetadata = async () => {
-    if (!editDate || sharedWith.length === 0) {
+    if (!editDate || (sharedWith.length === 0 && !['admin', 'sub-admin'].includes(user?.role))) {
       showToast('warning', '날짜와 공유할 가족을 한 명 이상 선택해 주세요.');
       return;
     }
@@ -818,7 +798,9 @@ const MediaViewerPage = () => {
     }
   };
 
-  const shareLabel = ['dad', 'mom'].every((category) => sharedWith.includes(category))
+  const descriptionLabel = current?.type === 'photo' ? '사진 설명' : '영상 설명';
+
+  const shareLabel = sharedWith.length === 0 ? '부부' : ['dad', 'mom'].every((category) => sharedWith.includes(category))
     ? '모든가족'
     : sharedWith.map((category) => ({ dad: '아빠가족', mom: '엄마가족', etc: '기타' })[category]).filter(Boolean).join(' · ');
 
@@ -836,7 +818,6 @@ const MediaViewerPage = () => {
     );
   }
 
-  const childDay = formatChildDay(child?.birthday, current.date);
 
   return (
     <main className="min-h-screen bg-background pb-16 text-text-primary">
@@ -871,15 +852,18 @@ const MediaViewerPage = () => {
       <div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
         <div className="min-w-0">
           <section className="overflow-hidden rounded-2xl bg-surface shadow-sm">
-            {childDay.day && (
-              <div className="flex justify-center bg-surface px-4 py-2.5">
-                <span className="rounded-full bg-background px-4 py-1 text-sm font-bold text-text-secondary">
-                  {childDay.day}
-                </span>
+            <div className="flex items-center justify-between gap-2 px-4 py-2 text-xs text-text-secondary">
+              <div className="flex min-w-0 items-center -space-x-1" aria-label="사진·영상을 본 가족">
+                {details?.viewers?.slice(0, 6).map((viewer) => <FamilyAvatar key={viewer.id} person={viewer} className="size-6" />)}
               </div>
-            )}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="inline-flex shrink-0 items-center gap-1 font-semibold"><Icon icon="mdi:account-group-outline" aria-hidden="true" />{shareLabel}</span>
+                <span aria-hidden="true">·</span>
+                <span className="truncate">{details?.uploader?.title || details?.uploader?.name || '가족'} 올림</span>
+              </div>
+            </div>
             <div
-              className={`relative flex touch-pan-y items-center justify-center border-b border-border bg-white ${current.type === 'photo' ? '' : 'min-h-[48vh] sm:min-h-[65vh]'}`}
+              className="relative flex touch-pan-y items-center justify-center border-b border-border bg-white"
               onPointerDown={handleDetailPointerDown}
               onPointerUp={handleDetailPointerUp}
               onPointerCancel={() => { detailSwipeRef.current = null; }}
@@ -938,96 +922,98 @@ const MediaViewerPage = () => {
               <button type="button" onClick={() => moveTo(next)} disabled={!next} className="absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
             </div>
 
-            <div className="px-5 pb-3 pt-2">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                {current.source === 'youtube' && (
-                  <h1 className="truncate text-xl font-bold sm:text-2xl">{current.title}</h1>
+            {details?.canModify && (
+              <div className="mx-4 mb-1 mt-3 flex items-center justify-between gap-2">
+                <button type="button" onClick={() => { resetDescriptionDraft(current); setEditingDescription((value) => !value); }} disabled={Boolean(busyAction)} aria-expanded={editingDescription} aria-controls="media-description-input" className="inline-flex items-center gap-1 text-xs font-semibold text-text-secondary hover:text-primary disabled:opacity-50">
+                  <Icon icon="mdi:pencil-box-outline" className="text-base" aria-hidden="true" />
+                  {descriptionLabel}
+                </button>
+                {editingDescription && (
+                  <div className="flex items-center gap-2">
+                    {current.description && (
+                      <button type="button" onClick={() => setDescriptionDeleteOpen(true)} disabled={Boolean(busyAction)} className="flex size-5 items-center justify-center rounded-full text-text-secondary transition hover:bg-error/10 hover:text-error disabled:opacity-50" aria-label={`${descriptionLabel} 삭제`} title="설명 삭제">
+                        <Icon icon="mdi:close" className="text-lg" />
+                      </button>
+                    )}
+                    <span className="text-[11px] leading-none text-text-secondary">{descriptionLength}/500</span>
+                  </div>
                 )}
               </div>
-            </div>
+            )}
 
-            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text-secondary">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                {details?.viewers?.length > 0 && (
-                  <span className="flex -space-x-1">{details.viewers.slice(0, 6).map((viewer) => <FamilyAvatar key={viewer.id} person={viewer} className="size-6" />)}</span>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="inline-flex items-center gap-1 font-semibold"><Icon icon="mdi:account-group-outline" />{shareLabel}</span>
-                <span>·</span>
-                <span>by {details?.uploader?.title || details?.uploader?.name || '가족'}</span>
-              </div>
-            </div>
+            {(caption.trim() || editingDescription) && <section aria-label={descriptionLabel} className={`px-4 pb-1 text-sm ${editingDescription || details?.canModify ? 'pt-0' : 'pt-3'}`}>
+              {editingDescription ? (
+                <div>
+                  <textarea
+                    id="media-description-input"
+                    autoFocus
+                    aria-label={descriptionLabel}
+                    value={descriptionDraft}
+                    onChange={(event) => setDescriptionDraft(event.target.value)}
+                    rows={2}
+                    placeholder="이 순간을 남겨보세요."
+                    maxLength={500}
+                    aria-invalid={descriptionLength > 500}
+                    className="block w-full resize-y rounded-lg border-border bg-background px-2 py-1.5 text-sm leading-5 focus:border-primary focus:ring-primary/30"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-text-secondary">
+                    {descriptionTags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-0.5">
+                        #{tag}
+                        <button type="button" disabled={Boolean(busyAction)} onClick={() => setDescriptionTags((tags) => tags.filter((item) => item !== tag))} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>
+                      </span>
+                    ))}
+                    {addingTag ? (
+                      <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} onBlur={addDraftTags}
+                        onKeyDown={(event) => {
+                          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                          if (event.key === 'Enter') { event.preventDefault(); addDraftTags(); }
+                          if (event.key === 'Escape') { setTagDraft(''); setAddingTag(false); }
+                        }}
+                        disabled={Boolean(busyAction)} aria-label="해시태그 추가" placeholder="#일상 #가족" className="h-6 w-40 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary" />
+                    ) : (
+                      <button type="button" disabled={Boolean(busyAction)} onClick={() => { setTagDraft('#'); setAddingTag(true); }} className="font-semibold hover:underline">+ 태그</button>
+                    )}
+                  </div>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button type="button" onClick={() => { resetDescriptionDraft(current); setEditingDescription(false); }} disabled={busyAction === 'description'} className="rounded-lg px-3 py-1.5 text-xs font-bold text-text-secondary hover:bg-background disabled:opacity-50">취소</button>
+                    <button type="button" onClick={saveDescription} disabled={busyAction === 'description' || descriptionLength > 500} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{busyAction === 'description' ? '저장 중…' : '저장'}</button>
+                  </div>
+                </div>
+              ) : caption ? (
+                <div>
+                  <MediaDescription
+                    key={mediaId}
+                    text={visibleDescription}
+                    label={descriptionLabel}
+                    onEdit={details?.canModify ? () => { resetDescriptionDraft(current); setEditingDescription(true); } : undefined}
+                  />
+                  {visibleTags.length > 0 && (
+                    <div className={`${visibleDescription ? 'mt-1' : ''} flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-text-secondary`}>
+                      {visibleTags.map((tag) => (
+                        <span key={tag} className="inline-flex items-center gap-0.5">
+                          {details?.canModify ? (
+                            <button type="button" onClick={() => { resetDescriptionDraft(current); setEditingDescription(true); }} aria-label={`태그 ${tag} 수정`}>#{tag}</button>
+                          ) : `#${tag}`}
+                          {details?.canModify && <button type="button" onClick={() => removeTag(tag)} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </section>}
 
-            <div className="mt-2 flex items-center justify-between">
+
+            {current.source === 'youtube' && (
+              <h1 className="mx-4 mt-1 truncate text-sm font-semibold">{current.title}</h1>
+            )}
+
+            <div className="grid grid-cols-4 items-start px-2 pb-2 pt-1">
               <ActionButton icon={isLiked(mediaId) ? 'mdi:heart' : 'mdi:heart-outline'} label="좋아요" count={details?.likeCount || 0} active={isLiked(mediaId)} onClick={handleLike} />
               <ActionButton icon={details?.favorited ? 'mdi:bookmark' : 'mdi:bookmark-outline'} label="즐겨찾기" active={details?.favorited} onClick={handleFavorite} />
               <ActionButton icon="mdi:comment-outline" label="댓글" count={details?.commentCount || 0} onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
               <ActionButton icon="mdi:download-outline" label="다운로드" href={current.source === 'file' && current.src ? `${current.src}&download=1` : undefined} disabled={current.source !== 'file' || !current.src} />
-            </div>
-
-            {(current.description || details?.canModify) && <div className="mt-3 border-t border-border pt-3">
-              {editingDescription ? (
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-sm font-bold">한줄기록</span>
-                    <span className="text-[11px] text-text-secondary">{descriptionDraft.length}/5000</span>
-                  </div>
-                  <textarea
-                    autoFocus
-                    value={descriptionDraft}
-                    onChange={(event) => setDescriptionDraft(event.target.value)}
-                    rows={4}
-                    maxLength={5000}
-                    placeholder="이 순간을 기억할 한마디를 남겨보세요."
-                    className="w-full resize-y rounded-xl border-border bg-background px-3 py-2.5 text-sm leading-6 focus:border-primary focus:ring-primary/30"
-                  />
-                  <div className="mt-2 flex justify-end gap-2">
-                    <button type="button" onClick={() => { setDescriptionDraft(current.description || ''); setEditingDescription(false); }} disabled={busyAction === 'description'} className="rounded-lg px-3 py-1.5 text-xs font-bold text-text-secondary hover:bg-background disabled:opacity-50">취소</button>
-                    <button type="button" onClick={saveDescription} disabled={busyAction === 'description'} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{busyAction === 'description' ? '저장 중…' : '저장'}</button>
-                  </div>
-                </div>
-              ) : current.description ? (
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-bold">한줄기록</span>
-                    {details?.canModify && (
-                      <div className="flex items-center gap-0.5">
-                        <button type="button" onClick={() => { setDescriptionDraft(current.description || ''); setEditingDescription(true); }} className="p-0.5 text-text-secondary transition hover:text-primary" aria-label="한줄기록 수정">
-                          <Icon icon="mdi:pencil-outline" className="text-sm" />
-                        </button>
-                        <button type="button" onClick={() => setDescriptionDeleteOpen(true)} className="p-0.5 text-text-secondary transition hover:text-error" aria-label="한줄기록 삭제">
-                          <Icon icon="mdi:delete-outline" className="text-sm" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">{current.description}</p>
-                </div>
-              ) : details?.canModify ? (
-                <button type="button" onClick={() => { setDescriptionDraft(''); setEditingDescription(true); }} className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:opacity-70">
-                  <Icon icon="mdi:text-box-plus-outline" className="text-base" />
-                  한줄기록
-                </button>
-              ) : null}
-            </div>}
-
-            <div className="mt-2 flex min-h-6 flex-wrap items-center gap-1.5 text-xs">
-              {[...new Set(current.tags || [])].map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-0.5 text-text-secondary">
-                  #{tag}
-                  {details?.canModify && <button type="button" onClick={() => removeTag(tag)} className="rounded-full p-0.5 hover:bg-error/10 hover:text-error" aria-label={`${tag} 태그 삭제`}><Icon icon="mdi:close" className="text-xs" /></button>}
-                </span>
-              ))}
-              {details?.canModify && (addingTag ? (
-                <form onSubmit={submitTag} className="flex items-center gap-1">
-                  <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} onBlur={submitTag} onKeyDown={(event) => { if (event.key === 'Escape') { setTagDraft(''); setAddingTag(false); } }} placeholder="태그" className="h-6 w-24 rounded-full border-primary bg-surface px-2 text-xs focus:border-primary focus:ring-1 focus:ring-primary" />
-                </form>
-              ) : (
-                <button type="button" onClick={() => setAddingTag(true)} className="font-semibold text-primary hover:underline">+ 태그</button>
-              ))}
-            </div>
             </div>
           </section>
         </div>
@@ -1063,8 +1049,9 @@ const MediaViewerPage = () => {
             </div>
             <fieldset className="mt-4">
               <legend className="text-sm font-semibold">공유 가족</legend>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {[['mom', '엄마가족'], ['dad', '아빠가족']].map(([value, label]) => <button key={value} type="button" onClick={() => toggleFamily(value)} className={`rounded-xl border px-3 py-2.5 text-sm font-bold ${sharedWith.includes(value) ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}><Icon icon={sharedWith.includes(value) ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline" />{label}</button>)}
+              <div className={`mt-2 grid gap-1.5 ${['admin', 'sub-admin'].includes(user?.role) ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {['admin', 'sub-admin'].includes(user?.role) && <button type="button" onClick={() => setSharedWith([])} aria-pressed={sharedWith.length === 0} className={`min-h-10 whitespace-nowrap rounded-xl border px-1 py-1.5 text-xs font-bold sm:text-sm ${sharedWith.length === 0 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}><Icon icon={sharedWith.length === 0 ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline" />부부</button>}
+                {[['mom', '엄마가족'], ['dad', '아빠가족']].map(([value, label]) => <button key={value} type="button" onClick={() => toggleFamily(value)} className={`min-h-10 whitespace-nowrap rounded-xl border px-1 py-1.5 text-xs font-bold sm:text-sm ${sharedWith.includes(value) ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}><Icon icon={sharedWith.includes(value) ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline" />{label}</button>)}
               </div>
             </fieldset>
             <button type="button" onClick={saveMetadata} disabled={busyAction === 'save'} className="mt-5 h-11 w-full rounded-xl bg-primary text-sm font-bold text-white disabled:opacity-50">{busyAction === 'save' ? '저장 중...' : '변경사항 저장'}</button>

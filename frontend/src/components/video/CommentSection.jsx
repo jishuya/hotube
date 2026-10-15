@@ -1,9 +1,23 @@
+import { getDefaultCommentSharedWith } from '../../utils/familySharing';
 import { useCallback, useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getComments, createComment, updateComment, deleteComment } from '../../services/commentApi';
 import Modal from '../common/Modal';
 import { AVATAR_POSITIONS } from '../../constants/profileAvatars';
+
+const getCommentAudience = (sharedWith) => {
+  if (sharedWith?.length === 1 && sharedWith[0] === 'mom') {
+    return { label: '엄마가족', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' };
+  }
+  if (sharedWith?.length === 1 && sharedWith[0] === 'dad') {
+    return { label: '아빠가족', color: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' };
+  }
+  if (sharedWith?.length === 1 && sharedWith[0] === 'etc') {
+    return { label: '기타 가족', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' };
+  }
+  return { label: '양쪽 가족', color: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200' };
+};
 
 const CommentAvatar = ({ comment }) => {
   const [x, y] = AVATAR_POSITIONS[comment.userAvatar] || AVATAR_POSITIONS['woman-long'];
@@ -24,8 +38,11 @@ const CommentAvatar = ({ comment }) => {
 
 const CommentSection = ({ videoId, onCountChange }) => {
   const { user } = useAuth();
+  const canChooseAudience = ['admin', 'sub-admin'].includes(user?.role);
+  const ownAudience = getCommentAudience([user?.category]);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
+  const [sharedWith, setSharedWith] = useState(() => getDefaultCommentSharedWith(user));
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -56,10 +73,11 @@ const CommentSection = ({ videoId, onCountChange }) => {
 
     try {
       setSubmitting(true);
-      const comment = await createComment(videoId, user.id, newComment.trim());
+      const comment = await createComment(videoId, user.id, newComment.trim(), sharedWith);
       setComments(prev => [comment, ...prev]);
       onCountChange?.(comments.length + 1);
       setNewComment('');
+      setSharedWith(getDefaultCommentSharedWith(user));
     } catch (error) {
       console.error('댓글 작성 실패:', error);
     } finally {
@@ -133,28 +151,55 @@ const CommentSection = ({ videoId, onCountChange }) => {
       </div>
 
       {/* 댓글 입력 */}
-      <form onSubmit={handleSubmit} className="mb-3">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="댓글을 입력하세요..."
-              rows={2}
-              className="w-full p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={!newComment.trim() || submitting}
-            className="shrink-0 px-3 h-10 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {submitting ? (
-              <Icon icon="mdi:loading" className="animate-spin text-lg" />
+      <form onSubmit={handleSubmit} className="mb-5 flex items-start gap-2 sm:gap-3">
+        <div className="shrink-0 pt-1">
+          <CommentAvatar comment={{ userAvatar: user?.avatar, userName: user?.name, userTitle: user?.title }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <textarea
+            value={newComment}
+            onChange={(event) => setNewComment(event.target.value)}
+            aria-label="댓글 내용"
+            placeholder="댓글 추가..."
+            rows={1}
+            disabled={submitting}
+            className="block min-h-10 w-full resize-y rounded-none border-0 border-b border-zinc-300 bg-transparent px-0 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-0 disabled:opacity-60 dark:border-zinc-600 dark:text-white"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+            {canChooseAudience ? (
+              <fieldset disabled={submitting} className="min-w-0">
+                <legend className="sr-only">공유 가족</legend>
+                <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-xs font-semibold text-black dark:text-white">공유</span>
+                  {[['dad', '아빠가족'], ['mom', '엄마가족']].map(([value, label]) => (
+                    <button key={value} type="button" aria-pressed={sharedWith.includes(value)}
+                      onClick={() => setSharedWith((current) => current.includes(value)
+                        ? (current.length > 1 ? current.filter((item) => item !== value) : current)
+                        : [...current, value])}
+                      className={`inline-flex h-7 items-center gap-0.5 whitespace-nowrap rounded-full px-1 text-xs font-semibold transition hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-700 ${sharedWith.includes(value) ? 'text-primary' : 'text-text-secondary'}`}>
+                      <Icon icon={sharedWith.includes(value) ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="shrink-0 text-sm" />{label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
             ) : (
-              <Icon icon="mdi:send" className="text-lg" />
+              <span title={`${ownAudience.label}과 관리자·부관리자에게만 보여요.`} className={`rounded-full px-2 py-1 text-xs font-semibold ${ownAudience.color}`}>
+                {ownAudience.label} 공개
+              </span>
             )}
-          </button>
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <button type="button" disabled={submitting}
+                onClick={() => { setNewComment(''); setSharedWith(getDefaultCommentSharedWith(user)); }}
+                className="h-8 rounded-full px-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-700 sm:px-3 sm:text-sm">
+                취소
+              </button>
+              <button type="submit" disabled={!newComment.trim() || submitting}
+                className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 dark:disabled:bg-zinc-700 sm:px-4 sm:text-sm">
+                {submitting && <Icon icon="mdi:loading" className="animate-spin" />}
+                {submitting ? '저장 중' : '저장'}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
 
@@ -174,6 +219,9 @@ const CommentSection = ({ videoId, onCountChange }) => {
                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
                   <span className="font-semibold text-zinc-900 dark:text-white">
                     {comment.userName}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 font-semibold ${getCommentAudience(comment.sharedWith).color}`}>
+                    {getCommentAudience(comment.sharedWith).label}
                   </span>
                   <span className="text-zinc-500 dark:text-zinc-400">
                     {comment.userTitle}

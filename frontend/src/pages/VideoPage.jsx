@@ -1,7 +1,8 @@
+import MediaDescription from '../components/common/MediaDescription';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { getAllVideos, getVideoById } from '../services/videoApi';
+import { getAllVideos, getVideoById, updateVideo } from '../services/videoApi';
 import { extractVideoId } from '../services/youtubeService';
 import { toggleLike, markVideoWatched } from '../services/authApi';
 import { dismissMediaNotifications } from '../services/pushApi';
@@ -17,6 +18,33 @@ const VideoPage = () => {
   const [loading, setLoading] = useState(true);
   const [autoPlay, setAutoPlay] = useState(true);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionBusy, setDescriptionBusy] = useState(false);
+  const [descriptionError, setDescriptionError] = useState('');
+  const canEditDescription = Boolean(user && video && (
+    ['admin', 'sub-admin'].includes(user.role) || video.uploadedBy === user.id
+  ));
+  const toggleDescription = () => {
+    setDescriptionDraft(video.description || '');
+    setDescriptionError('');
+    setEditingDescription((value) => !value);
+  };
+  const saveDescription = async () => {
+    if (descriptionBusy || descriptionDraft.length > 500) return;
+    setDescriptionBusy(true);
+    setDescriptionError('');
+    try {
+      const saved = await updateVideo(videoId, { description: descriptionDraft.trim() }, user.id);
+      setVideo(saved);
+      setEditingDescription(false);
+      window.dispatchEvent(new Event('hotube:media-updated'));
+    } catch (error) {
+      setDescriptionError(error.message);
+    } finally {
+      setDescriptionBusy(false);
+    }
+  };
 
   // YouTube IFrame API 로드
   useEffect(() => {
@@ -33,6 +61,8 @@ const VideoPage = () => {
       setLoading(true);
       const currentVideo = await getVideoById(videoId);
       setVideo(currentVideo);
+      setEditingDescription(false);
+      setDescriptionError('');
 
       const relatedVideos = await getAllVideos({
         contentType: currentVideo.type,
@@ -397,15 +427,30 @@ const VideoPage = () => {
 
             {/* Description */}
             <div className="border-y border-zinc-200 py-4">
-              <p className="text-zinc-800 text-base font-normal leading-relaxed">
-                {video.description || 'No description available.'}
-              </p>
+              {canEditDescription && (
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <button type="button" onClick={toggleDescription} disabled={descriptionBusy} aria-expanded={editingDescription} className="inline-flex items-center gap-1 text-xs font-semibold text-text-secondary hover:text-primary disabled:opacity-50">
+                    <Icon icon="mdi:pencil-box-outline" className="text-base" />영상 설명
+                  </button>
+                  {editingDescription && <span className="text-[11px] text-text-secondary">{descriptionDraft.length}/500</span>}
+                </div>
+              )}
+              {editingDescription && canEditDescription ? (
+                <div>
+                  <textarea autoFocus value={descriptionDraft} onChange={(event) => setDescriptionDraft(event.target.value)} rows={2} maxLength={500} aria-label="영상 설명" className="block w-full resize-y rounded-lg border-border bg-background px-2 py-1.5 text-sm leading-5 focus:border-primary focus:ring-primary/30" />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button type="button" onClick={toggleDescription} disabled={descriptionBusy} className="rounded-lg px-3 py-1.5 text-xs font-bold text-text-secondary">취소</button>
+                    <button type="button" onClick={saveDescription} disabled={descriptionBusy || descriptionDraft.length > 500} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{descriptionBusy ? '저장 중…' : '저장'}</button>
+                  </div>
+                  {descriptionError && <p role="alert" className="mt-1 text-xs text-error">{descriptionError}</p>}
+                </div>
+              ) : <MediaDescription key={videoId} text={video.description} label="영상 설명" onEdit={canEditDescription ? toggleDescription : undefined} />}
               {video.tags && video.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-4">
+                <div className="mt-1 flex flex-wrap gap-x-1 gap-y-0.5 text-xs text-text-secondary">
                   {video.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="cursor-pointer rounded-lg bg-primary/20 px-3 py-1 text-sm font-medium text-primary hover:bg-primary/30"
+                      className="font-normal"
                     >
                       #{tag}
                     </span>

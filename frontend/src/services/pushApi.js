@@ -169,3 +169,27 @@ export const dismissMediaNotifications = async (mediaIds) => {
     console.error('확인한 미디어의 시스템 알림 닫기 실패:', error);
   }
 };
+
+export const getDeveloperMode = async () => parseResponse(
+  await fetch(`${API_BASE_URL}/push/developer-mode`, { headers: authHeaders() }),
+  '개발자 모드를 불러오지 못했습니다',
+);
+
+export const saveDeveloperMode = async (enabled) => parseResponse(
+  await fetch(`${API_BASE_URL}/push/developer-mode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ enabled }),
+  }),
+  '개발자 모드를 저장하지 못했습니다',
+);
+
+
+export const sendManualMediaNotification = async (groups, requestId) => parseResponse(
+  await fetch(`${API_BASE_URL}/push/developer-mode/notify-media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ groups, requestId }),
+  }),
+  '알림 발송 결과를 확인하지 못했습니다',
+);
