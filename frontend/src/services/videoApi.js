@@ -130,8 +130,9 @@ export const getVideoById = async (id) => {
 };
 
 // 비디오 등록
-export const addVideo = async (videoData) => {
+export const addVideo = async (videoData, { signal } = {}) => {
   const response = await fetch(FUNCTIONS_URL.createVideo, {
+    signal,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

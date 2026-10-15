@@ -174,11 +174,11 @@ const UploadOverlay = ({ targetDate }) => {
   }, [navigate]);
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="업로드">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="사진·영상 업로드">
       <button type="button" className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={() => navigate(-1)} aria-label="업로드 닫기" />
       <div className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <div className="z-20 flex shrink-0 items-center justify-between bg-surface p-6 pb-0">
-          <h2 className="text-xl font-bold text-text-primary">업로드</h2>
+          <h2 className="text-xl font-bold text-text-primary">사진·영상 업로드</h2>
           <button type="button" onClick={() => navigate(-1)} className="flex size-9 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary" aria-label="업로드 닫기">
             <Icon icon="mdi:close" className="text-2xl" />
           </button>
