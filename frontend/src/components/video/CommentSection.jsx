@@ -7,16 +7,19 @@ import Modal from '../common/Modal';
 import { AVATAR_POSITIONS } from '../../constants/profileAvatars';
 
 const getCommentAudience = (sharedWith) => {
+  if (Array.isArray(sharedWith) && sharedWith.length === 0) {
+    return { label: '부부만 공개', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' };
+  }
   if (sharedWith?.length === 1 && sharedWith[0] === 'mom') {
-    return { label: '엄마가족', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' };
+    return { label: '엄마가족 공개', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' };
   }
   if (sharedWith?.length === 1 && sharedWith[0] === 'dad') {
-    return { label: '아빠가족', color: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' };
+    return { label: '아빠가족 공개', color: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' };
   }
   if (sharedWith?.length === 1 && sharedWith[0] === 'etc') {
     return { label: '기타 가족', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' };
   }
-  return { label: '양쪽 가족', color: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200' };
+  return { label: '양쪽 가족 공개', color: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200' };
 };
 
 const CommentAvatar = ({ comment }) => {
@@ -39,7 +42,10 @@ const CommentAvatar = ({ comment }) => {
 const CommentSection = ({ videoId, onCountChange }) => {
   const { user } = useAuth();
   const canChooseAudience = ['admin', 'sub-admin'].includes(user?.role);
-  const ownAudience = getCommentAudience([user?.category]);
+  const ownAudience = {
+    ...getCommentAudience([user?.category]),
+    label: { mom: '엄마가족', dad: '아빠가족', etc: '기타 가족' }[user?.category] || '양쪽 가족',
+  };
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [sharedWith, setSharedWith] = useState(() => getDefaultCommentSharedWith(user));
@@ -171,10 +177,15 @@ const CommentSection = ({ videoId, onCountChange }) => {
                 <legend className="sr-only">공유 가족</legend>
                 <div className="flex items-center gap-1.5">
                   <span className="shrink-0 text-xs font-semibold text-black dark:text-white">공유</span>
+                  <button type="button" aria-pressed={sharedWith.length === 0}
+                    onClick={() => setSharedWith([])}
+                    className={`inline-flex h-7 items-center gap-0.5 whitespace-nowrap rounded-full px-1 text-xs font-semibold transition hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-700 ${sharedWith.length === 0 ? 'text-primary' : 'text-text-secondary'}`}>
+                    <Icon icon={sharedWith.length === 0 ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="shrink-0 text-sm" />부부
+                  </button>
                   {[['dad', '아빠가족'], ['mom', '엄마가족']].map(([value, label]) => (
                     <button key={value} type="button" aria-pressed={sharedWith.includes(value)}
                       onClick={() => setSharedWith((current) => current.includes(value)
-                        ? (current.length > 1 ? current.filter((item) => item !== value) : current)
+                        ? current.filter((item) => item !== value)
                         : [...current, value])}
                       className={`inline-flex h-7 items-center gap-0.5 whitespace-nowrap rounded-full px-1 text-xs font-semibold transition hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-700 ${sharedWith.includes(value) ? 'text-primary' : 'text-text-secondary'}`}>
                       <Icon icon={sharedWith.includes(value) ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="shrink-0 text-sm" />{label}

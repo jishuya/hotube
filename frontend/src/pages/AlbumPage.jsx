@@ -73,6 +73,59 @@ const NewMediaBadge = () => (
   </span>
 );
 
+const SelectionActionScroller = ({ children }) => {
+  const scrollRef = useRef(null);
+  const [canScroll, setCanScroll] = useState({ left: false, right: false });
+
+  const updateScroll = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    setCanScroll({
+      left: element.scrollLeft > 1,
+      right: element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
+    });
+  }, []);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    const observer = new ResizeObserver(updateScroll);
+    observer.observe(element);
+    observer.observe(element.firstElementChild);
+    return () => observer.disconnect();
+  }, [updateScroll]);
+
+  const scroll = (direction) => {
+    const element = scrollRef.current;
+    element.scrollBy({
+      left: direction * element.clientWidth * 0.8,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
+  };
+
+  return (
+    <div className="relative px-7">
+      <div ref={scrollRef} onScroll={updateScroll} className="scrollbar-hide overflow-x-auto">
+        <div className="flex w-max min-w-full gap-0.5">{children}</div>
+      </div>
+      {[
+        ['left', -1, 'left-0', '이전 작업 보기'],
+        ['right', 1, 'right-0', '더 많은 작업 보기'],
+      ].map(([side, direction, position, label]) => canScroll[side] && (
+        <button
+          key={side}
+          type="button"
+          onClick={() => scroll(direction)}
+          className={`absolute ${position} top-1/2 flex h-11 w-6 -translate-y-1/2 items-center justify-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary`}
+          aria-label={label}
+          title={label}
+        >
+          <Icon icon={`mdi:chevron-${side}`} className="text-2xl" />
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const AlbumPage = () => {
   const monthBarRef = useRef(null);
   const noteDraftRef = useRef('');
@@ -119,6 +172,7 @@ const AlbumPage = () => {
   const [toasts, setToasts] = useState([]);
   const { user, isLiked, updateUser } = useAuth();
   const selectionMode = selectionActive;
+  const canShareCoupleOnly = ['admin', 'sub-admin'].includes(user?.role);
   const monthOptions = useMemo(() => buildMonthOptions(
     mediaDateRange.minDate,
     mediaDateRange.maxDate,
@@ -569,7 +623,7 @@ const AlbumPage = () => {
   };
 
   const saveSelectedFamilies = async () => {
-    if (!selectionFamilies.length) return;
+    if (!selectionFamilies.length && !canShareCoupleOnly) return;
     await runSelectedAction('family', (id) => updateVideo(id, { sharedWith: selectionFamilies }, user.id), '미디어의 공유 가족을 변경했습니다.');
     setSelectionDialog('');
     setReloadKey((current) => current + 1);
@@ -977,7 +1031,7 @@ const AlbumPage = () => {
             <span className="text-sm font-black text-primary">{selectedMediaIds.length}개 선택</span>
             <span className="size-10" aria-hidden="true" />
             </div>
-            <div className="scrollbar-hide flex gap-1 overflow-x-auto">
+            <SelectionActionScroller>
             {[
               ['album', 'mdi:folder-plus-outline', '앨범 만들기', openAlbumCreateModal],
               ['favorite', 'mdi:bookmark-plus-outline', '즐겨찾기', addSelectedFavorites],
@@ -987,7 +1041,7 @@ const AlbumPage = () => {
               ['download', 'mdi:download-outline', '다운로드', downloadSelectedMedia],
               ['tag', 'mdi:tag-plus-outline', '태그', () => setSelectionDialog('tag')],
             ].map(([key, icon, label, handler]) => (
-              <button key={key} type="button" onClick={handler} disabled={Boolean(selectionBusy) || !selectedMediaIds.length} className="flex min-w-[72px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-bold text-text-secondary transition hover:bg-primary/10 hover:text-primary disabled:opacity-40">
+              <button key={key} type="button" onClick={handler} disabled={Boolean(selectionBusy) || !selectedMediaIds.length} className="flex min-w-[60px] flex-1 flex-col items-center gap-0.5 whitespace-nowrap rounded-xl px-1.5 py-2 text-[11px] font-bold text-text-secondary transition hover:bg-primary/10 hover:text-primary disabled:opacity-40">
                 <Icon icon={selectionBusy === key ? 'mdi:loading' : icon} className={`text-xl ${selectionBusy === key ? 'animate-spin' : ''}`} />
                 {label}
               </button>
@@ -996,12 +1050,12 @@ const AlbumPage = () => {
               type="button"
               onClick={() => setSelectionDeleteOpen(true)}
               disabled={Boolean(selectionBusy) || !selectedMediaIds.length}
-              className="flex min-w-[72px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-bold text-error transition hover:bg-error/10 disabled:opacity-40"
+              className="flex min-w-[60px] flex-1 flex-col items-center gap-0.5 whitespace-nowrap rounded-xl px-1.5 py-2 text-[11px] font-bold text-error transition hover:bg-error/10 disabled:opacity-40"
             >
               <Icon icon={selectionBusy === 'delete' ? 'mdi:loading' : 'mdi:trash-can-outline'} className={`text-xl ${selectionBusy === 'delete' ? 'animate-spin' : ''}`} />
               삭제
             </button>
-            </div>
+            </SelectionActionScroller>
           </section>
         )}
         {albumCreateOpen && (
@@ -1108,15 +1162,26 @@ const AlbumPage = () => {
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">공유 가족 변경</h2>
                   <p className="mt-1 text-sm text-gray-600">선택한 미디어를 볼 수 있는 가족을 정해 주세요.</p>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {[['mom', '엄마가족'], ['dad', '아빠가족'], ['etc', '기타']].map(([value, label]) => {
+                  <div className={`mt-4 grid gap-2 ${canShareCoupleOnly ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {canShareCoupleOnly && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectionFamilies([])}
+                        disabled={Boolean(selectionBusy)}
+                        aria-pressed={selectionFamilies.length === 0}
+                        className={`rounded-xl border px-2 py-3 text-sm font-bold ${selectionFamilies.length === 0 ? 'border-primary bg-primary/10 text-primary' : 'border-border text-gray-600'}`}
+                      >
+                        <Icon icon={selectionFamilies.length === 0 ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline text-lg" />부부
+                      </button>
+                    )}
+                    {[['mom', '엄마가족'], ['dad', '아빠가족']].map(([value, label]) => {
                       const selected = selectionFamilies.includes(value);
-                      return <button key={value} type="button" onClick={() => setSelectionFamilies((current) => selected ? current.filter((item) => item !== value) : [...current, value])} className={`rounded-xl border px-2 py-3 text-sm font-bold ${selected ? 'border-primary bg-primary/10 text-primary' : 'border-border text-gray-600'}`}><Icon icon={selected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline text-lg" />{label}</button>;
+                      return <button key={value} type="button" disabled={Boolean(selectionBusy)} aria-pressed={selected} onClick={() => setSelectionFamilies((current) => selected ? current.filter((item) => item !== value) : [...current, value])} className={`rounded-xl border px-2 py-3 text-sm font-bold ${selected ? 'border-primary bg-primary/10 text-primary' : 'border-border text-gray-600'}`}><Icon icon={selected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'} className="mr-1 inline text-lg" />{label}</button>;
                     })}
                   </div>
                   <div className="mt-5 flex gap-2">
                     <button type="button" onClick={() => setSelectionDialog('')} disabled={Boolean(selectionBusy)} className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700">취소</button>
-                    <button type="button" onClick={saveSelectedFamilies} disabled={Boolean(selectionBusy) || !selectionFamilies.length} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white disabled:opacity-50">
+                    <button type="button" onClick={saveSelectedFamilies} disabled={Boolean(selectionBusy) || (!selectionFamilies.length && !canShareCoupleOnly)} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white disabled:opacity-50">
                       {selectionBusy === 'family' && <Icon icon="mdi:loading" className="animate-spin" />} 변경
                     </button>
                   </div>
