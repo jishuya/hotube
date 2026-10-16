@@ -1,7 +1,7 @@
 import MediaDescription from '../components/common/MediaDescription';
 import { parseTags } from '../utils/tags';
 import { getMediaCaption, parseCaption, removeCaptionTag } from '../utils/caption';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CommentSection from '../components/video/CommentSection';
@@ -267,7 +267,36 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
   );
 };
 
-const PhotoLightbox = ({ src, alt, previousSrc, nextSrc, onClose, onPrevious, onNext }) => {
+// Keep the preview visible until the original has downloaded and decoded.
+const FullscreenPhoto = ({ media, alt, loadOriginal, style }) => {
+  const [decodedSrc, setDecodedSrc] = useState(null);
+  const preview = media.preview || media.thumbnail || media.src;
+  const originalRef = useRef(null);
+  const [requested, setRequested] = useState(loadOriginal);
+  if (loadOriginal && !requested) setRequested(true);
+  return (
+    <div className="relative flex max-h-full max-w-full items-center justify-center" style={style}>
+      <img src={preview} alt={alt} draggable="false"
+        className="block max-h-[100dvh] max-w-full select-none object-contain" />
+      {requested && media.src !== preview && (
+        <img ref={originalRef} src={media.src} alt="" aria-hidden="true" draggable="false" decoding="async"
+          onLoad={async (event) => {
+            const image = event.currentTarget;
+            try {
+              await image.decode();
+              if (originalRef.current === image) setDecodedSrc(media.src);
+            } catch { /* Keep the preview if the original cannot be decoded. */ }
+          }}
+          className="absolute inset-0 h-full w-full select-none object-contain"
+          style={{ opacity: decodedSrc === media.src ? 1 : 0 }} />
+      )}
+    </div>
+  );
+};
+
+const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) => {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const allowPrefetch = !connection?.saveData && !/(^|-)2g$/.test(connection?.effectiveType || '');
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [slideX, setSlideX] = useState(0);
@@ -303,6 +332,23 @@ const PhotoLightbox = ({ src, alt, previousSrc, nextSrc, onClose, onPrevious, on
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
   const swipeRef = useRef(null);
+
+  const [activeId, setActiveId] = useState(media.id);
+  if (activeId !== media.id) {
+    setActiveId(media.id);
+    setSettling(false);
+    setSlideX(0);
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  }
+  useLayoutEffect(() => {
+    window.clearTimeout(timerRef.current);
+    navigationRef.current = null;
+    lockedRef.current = false;
+    pointersRef.current.clear();
+    gestureRef.current = null;
+    swipeRef.current = null;
+  }, [media.id]);
 
   const applyScale = useCallback((nextScale) => {
     const normalizedScale = Math.min(5, Math.max(1, nextScale));
@@ -438,11 +484,15 @@ const PhotoLightbox = ({ src, alt, previousSrc, nextSrc, onClose, onPrevious, on
           onTransitionEnd={(event) => { if (event.target === event.currentTarget) finishSlide(); }}
           style={{ transform: `translate3d(${slideX}px, 0, 0)`, transition: settling ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none' }}
         >
-          {[{ image: previousSrc, position: -1 }, { image: src, position: 0 }, { image: nextSrc, position: 1 }].map(({ image, position }) => image && (
-            <div key={position} className="absolute inset-0 flex items-center justify-center" style={{ left: `${position * 100}%`, width: '100%' }} aria-hidden={position !== 0 || undefined}>
-              <img src={image} alt={position === 0 ? alt : ''} draggable="false"
-                className="max-h-full max-w-full select-none object-contain will-change-transform"
-                style={position === 0 ? { transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` } : undefined} />
+          {[{ item: previous, position: -1 }, { item: media, position: 0 }, { item: next, position: 1 }].map(({ item, position }) => item && (
+            <div key={item.id} className="absolute inset-0 flex items-center justify-center" style={{ left: `${position * 100}%`, width: '100%' }} aria-hidden={position !== 0 || undefined}>
+              {item.type === 'photo' ? (
+                <FullscreenPhoto media={item} alt={position === 0 ? media.title : ''}
+                  loadOriginal={position === 0 || (position === 1 && allowPrefetch)}
+                  style={position === 0 ? { transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` } : undefined} />
+              ) : (
+                <img src={item.thumbnail || item.preview} alt="" draggable="false" className="max-h-full max-w-full object-contain" />
+              )}
             </div>
           ))}
         </div>
@@ -585,6 +635,11 @@ const MediaViewerPage = () => {
     internalMediaNavigationRef.current = false;
     if (!preserveCurrentViewer) setLoading(!hasUploadedMedia);
     setDetails(null);
+    // Internal navigation already has the album; details can refresh separately.
+    if (preserveCurrentViewer) {
+      void loadDetails();
+      return () => { active = false; };
+    }
     const loadMediaItems = Array.isArray(albumMediaIds) && albumMediaIds.length > 0
       ? getAllVideos({ ids: albumMediaIds.join(',') })
       : requestedDate
@@ -656,7 +711,7 @@ const MediaViewerPage = () => {
     if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return undefined;
     const resources = [];
     const preload = () => {
-      [previous, next].filter(Boolean).forEach((item) => {
+      [next, previous].filter(Boolean).forEach((item) => {
         const imageUrl = item.type === 'photo'
           ? item.preview || item.thumbnail
           : item.thumbnail;
@@ -668,13 +723,15 @@ const MediaViewerPage = () => {
         }
         if (item === next && item.type === 'video' && item.source === 'file' && item.src) {
           const video = document.createElement('video');
-          video.preload = 'metadata';
+          video.preload = viewerOpen ? 'auto' : 'metadata';
+          video.muted = true;
+          video.playsInline = true;
           video.src = item.src;
           resources.push(video);
         }
       });
     };
-    const timer = window.setTimeout(preload, 400);
+    const timer = window.setTimeout(preload, 0);
     return () => {
       window.clearTimeout(timer);
       resources.forEach((resource) => {
@@ -686,7 +743,7 @@ const MediaViewerPage = () => {
         }
       });
     };
-  }, [current, next, previous]);
+  }, [current, next, previous, viewerOpen]);
 
   useEffect(() => {
     if (!current || !user || user.watchedVideos?.includes(current.id)) return;
@@ -1161,11 +1218,9 @@ const MediaViewerPage = () => {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       {viewerOpen && current.type === 'photo' && (
         <PhotoLightbox
-          key={current.id}
-          previousSrc={previous?.type === 'photo' ? previous.src : previous?.thumbnail || previous?.preview}
-          nextSrc={next?.type === 'photo' ? next.src : next?.thumbnail || next?.preview}
-          src={current.src}
-          alt={current.title}
+          media={current}
+          previous={previous}
+          next={next}
           onClose={() => setViewerOpen(false)}
           onPrevious={previous ? () => moveTo(previous) : undefined}
           onNext={next ? () => moveTo(next) : undefined}
