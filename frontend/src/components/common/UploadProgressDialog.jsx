@@ -22,7 +22,7 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
   return createPortal(
     <dialog
       ref={dialogRef}
-      style={phase === 'preparing' ? { '--color-primary': '59 130 246' } : undefined}
+      style={phase === 'preparing' ? { '--color-primary': '180 130 45' } : undefined}
       aria-labelledby="upload-progress-title"
       onCancel={(event) => event.preventDefault()}
       onKeyDown={(event) => event.stopPropagation()}
@@ -45,7 +45,7 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
             <span aria-hidden="true" className="upload-progress-shimmer pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           </div>
         </div>
-        <button type="button" onClick={onStop} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">{stopLabel}</button>
+        <button type="button" onClick={onStop} className="mt-3 min-h-11 w-full rounded-lg border border-[#e2d8cb] bg-[#f2ece3] px-4 py-2.5 text-sm font-medium text-[#715b43] transition-colors hover:border-[#d3c3b0] hover:bg-[#e8ddcf] hover:text-[#59442f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">{stopLabel}</button>
       </div>
     </dialog>,
     document.body,
