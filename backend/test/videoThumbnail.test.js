@@ -104,7 +104,7 @@ test('H.264 MP4 영상은 브라우저 호환 영상으로 판별한다', async 
   assert.equal(await isPlaybackOptimizedVideo(videoPath), true);
 });
 
-for (const seconds of [89, 90, 90.1]) {
+for (const seconds of [119, 120, 120.1]) {
   test(`영상 업로드 길이 경계 검사: ${seconds}초`, async (t) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-duration-'));
     t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -114,7 +114,7 @@ for (const seconds of [89, 90, 90.1]) {
       '-i', `color=c=orange:s=16x16:r=10:d=${seconds}`,
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoPath,
     ]);
-    if (seconds <= 90) {
+    if (seconds <= 120) {
       assert.equal(await validateVideoDuration(videoPath), seconds);
     } else {
       await assert.rejects(validateVideoDuration(videoPath), { status: 400, code: 'VIDEO_TOO_LONG' });

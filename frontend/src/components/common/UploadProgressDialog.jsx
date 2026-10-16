@@ -24,6 +24,7 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
       ref={dialogRef}
       style={phase === 'preparing' ? { '--color-primary': '180 130 45' } : undefined}
       aria-labelledby="upload-progress-title"
+      aria-describedby={phase === 'uploading' ? 'upload-progress-description' : undefined}
       onCancel={(event) => event.preventDefault()}
       onKeyDown={(event) => event.stopPropagation()}
       className="fixed inset-0 m-auto max-h-[76dvh] w-[calc(100vw-3rem)] max-w-[240px] overflow-y-auto rounded-2xl border border-primary/10 bg-white p-4 text-gray-900 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
@@ -35,6 +36,9 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
           </div>
         </div>
         <h2 id="upload-progress-title" role="status" className="text-base font-semibold text-gray-900">{title}</h2>
+        {phase === 'uploading' && (
+          <p id="upload-progress-description" className="mt-2 text-xs leading-5 text-gray-500">업로드에 시간이 걸릴 수 있어요.<br />잠시만 기다려 주세요.</p>
+        )}
         <div className="mt-3 w-full rounded-xl border border-primary/10 bg-primary/[0.03] px-3 py-2.5">
           {progress !== null && <p className="mb-2 text-center text-sm font-semibold tabular-nums text-primary">{progress}<span className="ml-0.5 text-xs font-medium">%</span></p>}
           <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined} className="relative h-2 overflow-hidden rounded-full bg-primary/10 shadow-inner">

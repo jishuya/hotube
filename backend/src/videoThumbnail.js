@@ -72,8 +72,8 @@ const validateVideoDuration = async (inputPath) => {
   if (!info.streams?.some((stream) => stream.codec_type === 'video') || !Number.isFinite(duration) || duration <= 0) {
     throw new HttpError(400, '영상 길이를 확인할 수 없습니다. 다른 영상 파일을 선택해주세요.', 'INVALID_VIDEO_DURATION');
   }
-  if (duration > 90) {
-    throw new HttpError(400, '영상은 90초(1분 30초) 이하만 업로드할 수 있습니다.', 'VIDEO_TOO_LONG');
+  if (duration > 120) {
+    throw new HttpError(400, '영상은 120초(2분) 이하만 업로드할 수 있습니다.', 'VIDEO_TOO_LONG');
   }
   return duration;
 };

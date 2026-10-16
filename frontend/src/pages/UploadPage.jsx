@@ -23,7 +23,7 @@ import { listPendingUploadIds, getPendingUpload, removePendingUpload, savePendin
 const ITEMS_PER_PAGE = 30;
 const MAX_UPLOAD_FILES = 10;
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 150 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 300 * 1024 * 1024;
 const MAX_TOTAL_UPLOAD_SIZE = 500 * 1024 * 1024;
 const formatUploadSize = (bytes) => {
   const mb = bytes / (1024 * 1024);
@@ -435,7 +435,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           controller.signal.throwIfAborted();
           const duration = await readVideoDuration(file, controller.signal);
           controller.signal.throwIfAborted();
-          if (duration !== null && duration > 90) {
+          if (duration !== null && duration > 120) {
             longVideoCount += 1;
             continue;
           }
@@ -448,7 +448,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         totalSize += file.size;
       }
 
-      if (longVideoCount) selectionNotices.push(`영상 길이 초과 ${longVideoCount}개 (최대 1분 30초)`);
+      if (longVideoCount) selectionNotices.push(`영상 길이 초과 ${longVideoCount}개 (최대 2분)`);
       if (totalSizeExceededCount) selectionNotices.push(`전체 용량 초과 ${totalSizeExceededCount}개 (최대 500MB)`);
       if (countExcludedFiles.length) {
         selectionNotices.push(`개수 초과 ${countExcludedFiles.length}개 (최대 ${MAX_UPLOAD_FILES}개)`);
@@ -457,7 +457,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         selectionNotices.push(`사진 용량 초과 ${oversizedImages.length}개 (개당 최대 20MB)`);
       }
       if (oversizedVideos.length) {
-        selectionNotices.push(`영상 용량 초과 ${oversizedVideos.length}개 (개당 최대 150MB)`);
+        selectionNotices.push(`영상 용량 초과 ${oversizedVideos.length}개 (개당 최대 300MB)`);
       }
 
       if (!mediaFiles.length) {
@@ -795,7 +795,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                       >
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
                         <span className="mt-3 text-sm font-extrabold text-orange-700 dark:text-orange-300">
-                          <span>한 번에 최대 10개 첨부<br /><span className="text-xs font-semibold">영상은 개당 1분 30초 이하</span></span>
+                          <span>한 번에 최대 10개 첨부<br /><span className="text-xs font-semibold">영상은 개당 2분 이하</span></span>
                         </span>
                         {selectedFiles.length > 0 && (
                           <span className="mt-3 flex w-full max-w-xs flex-col gap-2 text-sm font-bold text-primary" aria-live="polite">
@@ -825,7 +825,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                           }}
                         />
                       </label>
-                      <p className="mt-2 text-center text-xs text-text-secondary">*개당 용량: 사진 20MB · 영상 150MB 이하</p>
+                      <p className="mt-2 text-center text-xs text-text-secondary">*개당 용량: 사진 20MB · 영상 300MB 이하</p>
 
                       {selectedFiles.length > 0 && (
                         <div className="mt-5 space-y-3">
@@ -1189,7 +1189,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
       {progressOpen && <UploadProgressDialog
         phase={preparing ? 'preparing' : 'uploading'}
-        title={preparing ? '파일 준비 중' : '업로드 중'}
+        title={preparing ? '파일 첨부 중...' : '업로드 중...'}
         percent={preparing ? preparationProgress : uploadPercent}
         onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
         stopLabel="취소"
