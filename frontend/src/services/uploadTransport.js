@@ -3,7 +3,7 @@ export const uploadRequest = (url, { method = 'POST', body, signal, onProgress, 
   const abort = () => xhr.abort();
   const finish = (error, result) => {
     signal?.removeEventListener('abort', abort);
-    if (error) reject(error);
+    if (error) reject(Object.assign(error, { requestUrl: url, requestMethod: method }));
     else resolve(result);
   };
   if (signal?.aborted) {
@@ -23,7 +23,7 @@ export const uploadRequest = (url, { method = 'POST', body, signal, onProgress, 
     error.code = xhr.response?.code;
     finish(error);
   };
-  xhr.onerror = () => finish(new TypeError('서버에 연결하지 못했습니다. 인터넷 연결을 확인해주세요.'));
+  xhr.onerror = () => finish(Object.assign(new TypeError('서버의 응답을 받지 못했습니다.'), { code: 'UPLOAD_NETWORK_ERROR' }));
   xhr.ontimeout = () => finish(Object.assign(new Error('연결이 지연됐어요. 다시 누르면 이어서 업로드합니다.'), { code: 'UPLOAD_TIMEOUT' }));
   xhr.onabort = () => finish(new DOMException('업로드를 중지했습니다.', 'AbortError'));
   signal?.addEventListener('abort', abort, { once: true });

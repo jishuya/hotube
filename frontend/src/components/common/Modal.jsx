@@ -9,6 +9,8 @@ const Modal = ({
   onConfirm,
   title,
   message,
+  children,
+  tone,
   type = 'alert', // 'alert' | 'confirm'
   confirmText = '확인',
   cancelText = '취소'
@@ -33,7 +35,8 @@ const Modal = ({
 
   if (!isOpen) return null;
 
-  const isError = title?.includes('실패') || message?.includes('실패');
+  const isError = tone ? tone === 'error' : title?.includes('실패') || message?.includes('실패');
+  const isWarning = tone === 'warning' || type === 'confirm';
 
   return createPortal(
     <div
@@ -50,7 +53,7 @@ const Modal = ({
           <div className={`flex size-10 items-center justify-center rounded-full ${
             isError
               ? 'bg-red-100 text-red-600'
-              : type === 'confirm'
+              : isWarning
                 ? 'bg-amber-100 text-amber-600'
                 : 'bg-primary/10 text-primary'
           }`}>
@@ -58,7 +61,7 @@ const Modal = ({
               icon={
                 isError
                   ? 'lucide:x-circle'
-                  : type === 'confirm'
+                  : isWarning
                     ? 'lucide:alert-triangle'
                     : 'lucide:check-circle'
               }
@@ -70,7 +73,7 @@ const Modal = ({
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           )}
 
-          <p className="max-w-full whitespace-pre-line break-words text-gray-600">{message}</p>
+          {children ?? <p className="max-w-full whitespace-pre-line break-words text-gray-600">{message}</p>}
 
           <div className="flex gap-3 w-full mt-2">
             {type === 'confirm' && (

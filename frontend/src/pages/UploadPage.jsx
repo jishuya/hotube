@@ -1,3 +1,4 @@
+import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
 import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
@@ -133,17 +134,6 @@ const extractYouTubeId = (url) => {
   return match?.[1] || '';
 };
 
-const getUploadFailureMessage = (error) => {
-  if (error.name === 'AbortError') return '업로드를 중지했어요. 다시 누르면 남은 파일을 이어서 올립니다.';
-  const message = String(error?.message || '').toLowerCase();
-  if (error instanceof TypeError || message.includes('failed to fetch') || message.includes('networkerror') || message.includes('load failed')) {
-    return '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 후 다시 시도해주세요.';
-  }
-  if (message.includes('too large') || message.includes('파일이 너무 큽니다')) {
-    return '파일 용량이 너무 커서 업로드하지 못했습니다. 더 작은 파일을 선택해주세요.';
-  }
-  return error.message || '업로드하지 못했습니다. 다시 누르면 이어서 올립니다.';
-};
 
 const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetDate = '', listOnly = false }) => {
   const { user } = useAuth();
@@ -187,6 +177,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
+  const [uploadFailureTitle, setUploadFailureTitle] = useState('업로드 중단');
   const [fileSelectionNotice, setFileSelectionNotice] = useState('');
   const [toasts, setToasts] = useState([]);
   const [resumeVersion, setResumeVersion] = useState(0);
@@ -609,6 +600,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setUploadProgress({ completed: 0, total: uploadSource === 'device' ? selectedFiles.length : 1 });
     setUploadError('');
     setUploadFailureMessage('');
+    setUploadFailureTitle('업로드 중단');
     try {
       const created = [];
       const duplicateFiles = [];
@@ -650,7 +642,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
               duplicateFiles.push(item.name);
               await removePendingUpload(pendingId).catch(() => {});
             } else {
-              failures.push(`${item.name}: ${getUploadFailureMessage(error)}`);
+              console.warn('파일 업로드 중단:', { name: item.name, code: error.code, status: error.status, requestUrl: error.requestUrl }, error);
+              failures.push(getUploadFailureMessage(error));
               if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
                 await removePendingUpload(pendingId).catch(() => {});
               }
@@ -670,7 +663,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             window.dispatchEvent(new Event('hotube:media-updated'));
             showToast(`${created.length}개 업로드 완료. 남은 파일만 다시 올릴 수 있어요.`, 'info');
           }
-          setUploadFailureMessage(failures.join('\n') || '업로드를 중지했어요. 남은 파일은 다시 누르면 이어서 올립니다.');
+          const feedback = getInterruptedUploadFeedback({
+            total: selectedFiles.length,
+            completed: created.length,
+            reason: failures[0],
+            cancelled: controller.signal.aborted,
+          });
+          setUploadFailureTitle(feedback.title);
+          setUploadFailureMessage(feedback.message);
           return;
         }
       } else if (youtubeId && youtubeInfo) {
@@ -1220,10 +1220,22 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       <Modal
         isOpen={!progressOpen && Boolean(uploadFailureMessage)}
         onClose={() => setUploadFailureMessage('')}
-        title="업로드 실패"
+        title={uploadFailureTitle}
+        tone={uploadFailureTitle === '업로드 안내' ? 'warning' : 'error'}
         message={uploadFailureMessage}
         confirmText="확인"
-      />
+      >
+        <div className="w-full min-w-0">
+          <p className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 text-sm font-semibold leading-6 text-primary">
+            {uploadFailureMessage.split('\n')[0]}
+          </p>
+          {uploadFailureMessage.includes('\n') && (
+            <div className="mt-3 space-y-1 text-xs leading-5 text-gray-500">
+              {uploadFailureMessage.split('\n').slice(1).map((line, index) => <p key={index} className="break-words">{line}</p>)}
+            </div>
+          )}
+        </div>
+      </Modal>
       <Modal
         isOpen={!progressOpen && Boolean(fileSelectionNotice)}
         onClose={() => setFileSelectionNotice('')}
