@@ -135,7 +135,7 @@ const DayAlbumContent = ({ date }) => {
                   aria-pressed={allSelected}
                   className="inline-flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-bold text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
                 >
-                  <span>전체 선택</span>
+                  <span className="text-xs">전체 선택</span>
                   <Icon
                     icon={allSelected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'}
                     className={`text-xl ${allSelected ? 'text-primary' : 'text-text-secondary'}`}

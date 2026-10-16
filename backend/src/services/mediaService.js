@@ -59,6 +59,7 @@ const listMedia = async ({
   limit = null,
   offset = 0,
   cursor = null,
+  sort = 'created',
 } = {}) => {
   const conditions = [];
   const params = [];
@@ -77,7 +78,11 @@ const listMedia = async ({
   if (mediaType === 'video') conditions.push("m.media_type IN ('video', 'youtube')");
   if (year) conditions.push(`m.year = ${addParam(year)}`);
   if (Array.isArray(ids) && ids.length > 0) conditions.push(`m.id = ANY(${addParam(ids)}::text[])`);
-  if (cursor) {
+  if (cursor && sort === 'date') {
+    const cursorDate = addParam(cursor.uploadedAt);
+    const cursorId = addParam(cursor.id);
+    conditions.push(`(COALESCE(m.uploaded_at, '1970-01-01'::date), m.id) < (${cursorDate}::date, ${cursorId}::text)`);
+  } else if (cursor) {
     const cursorCreatedAt = addParam(cursor.createdAt);
     const cursorId = addParam(cursor.id);
     conditions.push(`(COALESCE(m.created_at, 'epoch'::timestamptz), m.id) < (${cursorCreatedAt}::timestamptz, ${cursorId}::text)`);
@@ -155,7 +160,7 @@ const listMedia = async ({
     ${MEDIA_WITH_TAGS_SELECT}
     ${whereClause}
     GROUP BY m.id
-    ORDER BY COALESCE(m.created_at, 'epoch'::timestamptz) DESC, m.id DESC
+    ORDER BY ${sort === 'date' ? "COALESCE(m.uploaded_at, '1970-01-01'::date)" : "COALESCE(m.created_at, 'epoch'::timestamptz)"} DESC, m.id DESC
     ${limitClause}
   `, params);
 

@@ -29,10 +29,14 @@ const setPrivateMediaCache = (req, res) => {
     : 'private, max-age=86400');
 };
 
-const decodeMediaCursor = (value) => {
+const decodeMediaCursor = (value, sort = 'created') => {
   if (!value) return null;
   try {
     const decoded = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+    if (sort === 'date') {
+      if (!decoded?.id || !/^\d{4}-\d{2}-\d{2}$/.test(decoded.uploadedAt) || Number.isNaN(Date.parse(decoded.uploadedAt))) return null;
+      return { uploadedAt: decoded.uploadedAt, id: String(decoded.id) };
+    }
     if (!decoded?.createdAt || !decoded?.id || Number.isNaN(Date.parse(decoded.createdAt))) return null;
     return { createdAt: decoded.createdAt, id: String(decoded.id) };
   } catch {
@@ -40,7 +44,10 @@ const decodeMediaCursor = (value) => {
   }
 };
 
-const encodeMediaCursor = (row) => Buffer.from(JSON.stringify({
+const encodeMediaCursor = (row, sort = 'created') => Buffer.from(JSON.stringify(sort === 'date' ? {
+  uploadedAt: mapMediaRowToVideo(row).uploadedAt || '1970-01-01',
+  id: row.id,
+} : {
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : (row.created_at || '1970-01-01T00:00:00.000Z'),
   id: row.id,
 })).toString('base64url');
@@ -118,7 +125,11 @@ router.get("/getVideos", async (req, res) => {
     const limit = req.query.limit ? Number(req.query.limit) : null;
     const offset = req.query.offset ? Number(req.query.offset) : 0;
     const cursorPagination = req.query.pagination === 'cursor';
-    const cursor = decodeMediaCursor(req.query.cursor);
+    const sort = req.query.sort || 'created';
+    if (!['created', 'date'].includes(sort)) {
+      return res.status(400).json({ error: 'sort는 created 또는 date여야 합니다' });
+    }
+    const cursor = decodeMediaCursor(req.query.cursor, sort);
     const viewerId = req.query.viewerId || null;
     const viewer = viewerId ? await fetchUserById(viewerId) : null;
     if (!viewer) return res.status(401).json({ error: '로그인 정보가 필요합니다' });
@@ -170,13 +181,14 @@ router.get("/getVideos", async (req, res) => {
       limit: cursorPagination ? limit + 1 : limit,
       offset,
       cursor: cursorPagination ? cursor : null,
+      sort,
     });
     if (cursorPagination) {
       const hasMore = videos.length > limit;
       const pageRows = hasMore ? videos.slice(0, limit) : videos;
       return res.json({
         items: pageRows.map(mapMediaRowToVideo),
-        nextCursor: hasMore && pageRows.length ? encodeMediaCursor(pageRows[pageRows.length - 1]) : null,
+        nextCursor: hasMore && pageRows.length ? encodeMediaCursor(pageRows[pageRows.length - 1], sort) : null,
       });
     }
     res.json(videos.map(mapMediaRowToVideo));

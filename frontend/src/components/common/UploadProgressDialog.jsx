@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from '@iconify/react';
+import { Ring } from 'ldrs/react';
+import 'ldrs/react/Ring.css';
 
-export default function UploadProgressDialog({ title, message, percent, sizeLabel, onStop, stopLabel }) {
+export default function UploadProgressDialog({ title, percent, onStop, stopLabel }) {
   const dialogRef = useRef(null);
+  const progress = Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.floor(percent))) : null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -22,20 +24,19 @@ export default function UploadProgressDialog({ title, message, percent, sizeLabe
     <dialog
       ref={dialogRef}
       aria-labelledby="upload-progress-title"
-      aria-describedby="upload-progress-message"
       onCancel={(event) => event.preventDefault()}
       onKeyDown={(event) => event.stopPropagation()}
-      className="m-auto w-11/12 max-w-sm rounded-2xl border-0 bg-surface p-6 text-center text-text-primary shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      className="m-auto w-11/12 max-w-sm rounded-3xl border border-primary/10 bg-surface p-8 text-center text-text-primary shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
     >
-      <Icon icon="mdi:loading" className="mx-auto mb-4 animate-spin text-4xl text-primary" aria-hidden="true" />
-      <h2 id="upload-progress-title" className="text-lg font-bold">{title}</h2>
-      <p id="upload-progress-message" className="mt-2 break-words text-sm text-text-secondary">{message}</p>
-      <div className="mt-5" role="status">
-        <progress max={100} value={percent ?? undefined} aria-label={title} className="block h-3 w-full accent-primary" />
-        {percent !== null && <p className="mt-2 text-lg font-bold tabular-nums text-primary">{percent}%</p>}
-        {sizeLabel && <p className="mt-1 text-xs tabular-nums text-text-secondary">{sizeLabel}</p>}
+      <div className="mx-auto mb-6 flex size-24 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden="true">
+        <div className="motion-reduce:hidden"><Ring size={56} stroke={4} speed={1.8} color="currentColor" /></div>
+        <div className="hidden size-14 rounded-full border-4 border-primary/20 border-t-primary motion-reduce:block" />
       </div>
-      <button type="button" onClick={onStop} className="mt-5 min-h-10 px-3 text-xs text-text-secondary underline">{stopLabel}</button>
+      <h2 id="upload-progress-title" role="status" className="text-lg font-bold">{title}</h2>
+      <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined} className="mt-3 text-2xl font-bold tabular-nums text-primary">
+        {progress === null ? <span aria-hidden="true">…</span> : `${progress}%`}
+      </div>
+      <button type="button" onClick={onStop} className="mt-6 min-h-11 rounded-full border border-border px-5 text-sm text-text-secondary transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{stopLabel}</button>
     </dialog>,
     document.body,
   );

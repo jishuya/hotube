@@ -548,7 +548,7 @@ const AlbumPage = () => {
                         aria-pressed={allDateMediaSelected}
                         title="이 날짜 전체 선택"
                       >
-                        <span>전체 선택</span>
+                        <span className="text-xs">전체 선택</span>
                         <Icon
                           icon={allDateMediaSelected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'}
                           className={`text-xl ${allDateMediaSelected ? 'text-primary' : 'text-text-secondary'}`}

@@ -267,9 +267,39 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
   );
 };
 
-const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
+const PhotoLightbox = ({ src, alt, previousSrc, nextSrc, onClose, onPrevious, onNext }) => {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [slideX, setSlideX] = useState(0);
+  const [settling, setSettling] = useState(false);
+  const viewportRef = useRef(null);
+  const navigationRef = useRef(null);
+  const timerRef = useRef(null);
+  const lockedRef = useRef(false);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  const finishSlide = useCallback(() => {
+    window.clearTimeout(timerRef.current);
+    const navigate = navigationRef.current;
+    navigationRef.current = null;
+    if (navigate) navigate();
+    else { lockedRef.current = false; setSettling(false); }
+  }, []);
+  const slideTo = useCallback((direction) => {
+    if (lockedRef.current) return;
+    const navigate = direction < 0 ? onNext : onPrevious;
+    if (!navigate) return;
+    lockedRef.current = true;
+    navigationRef.current = navigate;
+    setSettling(true);
+    setSlideX(direction * (viewportRef.current?.clientWidth || window.innerWidth));
+    timerRef.current = window.setTimeout(finishSlide, 280);
+  }, [finishSlide, onNext, onPrevious]);
+  const resetSlide = () => {
+    lockedRef.current = true;
+    setSettling(true);
+    setSlideX(0);
+    timerRef.current = window.setTimeout(finishSlide, 280);
+  };
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
   const swipeRef = useRef(null);
@@ -287,15 +317,15 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
       if (event.key === 'Escape') onClose();
       if (event.key === '+' || event.key === '=') applyScale(scale + 0.5);
       if (event.key === '-') applyScale(scale - 0.5);
-      if (scale === 1 && event.key === 'ArrowLeft') onPrevious?.();
-      if (scale === 1 && event.key === 'ArrowRight') onNext?.();
+      if (scale === 1 && event.key === 'ArrowLeft') slideTo(1);
+      if (scale === 1 && event.key === 'ArrowRight') slideTo(-1);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [applyScale, onClose, onNext, onPrevious, scale]);
+  }, [applyScale, onClose, scale, slideTo]);
 
   const getPointerDistance = () => {
     const points = [...pointersRef.current.values()];
@@ -303,14 +333,16 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
   };
 
   const handlePointerDown = (event) => {
+    if (lockedRef.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointersRef.current.size === 2) {
       swipeRef.current = null;
+      setSlideX(0);
       gestureRef.current = { distance: getPointerDistance(), scale };
     } else {
       swipeRef.current = scale === 1
-        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now() }
         : null;
       gestureRef.current = { x: event.clientX, y: event.clientY, offset };
     }
@@ -322,6 +354,13 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
     if (pointersRef.current.size === 2) {
       const distance = getPointerDistance();
       if (gestureRef.current?.distance) applyScale(gestureRef.current.scale * (distance / gestureRef.current.distance));
+    } else if (scale === 1 && swipeRef.current) {
+      const dx = event.clientX - swipeRef.current.x;
+      const dy = event.clientY - swipeRef.current.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        const atEdge = dx > 0 ? !onPrevious : !onNext;
+        setSlideX(atEdge ? dx * 0.22 : dx);
+      }
     } else if (scale > 1 && gestureRef.current?.x !== undefined) {
       setOffset({
         x: gestureRef.current.offset.x + event.clientX - gestureRef.current.x,
@@ -342,10 +381,13 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
     if (swipe?.pointerId === event.pointerId && scale === 1) {
       const deltaX = event.clientX - swipe.x;
       const deltaY = event.clientY - swipe.y;
-      if (Math.abs(deltaX) >= 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        if (deltaX < 0) onNext?.();
-        else onPrevious?.();
-      }
+      const width = viewportRef.current?.clientWidth || window.innerWidth;
+      const velocity = Math.abs(deltaX) / Math.max(1, performance.now() - swipe.time);
+      const canMove = deltaX < 0 ? onNext : onPrevious;
+      if (canMove && Math.abs(deltaX) > Math.abs(deltaY)
+        && (Math.abs(deltaX) > width * 0.2 || (Math.abs(deltaX) > 30 && velocity > 0.5))) {
+        slideTo(deltaX < 0 ? -1 : 1);
+      } else resetSlide();
     }
     swipeRef.current = null;
   };
@@ -354,6 +396,7 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
     pointersRef.current.delete(event.pointerId);
     gestureRef.current = null;
     swipeRef.current = null;
+    resetSlide();
   };
 
   return (
@@ -368,17 +411,18 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
         <button type="button" onClick={() => applyScale(1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" aria-label="원래 크기"><Icon icon="mdi:restore" /></button>
       </div>
       {onPrevious && scale === 1 && (
-        <button type="button" onClick={onPrevious} className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
+        <button type="button" onClick={() => slideTo(1)} className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
           <Icon icon="mdi:chevron-left" />
         </button>
       )}
       {onNext && scale === 1 && (
-        <button type="button" onClick={onNext} className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
+        <button type="button" onClick={() => slideTo(-1)} className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
           <Icon icon="mdi:chevron-right" />
         </button>
       )}
       <div
-        className={`flex h-full w-full items-center justify-center overflow-hidden touch-none ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+        ref={viewportRef}
+        className={`relative flex h-full w-full items-center justify-center overflow-hidden touch-none ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
         onWheel={(event) => {
           event.preventDefault();
           applyScale(scale + (event.deltaY < 0 ? 0.25 : -0.25));
@@ -389,13 +433,19 @@ const PhotoLightbox = ({ src, alt, onClose, onPrevious, onNext }) => {
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerCancel}
       >
-        <img
-          src={src}
-          alt={alt}
-          draggable="false"
-          className="max-h-full max-w-full select-none object-contain will-change-transform"
-          style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` }}
-        />
+        <div
+          className="relative h-full w-full motion-reduce:!duration-0"
+          onTransitionEnd={(event) => { if (event.target === event.currentTarget) finishSlide(); }}
+          style={{ transform: `translate3d(${slideX}px, 0, 0)`, transition: settling ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none' }}
+        >
+          {[{ image: previousSrc, position: -1 }, { image: src, position: 0 }, { image: nextSrc, position: 1 }].map(({ image, position }) => image && (
+            <div key={position} className="absolute inset-0 flex items-center justify-center" style={{ left: `${position * 100}%`, width: '100%' }} aria-hidden={position !== 0 || undefined}>
+              <img src={image} alt={position === 0 ? alt : ''} draggable="false"
+                className="max-h-full max-w-full select-none object-contain will-change-transform"
+                style={position === 0 ? { transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` } : undefined} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -951,7 +1001,7 @@ const MediaViewerPage = () => {
               <div className="mx-4 mb-1 mt-3 flex items-center justify-between gap-2">
                 <button type="button" onClick={() => { if (editingDescription) { saveDescription(); } else { resetDescriptionDraft(current); setDescriptionSaveStatus(''); setEditingDescription(true); } }} disabled={Boolean(busyAction)} aria-expanded={editingDescription} aria-controls="media-description-input" className="inline-flex items-center gap-1 text-xs font-semibold text-text-secondary hover:text-primary disabled:opacity-50">
                   <Icon icon="mdi:pencil-box-outline" className="text-base" aria-hidden="true" />
-                  {descriptionLabel}
+                  설명추가
                 </button>
                 {editingDescription && (
                   <div className="flex items-center gap-2">
@@ -1102,6 +1152,9 @@ const MediaViewerPage = () => {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       {viewerOpen && current.type === 'photo' && (
         <PhotoLightbox
+          key={current.id}
+          previousSrc={previous?.type === 'photo' ? previous.src : previous?.thumbnail || previous?.preview}
+          nextSrc={next?.type === 'photo' ? next.src : next?.thumbnail || next?.preview}
           src={current.src}
           alt={current.title}
           onClose={() => setViewerOpen(false)}

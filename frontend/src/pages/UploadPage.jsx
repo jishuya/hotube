@@ -174,7 +174,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [preparing, setPreparing] = useState(false);
-  const [preparationMessage, setPreparationMessage] = useState('');
   const [preparationProgress, setPreparationProgress] = useState(0);
   const [transfer, setTransfer] = useState(null);
   const [batchBytes, setBatchBytes] = useState({ total: 0, completed: 0 });
@@ -400,7 +399,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setPreparationProgress(0);
     const controller = new AbortController();
     operationControllerRef.current = controller;
-    setPreparationMessage('파일을 확인하고 있어요…');
     const newPreviewUrls = [];
     let selectionCommitted = false;
     try {
@@ -428,7 +426,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       for (const [index, file] of countEligibleFiles.entries()) {
         setPreparationProgress(Math.floor(index / countEligibleFiles.length * 10));
         if (file.type.startsWith('video/')) {
-          setPreparationMessage(`영상 길이 확인 중 · ${file.name}`);
           controller.signal.throwIfAborted();
           const duration = await readVideoDuration(file, controller.signal);
           controller.signal.throwIfAborted();
@@ -470,7 +467,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         const totalBytes = mediaFiles.reduce((sum, file) => sum + file.size, 0);
         let checkedBytes = 0;
         for (const file of mediaFiles) {
-          setPreparationMessage(`파일 확인 중 · ${file.name}`);
           const contentHash = await hashFile(file, (loaded) => {
             setPreparationProgress(10 + Math.floor(Math.min(1, (checkedBytes + loaded) / (totalBytes || 1)) * 80));
           }, controller.signal);
@@ -478,7 +474,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           hashedFiles.push({ file, contentHash });
         }
         setPreparationProgress(90);
-        setPreparationMessage('중복 파일을 확인하고 있어요…');
         const duplicateHashes = new Set(await checkMediaDuplicates(hashedFiles.map(({ contentHash }) => contentHash), controller.signal));
         const selectedHashes = new Set(selectedFiles.map((item) => item.contentHash).filter(Boolean));
         const acceptedHashes = new Set();
@@ -506,10 +501,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       const nextFiles = [];
       for (const { file, contentHash } of hashedFiles) {
         controller.signal.throwIfAborted();
-        setPreparationMessage(`촬영일 확인 중 · ${file.name}`);
         const mediaDate = await getMediaDate(file);
         controller.signal.throwIfAborted();
-        const preview = file.type.startsWith('image/') ? await createUploadPreview(file) : null;
+        const preview = file.type.startsWith('image/') ? await createUploadPreview(file) : URL.createObjectURL(file);
         if (preview) { previewUrlsRef.current.add(preview); newPreviewUrls.push(preview); }
         controller.signal.throwIfAborted();
         nextFiles.push({
@@ -530,7 +524,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       preparingRef.current = false;
       operationControllerRef.current = null;
       setPreparing(false);
-      setPreparationMessage('');
     }
   };
 
@@ -830,15 +823,20 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                           <div>
                             <p className="text-sm font-bold">선택한 파일</p>
                           </div>
-                          <div className="flex gap-2 overflow-x-auto pb-1">
+                          <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                             {selectedFiles.map((item, index) => (
-                              <div key={`${item.name}-${index}`} className="relative w-24 shrink-0 overflow-hidden rounded-xl border-2 border-transparent bg-gray-100 p-1 text-left">
-                                {item.type !== 'video' && (
-                                  <span className="block aspect-square overflow-hidden rounded-lg bg-black/5">
+                              <div key={`${item.name}-${index}`} className="relative min-w-0 overflow-hidden rounded-lg bg-gray-100 p-0.5 text-left" title={item.name}>
+                                  <span className="relative block aspect-square overflow-hidden rounded-md bg-black/5">
+                                    {item.type === 'video' ? (
+                                      <>
+                                        <VideoFramePreview src={item.preview} className="h-full w-full object-cover" />
+                                        <Icon icon="mdi:play-circle" className="pointer-events-none absolute bottom-1 left-1 text-sm text-white drop-shadow" aria-hidden="true" />
+                                      </>
+                                    ) : (
                                     <img src={item.preview} alt={item.name} className="h-full w-full object-cover" />
+                                    )}
                                   </span>
-                                )}
-                                <span className="mt-1 block truncate px-1 text-xs">{item.name}</span>
+                                <span className="mt-0.5 block truncate px-0.5 text-[10px] leading-4">{item.name}</span>
                                 <span
                                   role="button"
                                   tabIndex={0}
@@ -853,7 +851,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                                       removeSelectedFile(index);
                                     }
                                   }}
-                                  className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-black/60 text-white"
+                                  className="absolute right-0.5 top-0.5 flex size-6 items-center justify-center rounded-full bg-black/60 text-white"
                                   aria-label={`${item.name} 제거`}
                                 >
                                   <Icon icon="mdi:close" />
@@ -927,10 +925,12 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                     onChange={setDate}
                   />
                 )}
-                <label className={uploadSource === 'device' ? 'sm:col-span-2' : ''}>
-                  <span className={uploadSource === 'device' ? 'sr-only' : 'mb-2 block text-sm font-bold'}>{uploadSource === 'device' ? '모든 파일에 적용할 태그' : '태그'}</span>
-                  <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder={uploadSource === 'device' ? '#돌잔치 #수영장 #첫응가' : '#가족 #여행 #생일'} />
-                </label>
+                {uploadSource !== 'device' && (
+                  <label>
+                    <span className="mb-2 block text-sm font-bold">태그</span>
+                    <input value={tags} onChange={(event) => setTags(event.target.value)} className="h-11 w-full rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary" placeholder="#가족 #여행 #생일" />
+                  </label>
+                )}
                 <fieldset className="sm:col-span-2">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <legend className="text-sm font-bold">공유 가족</legend>
@@ -1179,12 +1179,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       </main>
 
       {progressOpen && <UploadProgressDialog
-        title={preparing ? '파일 확인 중' : `업로드 중 · ${uploadProgress.completed}/${uploadProgress.total}개 완료`}
-        message={preparing ? preparationMessage : uploadPercent === 100 ? '전송 완료 · 마무리 중…' : transfer?.phase === 'retrying' ? '연결을 다시 시도하고 있어요…' : '업로드가 끝날 때까지 앱을 열어두세요.'}
+        title={preparing ? '영상 준비 중' : '업로드 중'}
         percent={preparing ? preparationProgress : uploadPercent}
-        sizeLabel={!preparing && batchBytes.total > 0 ? `${formatUploadSize(transferredBytes)} / ${formatUploadSize(batchBytes.total)}` : ''}
         onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
-        stopLabel={preparing ? '파일 확인 취소' : '업로드 중지'}
+        stopLabel="취소"
       />}
 
       {editingUpload && createPortal((

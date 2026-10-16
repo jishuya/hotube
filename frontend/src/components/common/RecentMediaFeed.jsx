@@ -121,7 +121,7 @@ export default function RecentMediaFeed({ returnTo }) {
     setLoading(true);
     setError(false);
     try {
-      const page = await getMediaPage({ limit: PAGE_SIZE, source: 'file' }, state.cursor);
+      const page = await getMediaPage({ limit: PAGE_SIZE, source: 'file', sort: 'date' }, state.cursor);
       if (generation !== request.current.generation) return;
       const incoming = page.items.map(toMemoryMedia);
       setItems((previous) => {
