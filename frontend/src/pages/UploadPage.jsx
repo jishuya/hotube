@@ -1179,6 +1179,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       </main>
 
       {progressOpen && <UploadProgressDialog
+        phase={preparing ? 'preparing' : 'uploading'}
         title={preparing ? '파일 준비 중' : '업로드 중'}
         percent={preparing ? preparationProgress : uploadPercent}
         onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
