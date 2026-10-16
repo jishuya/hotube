@@ -1,3 +1,4 @@
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
@@ -9,13 +10,12 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
   useEffect(() => {
     const dialog = dialogRef.current;
     const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
+    const unlockScroll = lockBodyScroll();
     dialog.showModal();
-    document.body.style.overflow = 'hidden';
     return () => {
       dialog.close();
-      document.body.style.overflow = previousOverflow;
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+      unlockScroll();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, []);
 

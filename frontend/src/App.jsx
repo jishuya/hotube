@@ -1,8 +1,11 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { loadMediaViewerPage } from './utils/loadMediaViewerPage';
+import { lockBodyScroll } from './utils/bodyScrollLock';
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import BottomNavigationLayout from './components/common/BottomNavigationLayout';
+import PageErrorBoundary from './components/common/PageErrorBoundary';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const VideoPage = lazy(() => import('./pages/VideoPage'));
@@ -14,7 +17,7 @@ const MyAlbumPage = lazy(() => import('./pages/MyAlbumPage'));
 const MyAlbumDetailPage = lazy(() => import('./pages/MyAlbumDetailPage'));
 const MyPage = lazy(() => import('./pages/MyPage'));
 const DayAlbumPage = lazy(() => import('./pages/DayAlbumPage'));
-const MediaViewerPage = lazy(() => import('./pages/MediaViewerPage'));
+const MediaViewerPage = lazy(loadMediaViewerPage);
 const SupportManagementPage = lazy(() => import('./pages/SupportManagementPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
@@ -62,6 +65,12 @@ const AdminRoute = ({ children }) => {
 function AppRoutes() {
   const location = useLocation();
   const backgroundLocation = location.state?.backgroundLocation;
+
+  useLayoutEffect(() => {
+    if (location.pathname.startsWith('/media/')) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [location.pathname]);
 
   return (
     <>
@@ -161,14 +170,13 @@ const UploadOverlay = ({ targetDate }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
     const handleEscape = (event) => {
       if (event.key === 'Escape') navigate(-1);
     };
     window.addEventListener('keydown', handleEscape);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockScroll();
       window.removeEventListener('keydown', handleEscape);
     };
   }, [navigate]);
@@ -195,9 +203,11 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Suspense fallback={<PageLoadingFallback />}>
-          <AppRoutes />
-        </Suspense>
+        <PageErrorBoundary>
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AppRoutes />
+          </Suspense>
+        </PageErrorBoundary>
       </AuthProvider>
     </Router>
   );

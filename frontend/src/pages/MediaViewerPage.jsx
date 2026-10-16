@@ -463,7 +463,11 @@ const MediaViewerPage = () => {
   const commentScrollHandledRef = useRef('');
   const detailsRequestRef = useRef(0);
   const { user, isLiked, toggleLikeLocal, markWatchedLocal } = useAuth();
-  const [mediaItems, setMediaItems] = useState([]);
+  const uploadedMediaItems = useMemo(() => (
+    Array.isArray(location.state?.uploadedMediaItems) ? location.state.uploadedMediaItems : []
+  ), [location.state?.uploadedMediaItems]);
+  const hasUploadedMedia = uploadedMediaItems.some((item) => item.id === mediaId);
+  const [mediaItems, setMediaItems] = useState(uploadedMediaItems);
   const [details, setDetails] = useState(null);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
@@ -490,7 +494,7 @@ const MediaViewerPage = () => {
     setAddingTag(false);
   };
   const [descriptionDeleteOpen, setDescriptionDeleteOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasUploadedMedia);
   const [busyAction, setBusyAction] = useState('');
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState('');
@@ -579,7 +583,7 @@ const MediaViewerPage = () => {
     let active = true;
     const preserveCurrentViewer = internalMediaNavigationRef.current;
     internalMediaNavigationRef.current = false;
-    if (!preserveCurrentViewer) setLoading(true);
+    if (!preserveCurrentViewer) setLoading(!hasUploadedMedia);
     setDetails(null);
     const loadMediaItems = Array.isArray(albumMediaIds) && albumMediaIds.length > 0
       ? getAllVideos({ ids: albumMediaIds.join(',') })
@@ -588,7 +592,12 @@ const MediaViewerPage = () => {
         : getVideoById(mediaId).then((item) => [item]);
     loadMediaItems
       .then((allMedia) => {
-        if (active) setMediaItems(allMedia.map(toMemoryMedia));
+        if (active) {
+          const fetched = allMedia.map(toMemoryMedia);
+          // A freshly uploaded item can be absent from a stale list response.
+          const ids = new Set(fetched.map((item) => item.id));
+          setMediaItems([...fetched, ...uploadedMediaItems.filter((item) => !ids.has(item.id))]);
+        }
       })
       .catch((loadError) => {
         if (active) showToast('error', loadError.message);
@@ -600,7 +609,7 @@ const MediaViewerPage = () => {
     return () => {
       active = false;
     };
-  }, [albumMediaIds, loadDetails, mediaId, requestedDate, showToast]);
+  }, [albumMediaIds, hasUploadedMedia, loadDetails, mediaId, requestedDate, showToast, uploadedMediaItems]);
 
   useEffect(() => {
     if (!focusComments) {

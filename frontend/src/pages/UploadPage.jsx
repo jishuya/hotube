@@ -3,7 +3,8 @@ import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
 import { getDefaultSharedWith } from '../utils/familySharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { loadMediaViewerPage } from '../utils/loadMediaViewerPage';
+import { createPortal, flushSync } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import { parse as parseExif } from 'exifr';
@@ -206,6 +207,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const transferredBytes = Math.min(batchBytes.total, batchBytes.completed + (transfer?.loaded || 0));
   const uploadPercent = batchBytes.total > 0 ? Math.floor(transferredBytes / batchBytes.total * 100) : null;
   const progressOpen = preparing || uploading;
+
+  useEffect(() => {
+    // Fetch the next screen while the user selects and uploads files.
+    void loadMediaViewerPage().catch(() => {});
+  }, []);
   const hasDateFilter = Boolean(filterDateFrom || filterDateTo);
   const dateFilterError = filterDateFrom && filterDateTo && filterDateFrom > filterDateTo
     ? '종료일은 시작일보다 빠를 수 없어요.'
@@ -701,10 +707,13 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       const uploadedMonth = uploadedMedia.date?.slice(0, 7);
       const returnTo = uploadedMonth ? `/calendar?month=${uploadedMonth}` : '/calendar';
       const processingVideoCount = created.filter((media) => media.processingStatus === 'processing').length;
+      // Remove the native modal and release its scroll lock before changing routes.
+      flushSync(() => setUploading(false));
       navigate(`/media/${uploadedMedia.id}?date=${encodeURIComponent(uploadedMedia.date || '')}`, {
         replace: true,
         state: {
           returnTo,
+          uploadedMediaItems: created,
           uploadSuccessMessage: `${created.length}개의 미디어가 업로드되었습니다.${processingVideoCount ? ` 영상 ${processingVideoCount}개는 재생 준비 중입니다.` : ''}${duplicateFiles.length ? ` 중복 파일 ${duplicateFiles.length}개는 제외했어요: ${duplicateFiles.join(', ')}` : ''}`,
         },
       });

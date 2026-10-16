@@ -1,3 +1,4 @@
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
@@ -14,10 +15,9 @@ const Modal = ({
 }) => {
   useEffect(() => {
     if (!isOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockScroll();
     };
   }, [isOpen]);
 
