@@ -183,7 +183,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const preparingRef = useRef(false);
   const manuallyPausedRef = useRef(false);
   const previewUrlsRef = useRef(new Set());
-  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
+  const [, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
   const [fileSelectionNotice, setFileSelectionNotice] = useState('');
@@ -984,9 +984,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
               )}
               {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
               <button type="submit" disabled={uploading || preparing || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
-                <Icon icon={uploading ? 'mdi:loading' : 'mdi:cloud-upload'} className={`text-xl ${uploading ? 'animate-spin' : ''}`} />
+                {!uploading && !preparing && <Icon icon="mdi:cloud-upload" className="text-xl" />}
                 {uploading
-                  ? `업로드 중 · ${uploadProgress.completed}/${uploadProgress.total}`
+                  ? `파일 업로드 중${uploadPercent === null ? '' : ` · ${uploadPercent}%`}`
                   : preparing ? `파일 확인 중 · ${preparationProgress}%` : '업로드하기'}
               </button>
             </form>
@@ -1179,7 +1179,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       </main>
 
       {progressOpen && <UploadProgressDialog
-        title={preparing ? '영상 준비 중' : '업로드 중'}
+        title="파일 업로드 중"
         percent={preparing ? preparationProgress : uploadPercent}
         onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
         stopLabel="취소"

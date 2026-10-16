@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Ring } from 'ldrs/react';
-import 'ldrs/react/Ring.css';
 
 export default function UploadProgressDialog({ title, percent, onStop, stopLabel }) {
   const dialogRef = useRef(null);
@@ -26,17 +24,22 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
       aria-labelledby="upload-progress-title"
       onCancel={(event) => event.preventDefault()}
       onKeyDown={(event) => event.stopPropagation()}
-      className="m-auto w-11/12 max-w-sm rounded-3xl border border-primary/10 bg-surface p-8 text-center text-text-primary shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      className="relative m-auto w-11/12 max-w-sm overflow-hidden rounded-3xl border border-primary/15 bg-surface p-8 text-center text-text-primary shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-md"
     >
-      <div className="mx-auto mb-6 flex size-24 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden="true">
-        <div className="motion-reduce:hidden"><Ring size={56} stroke={4} speed={1.8} color="currentColor" /></div>
-        <div className="hidden size-14 rounded-full border-4 border-primary/20 border-t-primary motion-reduce:block" />
-      </div>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-primary/15 to-transparent" />
+      <div className="relative">
       <h2 id="upload-progress-title" role="status" className="text-lg font-bold">{title}</h2>
-      <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined} className="mt-3 text-2xl font-bold tabular-nums text-primary">
-        {progress === null ? <span aria-hidden="true">…</span> : `${progress}%`}
+      <p className="my-6 text-5xl font-bold tracking-tight tabular-nums text-primary">
+        {progress === null ? <span aria-hidden="true">…</span> : <>{progress}<span className="ml-1 text-xl font-medium text-primary/60">%</span></>}
+      </p>
+      <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined} className="h-2.5 overflow-hidden rounded-full bg-primary/10 ring-1 ring-inset ring-primary/5">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r from-primary/65 to-primary shadow-[0_0_12px_rgb(var(--color-primary)/0.3)] transition-[width] duration-300 ease-out motion-reduce:transition-none ${progress === null ? 'w-1/3 animate-pulse motion-reduce:animate-none' : ''}`}
+          style={progress === null ? undefined : { width: `${progress}%` }}
+        />
       </div>
-      <button type="button" onClick={onStop} className="mt-6 min-h-11 rounded-full border border-border px-5 text-sm text-text-secondary transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{stopLabel}</button>
+      <button type="button" onClick={onStop} className="mt-7 min-h-11 rounded-full bg-background px-7 text-sm font-medium text-text-secondary transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{stopLabel}</button>
+      </div>
     </dialog>,
     document.body,
   );
