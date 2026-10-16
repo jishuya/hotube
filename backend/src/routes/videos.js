@@ -125,7 +125,7 @@ router.get("/getVideos", async (req, res) => {
     const limit = req.query.limit ? Number(req.query.limit) : null;
     const offset = req.query.offset ? Number(req.query.offset) : 0;
     const cursorPagination = req.query.pagination === 'cursor';
-    const sort = req.query.sort || 'created';
+    const sort = req.query.sort || (source === 'file' ? 'date' : 'created');
     if (!['created', 'date'].includes(sort)) {
       return res.status(400).json({ error: 'sort는 created 또는 date여야 합니다' });
     }
