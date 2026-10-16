@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes upload-progress-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.upload-progress-shimmer {
+  animation: upload-progress-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-progress-shimmer {
+    animation: none;
+    display: none;
+  }
+}
+
 /* Child profile birthday picker */
 .rdp-root.child-birthday-picker {
   --rdp-accent-color: rgb(var(--color-primary)) !important;
