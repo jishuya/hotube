@@ -1,3 +1,4 @@
+import MediaThumbnail from '../components/common/MediaThumbnail';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
@@ -1142,11 +1143,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                   {uploads.map((item) => (
                     <article key={item.id} className="flex items-center gap-3 p-3 transition hover:bg-gray-50 sm:px-4">
                       <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-black/5 sm:size-20">
-                        {item.type === 'video' && item.source === 'file' && !item.thumbnail ? (
-                          <VideoFramePreview src={item.src} className="h-full w-full object-cover" />
-                        ) : (
-                          <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover" />
-                        )}
+                        <MediaThumbnail media={item} />
                         {item.type === 'video' && <VideoDurationBadge media={item} />}
                         {item.source === 'youtube' && <Icon icon="mdi:youtube" className="absolute top-1 left-1 text-lg text-error drop-shadow" />}
                       </div>

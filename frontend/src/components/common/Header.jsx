@@ -1,3 +1,4 @@
+import MediaThumbnail from './MediaThumbnail';
 import VideoDurationBadge from './VideoDurationBadge';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -469,7 +470,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                             >
                               <span className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-black/5">
                                 {media.thumbnail || media.type === 'photo' ? (
-                                  <img src={media.thumbnail || media.src} alt="" className="size-full object-cover" />
+                                  <MediaThumbnail media={media} alt="" />
                                 ) : (
                                   <Icon icon="mdi:video-outline" className="absolute inset-0 m-auto text-2xl text-primary" />
                                 )}

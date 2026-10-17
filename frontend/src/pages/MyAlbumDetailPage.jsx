@@ -1,3 +1,4 @@
+import MediaThumbnail from '../components/common/MediaThumbnail';
 import MediaPreviewAction from '../components/common/MediaPreviewAction';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -354,7 +355,7 @@ const MyAlbumDetailPage = () => {
                     onContextMenu={(event) => event.preventDefault()}
                     onClick={(event) => handleMediaClick(event, item.id)}
                   >
-                    <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <MediaThumbnail media={item} className="transition-transform duration-300 group-hover:scale-105" />
                   </Link>
                   {!selectionMode && <MediaPreviewAction mediaId={item.id} kind={isFavorites ? 'favorite' : 'like'} initiallyActive={isSystemAlbum} />}
                   {selectionMode && (
@@ -443,11 +444,7 @@ const MyAlbumDetailPage = () => {
                         aria-pressed={selected}
                         aria-label={`${item.title} ${selected ? '선택 해제' : '선택'}`}
                       >
-                        {item.type === 'video' && !item.thumbnail ? (
-                          <video src={item.src} muted playsInline preload="none" className="h-full w-full object-cover" />
-                        ) : (
-                          <img src={item.thumbnail || item.src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                        )}
+                        <MediaThumbnail media={item} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className={`absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                           selected ? 'border-primary bg-primary text-white' : 'border-white bg-black/35 text-transparent'
                         }`}>

@@ -43,6 +43,7 @@ const mapAlbum = (row) => ({
   mediaCount: Number(row.media_count || 0),
   coverMediaId: row.cover_media_id || null,
   coverThumbnailUrl: getCoverUrl(row),
+  coverRotation: row.cover_rotation ?? 0,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -55,10 +56,11 @@ const albumSelect = `
     cover.file_path AS cover_file_path,
     cover.thumbnail_path AS cover_thumbnail_path,
     cover.thumbnail_url AS cover_thumbnail_url,
+    cover.rotation AS cover_rotation,
     cover.updated_at AS cover_updated_at
   FROM user_albums a
   LEFT JOIN LATERAL (
-    SELECT m.id, m.media_type, m.file_path, m.thumbnail_path, m.thumbnail_url, m.updated_at
+    SELECT m.id, m.media_type, m.file_path, m.thumbnail_path, m.thumbnail_url, m.rotation, m.updated_at
     FROM user_album_media cover_am
     JOIN media m ON m.id = cover_am.media_id
     WHERE cover_am.album_id = a.id

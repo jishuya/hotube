@@ -1,3 +1,4 @@
+import MediaThumbnail from '../components/common/MediaThumbnail';
 import MediaPreviewAction from '../components/common/MediaPreviewAction';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { isNewMedia } from '../utils/mediaNotifications';
@@ -660,23 +661,7 @@ const AlbumPage = () => {
                                   <Icon icon="mdi:check" className="text-lg" />
                                 </span>
                               )}
-                              {item.type === 'video' && !item.thumbnail ? (
-                                <video
-                                  src={item.src}
-                                  muted
-                                  playsInline
-                                  preload="none"
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                />
-                              ) : (
-                                <img
-                                  src={item.thumbnail || item.src}
-                                  alt={item.title}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                />
-                              )}
+                              <MediaThumbnail media={item} className="transition-transform duration-300 group-hover:scale-105" />
                               {item.type === 'video' && <VideoDurationBadge media={item} />}
                               {isFeaturedYoutube && (
                                 <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent pl-4 pr-12 pb-8 pt-12 text-white sm:pl-5 sm:pr-14 sm:pb-9">

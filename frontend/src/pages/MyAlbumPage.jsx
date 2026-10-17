@@ -1,3 +1,4 @@
+import MediaThumbnail from '../components/common/MediaThumbnail';
 import MediaPreviewAction from '../components/common/MediaPreviewAction';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { useEffect, useState } from 'react';
@@ -33,7 +34,7 @@ const SavedMediaSection = ({ id, title, media, loading, icon, emptyIcon, descrip
               className="block h-full w-full"
               aria-label={`${item.title}, ${title} 전체 보기`}
             >
-              <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <MediaThumbnail media={item} className="transition-transform duration-300 group-hover:scale-105" />
               {item.type === 'video' && <VideoDurationBadge media={item} />}
             </Link>
             <MediaPreviewAction mediaId={item.id} kind={id === 'favorites' ? 'favorite' : 'like'} initiallyActive />
@@ -262,7 +263,7 @@ const MyAlbumPage = () => {
                   )}
                   <Link to={`/my-album/${album.id}`} className="relative block aspect-square overflow-hidden rounded-xl bg-primary/10">
                     {album.coverThumbnailUrl ? (
-                      <img src={album.coverThumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <MediaThumbnail media={{ thumbnail: album.coverThumbnailUrl, rotation: album.coverRotation }} alt="" className="transition-transform duration-300 group-hover:scale-105" />
                     ) : (
                       <Icon icon="mdi:image-multiple-outline" className="absolute inset-0 m-auto text-4xl text-primary/40" />
                     )}

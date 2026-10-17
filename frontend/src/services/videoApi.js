@@ -255,7 +255,11 @@ export const updateVideo = async (id, videoData, requesterId = getViewerId()) =>
     throw new Error(error.error || '비디오 수정에 실패했습니다');
   }
 
-  return resolveMediaUrls(await response.json());
+  const saved = await response.json();
+  if (videoData.rotation !== undefined && saved.rotation !== videoData.rotation) {
+    throw new Error('방향 보정이 저장되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+  }
+  return resolveMediaUrls(saved);
 };
 
 // 비디오 삭제

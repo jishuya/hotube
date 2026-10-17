@@ -487,7 +487,7 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
                   loadOriginal={position === 0 || (position === 1 && allowPrefetch)}
                   style={position === 0 ? { transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` } : undefined} />
               ) : (
-                <img src={item.thumbnail || item.preview} alt="" draggable="false" className="max-h-full max-w-full object-contain" />
+                <OrientedImage src={item.thumbnail || item.preview} alt="" rotation={item.rotation || 0} />
               )}
             </div>
           ))}
@@ -1186,7 +1186,6 @@ const MediaViewerPage = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 id="media-edit-title" className="text-lg font-bold">미디어 수정</h2>
-                <p className="mt-0.5 text-xs text-text-secondary">날짜, 공유 가족과 사진·영상 방향을 변경할 수 있어요.</p>
               </div>
               <button type="button" onClick={() => setEditing(false)} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10" aria-label="닫기"><Icon icon="mdi:close" className="text-xl" /></button>
             </div>

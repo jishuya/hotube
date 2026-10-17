@@ -1,3 +1,4 @@
+import MediaThumbnail from '../components/common/MediaThumbnail';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { isNewMedia } from '../utils/mediaNotifications';
 import { useEffect, useState } from 'react';
@@ -170,11 +171,7 @@ const DayAlbumContent = ({ date }) => {
                         N
                       </span>
                     )}
-                    {item.type === 'video' && !item.thumbnail ? (
-                      <video src={item.src} preload="none" muted playsInline className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                    ) : (
-                      <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                    )}
+                    <MediaThumbnail media={item} className="transition-transform duration-300 group-hover:scale-105" />
                     {item.type === 'video' && <VideoDurationBadge media={item} />}
                   </Link>
                 ))}

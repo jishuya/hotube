@@ -1,3 +1,4 @@
+import MediaThumbnail from './MediaThumbnail';
 import VideoDurationBadge from './VideoDurationBadge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
@@ -38,7 +39,6 @@ function RecentMediaTile({ item, returnTo }) {
   };
   const contentRef = useRef(null);
   const [rowSpan, setRowSpan] = useState(50);
-  const [aspectRatio, setAspectRatio] = useState(1);
 
   useEffect(() => {
     const content = contentRef.current;
@@ -60,7 +60,7 @@ function RecentMediaTile({ item, returnTo }) {
             >
               <div className="relative overflow-hidden bg-black/5">
                 {item.thumbnail ? (
-                  <img src={item.thumbnail} alt={item.title || ''} loading="lazy" decoding="async" onLoad={(event) => setAspectRatio(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight || 1)} style={{ aspectRatio }} className="block h-auto w-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-105" />
+                  <MediaThumbnail media={item} naturalAspect className="transition-transform duration-300 motion-safe:group-hover:scale-105" />
                 ) : (
                   <div className="flex aspect-square items-center justify-center text-text-secondary">
                     <Icon icon="mdi:image-outline" className="text-4xl" />

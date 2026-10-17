@@ -15,3 +15,14 @@ test('corrected media fits portrait and landscape viewports without clipping or 
     }
   }
 });
+
+test('rotated thumbnails fill rectangular and square tiles while preserving proportions', () => {
+  for (const rotation of [0, 90, 180, 270]) {
+    for (const [width, height] of [[160, 160], [320, 180], [180, 320]]) {
+      const fitted = fitRotatedMedia(1920, 1080, width, height, rotation, 'cover');
+      assert.ok(fitted.displayWidth >= width - 0.001);
+      assert.ok(fitted.displayHeight >= height - 0.001);
+      assert.ok(Math.abs(fitted.width / fitted.height - 16 / 9) < 0.001);
+    }
+  }
+});

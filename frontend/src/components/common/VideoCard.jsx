@@ -1,3 +1,4 @@
+import MediaThumbnail from './MediaThumbnail';
 import VideoDurationBadge from './VideoDurationBadge';
 import { isNewMedia } from '../../utils/mediaNotifications';
 import { Link } from 'react-router-dom';
@@ -12,13 +13,7 @@ const VideoCard = ({ video, isShort = false }) => {
   return (
     <Link to={`/video/${video.id}`} className="flex flex-col gap-3 group">
       <div className={`w-full ${isShort ? 'aspect-[9/16]' : 'aspect-video'} rounded-lg overflow-hidden relative shadow-sm hover:shadow-lg transition-shadow`}>
-        <img
-          src={video.thumbnailUrl}
-          alt={video.title}
-          loading="lazy"
-          decoding="async"
-          className="w-full h-full object-cover"
-        />
+        <MediaThumbnail media={video} />
         {/* 재생시간 */}
         <VideoDurationBadge media={video} />
         {/* NEW 배지 - 안본 영상 */}
