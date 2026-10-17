@@ -236,6 +236,7 @@ export const toggleFavorite = async (userId, videoId) => {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || '즐겨찾기 처리에 실패했습니다');
+  detailsCache.delete(`${videoId}:${userId}`);
   return data;
 };
 

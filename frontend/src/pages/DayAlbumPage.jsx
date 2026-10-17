@@ -1,3 +1,4 @@
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { isNewMedia } from '../utils/mediaNotifications';
 import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
@@ -176,8 +177,8 @@ const DayAlbumContent = ({ date }) => {
                     )}
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold">{item.title}</p>
-                        {item.type === 'video' && <Icon icon="mdi:play-circle" className="shrink-0 text-2xl" />}
+                        <p className={`truncate text-sm font-semibold ${item.type === 'video' ? 'pb-5' : ''}`}>{item.title}</p>
+                        {item.type === 'video' && <VideoDurationBadge media={item} />}
                       </div>
                     </div>
                   </Link>

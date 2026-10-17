@@ -1,3 +1,4 @@
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
@@ -313,11 +314,11 @@ const AdminPage = () => {
                       <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                         <p className="text-xs text-slate-500 mb-2 font-medium">영상 정보 미리보기</p>
                         <div className="flex gap-3">
-                          <img
+                          <div className="relative w-24 shrink-0 self-start"><img
                             src={videoPreview.thumbnailUrl}
                             alt="썸네일"
                             className="w-24 h-auto rounded aspect-video object-cover"
-                          />
+                          /><VideoDurationBadge media={videoPreview} /></div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm text-text-primary line-clamp-2">
                               {videoPreview.title}
@@ -429,9 +430,9 @@ const AdminPage = () => {
                         {videos.map((video) => (
                           <div key={video.id} className="p-4 flex gap-3">
                             <div
-                              className="bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-24 shrink-0"
+                              className="relative bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-24 shrink-0"
                               style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}
-                            />
+                            ><VideoDurationBadge media={video} /></div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-text-primary text-sm line-clamp-2">{video.title}</p>
                               <div className="flex gap-2 mt-1">
@@ -490,9 +491,9 @@ const AdminPage = () => {
                               <tr key={video.id} className="hover:bg-slate-50 transition-colors">
                                 <td className="p-4">
                                   <div
-                                    className="bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-28"
+                                    className="relative bg-center bg-no-repeat aspect-video bg-cover rounded-lg w-28"
                                     style={{ backgroundImage: `url('${video.thumbnailUrl}')` }}
-                                  />
+                                  ><VideoDurationBadge media={video} /></div>
                                 </td>
                                 <td className="p-4 max-w-xs">
                                   <p className="font-semibold text-text-primary line-clamp-2">{video.title}</p>

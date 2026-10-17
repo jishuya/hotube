@@ -116,14 +116,18 @@ export const AuthProvider = ({ children }) => {
 
   // 좋아요 토글 후 로컬 상태 업데이트
   const toggleLikeLocal = (videoId) => {
-    if (!user) return;
-
-    const likedVideos = user.likedVideos || [];
-    const newLikedVideos = likedVideos.includes(videoId)
-      ? likedVideos.filter(id => id !== videoId)
-      : [...likedVideos, videoId];
-
-    updateUser({ likedVideos: newLikedVideos });
+    setUser((currentUser) => {
+      if (!currentUser) return currentUser;
+      const likedVideos = currentUser.likedVideos || [];
+      const updatedUser = {
+        ...currentUser,
+        likedVideos: likedVideos.includes(videoId)
+          ? likedVideos.filter(id => id !== videoId)
+          : [...likedVideos, videoId],
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+      return updatedUser;
+    });
   };
 
   // 시청 기록 추가 후 로컬 상태 업데이트

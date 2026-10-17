@@ -1,3 +1,4 @@
+import VideoDurationBadge from './VideoDurationBadge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation } from 'react-router-dom';
@@ -65,11 +66,7 @@ function RecentMediaTile({ item, returnTo }) {
                     <Icon icon="mdi:image-outline" className="text-4xl" />
                   </div>
                 )}
-                {item.type === 'video' && (
-                  <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm">
-                    <Icon icon="mdi:play" className="text-lg" />
-                  </span>
-                )}
+                {item.type === 'video' && <VideoDurationBadge media={item} />}
               </div>
             </Link>
             <button
@@ -78,9 +75,9 @@ function RecentMediaTile({ item, returnTo }) {
               disabled={!user || pendingLiked !== null}
               aria-label={liked ? '좋아요 취소' : '좋아요'}
               aria-pressed={liked}
-              className="absolute bottom-0 right-0 flex size-11 items-center justify-center rounded-full text-white transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait"
+              className="absolute top-0 right-0 flex size-11 items-center justify-center bg-transparent text-white transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait"
             >
-              <Icon icon={liked ? 'mdi:heart' : 'mdi:heart-outline'} className={`text-base ${liked ? 'text-rose-400' : ''}`} aria-hidden="true" />
+              <Icon icon={liked ? 'mdi:heart' : 'mdi:heart-outline'} className={`translate-x-1.5 -translate-y-1.5 text-base ${liked ? 'text-rose-400' : ''}`} aria-hidden="true" />
             </button>
             {likeError && <p role="alert" className="absolute bottom-14 left-2 right-2 rounded-lg bg-black/80 p-2 text-xs text-white">{likeError}</p>}
           </article>

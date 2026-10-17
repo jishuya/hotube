@@ -1,3 +1,4 @@
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
 import { hashFile } from '../utils/fileHash';
@@ -839,7 +840,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                                     {item.type === 'video' ? (
                                       <>
                                         <VideoFramePreview src={item.preview} className="h-full w-full object-cover" />
-                                        <Icon icon="mdi:play-circle" className="pointer-events-none absolute bottom-1 left-1 text-sm text-white drop-shadow" aria-hidden="true" />
+                                        <VideoDurationBadge media={item} />
                                       </>
                                     ) : (
                                     <img src={item.preview} alt={item.name} className="h-full w-full object-cover" />
@@ -905,7 +906,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
                       {youtubeInfo && (
                         <div className="mt-4 flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
-                          <img src={youtubeInfo.thumbnailUrl} alt="" className="aspect-video w-28 shrink-0 rounded-lg object-cover sm:w-36" />
+                          <div className="relative w-28 shrink-0 self-start sm:w-36"><img src={youtubeInfo.thumbnailUrl} alt="" className="aspect-video w-full rounded-lg object-cover" /><VideoDurationBadge media={{ durationSeconds: youtubeInfo.durationInSeconds }} /></div>
                           <div className="min-w-0 py-1">
                             <p className="line-clamp-2 text-sm font-bold">{youtubeInfo.title}</p>
                             <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-text-secondary">
@@ -1146,8 +1147,8 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                         ) : (
                           <img src={item.thumbnail || item.src} alt={item.title} className="h-full w-full object-cover" />
                         )}
-                        {item.type === 'video' && <Icon icon="mdi:play-circle" className="absolute left-1 top-1 text-xl text-white drop-shadow" />}
-                        {item.source === 'youtube' && <Icon icon="mdi:youtube" className="absolute bottom-1 left-1 text-lg text-error drop-shadow" />}
+                        {item.type === 'video' && <VideoDurationBadge media={item} />}
+                        {item.source === 'youtube' && <Icon icon="mdi:youtube" className="absolute top-1 left-1 text-lg text-error drop-shadow" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <h2 className="truncate text-sm font-bold">{item.title}</h2>

@@ -1,21 +1,8 @@
+import VideoDurationBadge from './VideoDurationBadge';
 import { isNewMedia } from '../../utils/mediaNotifications';
 import { Link } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../contexts/AuthContext';
-
-// 초를 MM:SS 또는 HH:MM:SS 형식으로 변환
-const formatDuration = (seconds) => {
-  if (!seconds) return '0:00';
-
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
 
 const VideoCard = ({ video, isShort = false }) => {
   const { user, isLiked } = useAuth();
@@ -33,9 +20,7 @@ const VideoCard = ({ video, isShort = false }) => {
           className="w-full h-full object-cover"
         />
         {/* 재생시간 */}
-        <span className="absolute bottom-2 right-2 bg-black/70 text-white text-xs font-semibold px-1.5 py-0.5 rounded">
-          {formatDuration(video.durationSeconds)}
-        </span>
+        <VideoDurationBadge media={video} />
         {/* NEW 배지 - 안본 영상 */}
         {isNew && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
@@ -45,8 +30,8 @@ const VideoCard = ({ video, isShort = false }) => {
         )}
         {/* 좋아요 표시 */}
         {liked && (
-          <span className="absolute top-2 right-2 bg-white/90 text-red-500 text-xs font-bold p-1.5 rounded-full shadow-md">
-            <Icon icon="mdi:heart" className="text-lg" />
+          <span className="absolute top-0 right-0 flex size-11 items-center justify-center text-red-500">
+            <Icon icon="mdi:heart" className="translate-x-1.5 -translate-y-1.5 text-lg" />
           </span>
         )}
       </div>

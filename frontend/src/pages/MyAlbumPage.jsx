@@ -1,3 +1,5 @@
+import MediaPreviewAction from '../components/common/MediaPreviewAction';
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
@@ -9,8 +11,8 @@ import { getFavoriteMediaPage, getLikedMediaPage, toMemoryMedia } from '../servi
 const SavedMediaSection = ({ id, title, media, loading, icon, emptyIcon, description }) => (
   <section aria-labelledby={`${id}-title`}>
     <div className="mb-4 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2">
-        <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div className="flex items-center gap-1">
+        <span className={`flex h-9 w-5 shrink-0 items-center justify-center ${id === 'favorites' ? 'text-yellow-400' : 'text-rose-400'}`}>
           <Icon icon={icon} className="text-xl" />
         </span>
         <h2 id={`${id}-title`} className="text-xl font-bold">{title}</h2>
@@ -25,22 +27,17 @@ const SavedMediaSection = ({ id, title, media, loading, icon, emptyIcon, descrip
     ) : media.length > 0 ? (
       <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-label={`${title} 미리보기`}>
         {media.slice(0, 6).map((item) => (
-          <Link
-            key={item.id}
-            to={`/my-album/${id}`}
-            className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm"
-            aria-label={`${item.title}, ${title} 전체 보기`}
-          >
-            <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-            <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm backdrop-blur-sm">
-              <Icon icon={icon} className="text-base" />
-            </span>
-            {item.type === 'video' && (
-              <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-lg">
-                <Icon icon="mdi:play-circle" className="text-4xl" />
-              </span>
-            )}
-          </Link>
+          <article key={item.id} className="group relative aspect-square overflow-hidden rounded-xl bg-surface shadow-sm">
+            <Link
+              to={`/my-album/${id}`}
+              className="block h-full w-full"
+              aria-label={`${item.title}, ${title} 전체 보기`}
+            >
+              <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              {item.type === 'video' && <VideoDurationBadge media={item} />}
+            </Link>
+            <MediaPreviewAction mediaId={item.id} kind={id === 'favorites' ? 'favorite' : 'like'} initiallyActive />
+          </article>
         ))}
       </div>
     ) : (

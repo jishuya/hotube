@@ -1,3 +1,5 @@
+import MediaPreviewAction from '../components/common/MediaPreviewAction';
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { isNewMedia } from '../utils/mediaNotifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
@@ -66,7 +68,7 @@ const addOneDay = (dateKey) => {
 };
 
 const NewMediaBadge = () => (
-  <span className="absolute right-2 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
+  <span className="absolute right-12 top-2 z-[1] flex size-5 items-center justify-center rounded-full bg-error text-[10px] font-black text-white shadow-md">
     N
   </span>
 );
@@ -99,7 +101,7 @@ const AlbumPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const { user, isLiked } = useAuth();
+  const { user } = useAuth();
   const {
     selectionMode, selectedMediaIds, selectionError, selectionUI, clearSelection,
     toggleDateMediaSelection, beginLongPress, trackLongPress, endLongPress,
@@ -625,10 +627,18 @@ const AlbumPage = () => {
                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
                           {media.map((item) => {
                             const isFeaturedYoutube = item.source === 'youtube' && item.videoType === 'long';
-                            const liked = isLiked(item.id);
                             return (
+                              <article key={item.id} className={`group relative select-none overflow-hidden bg-surface shadow-sm transition duration-200 ${
+                                isFeaturedYoutube
+                                  ? 'col-span-3 aspect-video rounded-xl sm:col-span-4'
+                                  : 'aspect-square rounded-lg'
+                              } ${
+                                selectedMediaIds.includes(item.id)
+                                  ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background'
+                                  : 'hover:-translate-y-1'
+                              }`}>
                               <Link
-                              key={item.id}
+                              className="block h-full w-full"
                               to={`/media/${item.id}?date=${date}`}
                               state={{ returnTo: '/album' }}
                               onPointerDown={(event) => beginLongPress(event, item.id)}
@@ -638,15 +648,6 @@ const AlbumPage = () => {
                               onPointerLeave={endLongPress}
                               onContextMenu={(event) => event.preventDefault()}
                               onClick={(event) => handleMediaClick(event, item.id)}
-                              className={`group relative select-none overflow-hidden bg-surface shadow-sm transition duration-200 ${
-                                isFeaturedYoutube
-                                  ? 'col-span-3 aspect-video rounded-xl sm:col-span-4'
-                                  : 'aspect-square rounded-lg'
-                              } ${
-                                selectedMediaIds.includes(item.id)
-                                  ? 'scale-[0.96] ring-4 ring-primary ring-offset-2 ring-offset-background'
-                                  : 'hover:-translate-y-1'
-                              }`}
                               aria-label={`${item.title}, ${item.type === 'video' ? '영상' : '사진'}`}
                             >
                               {isNewMedia(item, user) && <NewMediaBadge />}
@@ -676,13 +677,9 @@ const AlbumPage = () => {
                                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
                               )}
-                              {item.type === 'video' && (
-                                <span className="absolute inset-0 flex items-center justify-center bg-black/10">
-                                  <Icon icon="mdi:play-circle" className={`${isFeaturedYoutube ? 'text-6xl sm:text-7xl' : 'text-4xl'} text-white drop-shadow`} />
-                                </span>
-                              )}
+                              {item.type === 'video' && <VideoDurationBadge media={item} />}
                               {isFeaturedYoutube && (
-                                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent pl-4 pr-12 pb-3 pt-12 text-white sm:pl-5 sm:pr-14 sm:pb-4">
+                                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent pl-4 pr-12 pb-8 pt-12 text-white sm:pl-5 sm:pr-14 sm:pb-9">
                                   <span className="min-w-0 truncate text-sm font-bold sm:text-lg">{item.title}</span>
                                   <span className="flex shrink-0 items-center gap-1 rounded-full bg-error px-2.5 py-1 text-[11px] font-bold shadow-sm sm:text-xs">
                                     <Icon icon="mdi:youtube" className="text-base" />
@@ -690,14 +687,9 @@ const AlbumPage = () => {
                                   </span>
                                 </span>
                               )}
-                              <span
-                                role="img"
-                                aria-label={liked ? '좋아요 표시됨' : '좋아요 없음'}
-                                className="pointer-events-none absolute bottom-0 right-0 flex size-11 items-center justify-center text-white"
-                              >
-                                <Icon icon={liked ? 'mdi:heart' : 'mdi:heart-outline'} className={`text-base ${liked ? 'text-rose-400' : ''}`} aria-hidden="true" />
-                              </span>
                               </Link>
+                              <MediaPreviewAction mediaId={item.id} />
+                              </article>
                             );
                           })}
                         </div>

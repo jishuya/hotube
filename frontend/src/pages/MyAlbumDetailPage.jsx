@@ -1,3 +1,5 @@
+import MediaPreviewAction from '../components/common/MediaPreviewAction';
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -310,7 +312,7 @@ const MyAlbumDetailPage = () => {
         <div className="mx-auto max-w-container">
           <header className="mb-6">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-1">
+              <div className={`flex min-w-0 items-center ${isSystemAlbum ? 'gap-0.5' : 'gap-1'}`}>
                 <button
                   type="button"
                   onClick={() => navigate('/my-album', { replace: true })}
@@ -319,6 +321,9 @@ const MyAlbumDetailPage = () => {
                 >
                   <Icon icon="mdi:arrow-left" className="text-xl" />
                 </button>
+                {isSystemAlbum && (
+                  <Icon icon={isFavorites ? 'mdi:bookmark' : 'mdi:heart'} className={`shrink-0 text-2xl ${isFavorites ? 'text-yellow-400' : 'text-rose-400'}`} aria-hidden="true" />
+                )}
                 <h1 className="truncate text-2xl font-bold sm:text-3xl">{title}</h1>
                 {!isSystemAlbum && (
                   <button
@@ -370,13 +375,9 @@ const MyAlbumDetailPage = () => {
                   >
                     <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   </Link>
-                  {isSystemAlbum && (
-                    <span className="pointer-events-none absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm">
-                      <Icon icon={isFavorites ? 'mdi:bookmark' : 'mdi:heart'} />
-                    </span>
-                  )}
+                  <MediaPreviewAction mediaId={item.id} kind={isFavorites ? 'favorite' : 'like'} initiallyActive={isSystemAlbum} />
                   {selectionMode && !isSystemAlbum && (
-                    <span className={`pointer-events-none absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
+                    <span className={`pointer-events-none absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                       selectedMediaIds.includes(item.id)
                         ? 'border-primary bg-primary text-white'
                         : 'border-white bg-black/35 text-transparent'
@@ -386,8 +387,8 @@ const MyAlbumDetailPage = () => {
                   )}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold">{item.title}</p>
-                      {item.type === 'video' && <Icon icon="mdi:play-circle" className="shrink-0 text-2xl" />}
+                      <p className={`truncate text-sm font-semibold ${item.type === 'video' ? 'pb-5' : ''}`}>{item.title}</p>
+                      {item.type === 'video' && <VideoDurationBadge media={item} />}
                     </div>
                   </div>
                 </article>
@@ -564,7 +565,7 @@ const MyAlbumDetailPage = () => {
                         }`}>
                           <Icon icon="mdi:check" className="text-lg" />
                         </span>
-                        {item.type === 'video' && <Icon icon="mdi:play-circle" className="absolute bottom-2 left-2 text-2xl text-white drop-shadow" />}
+                        {item.type === 'video' && <VideoDurationBadge media={item} />}
                       </button>
                     );
                     })}

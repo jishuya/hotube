@@ -1,3 +1,4 @@
+import VideoDurationBadge from './VideoDurationBadge';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
@@ -472,6 +473,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
                                 ) : (
                                   <Icon icon="mdi:video-outline" className="absolute inset-0 m-auto text-2xl text-primary" />
                                 )}
+                                {media.type === 'video' && <VideoDurationBadge media={media} />}
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-semibold">

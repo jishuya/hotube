@@ -1,3 +1,4 @@
+import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import MediaDescription from '../components/common/MediaDescription';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -302,12 +303,13 @@ const VideoPage = () => {
                 <div className="grid grid-cols-3 gap-2">
                   {recommendedVideos.map((recVideo) => (
                     <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group">
-                      <div className="aspect-[9/16] rounded-lg overflow-hidden">
+                      <div className="relative aspect-[9/16] rounded-lg overflow-hidden">
                         <img
                           className="w-full h-full object-cover group-active:scale-95 transition-transform"
                           src={recVideo.thumbnailUrl}
                           alt={recVideo.title}
                         />
+                          <VideoDurationBadge media={recVideo} />
                       </div>
                       <p className="text-xs font-medium text-zinc-900 line-clamp-2 mt-1.5 leading-tight">
                         {recVideo.title}
@@ -383,12 +385,13 @@ const VideoPage = () => {
                 <div className="grid grid-cols-2 gap-3">
                   {recommendedVideos.map((recVideo) => (
                     <Link key={recVideo.id} to={`/video/${recVideo.id}`} className="group">
-                      <div className="aspect-video rounded-lg overflow-hidden">
+                      <div className="relative aspect-video rounded-lg overflow-hidden">
                         <img
                           className="w-full h-full object-cover group-active:scale-95 transition-transform"
                           src={recVideo.thumbnailUrl}
                           alt={recVideo.title}
                         />
+                          <VideoDurationBadge media={recVideo} />
                       </div>
                       <p className="text-xs font-medium text-zinc-900 line-clamp-2 mt-1.5 leading-tight">
                         {recVideo.title}
@@ -498,6 +501,7 @@ const VideoPage = () => {
                             src={recVideo.thumbnailUrl}
                             alt={recVideo.title}
                           />
+                          <VideoDurationBadge media={recVideo} />
                         </div>
                         <h4 className="font-medium text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight text-sm mt-2">
                           {recVideo.title}
@@ -515,6 +519,7 @@ const VideoPage = () => {
                             src={recVideo.thumbnailUrl}
                             alt={recVideo.title}
                           />
+                          <VideoDurationBadge media={recVideo} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-zinc-800 group-hover:text-primary transition-colors line-clamp-2 leading-tight text-sm">

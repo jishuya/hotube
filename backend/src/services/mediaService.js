@@ -456,6 +456,7 @@ const createFileMedia = async ({
   uploadBatchId = null,
   contentHash = null,
   processingStatus = 'ready',
+  durationSeconds = null,
 }) => {
   let client;
 
@@ -474,8 +475,8 @@ const createFileMedia = async ({
         view_count, like_count, channel_title, uploaded_by, shared_with, upload_batch_id, content_hash,
         processing_status, created_at, updated_at, notifications_suppressed
       )
-      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, $8, NULL, 0, 0, NULL, $9, $10, $11, $12, $13, $14, $14, COALESCE((SELECT role = 'admin' AND developer_mode FROM users WHERE id = $9), FALSE))
-    `, [id, title, mediaType, filePath, thumbnailPath, previewPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now]);
+      VALUES ($1, $2, '', NULL, $3, NULL, $4, NULL, $5, $6, $7, $8, $15, 0, 0, NULL, $9, $10, $11, $12, $13, $14, $14, COALESCE((SELECT role = 'admin' AND developer_mode FROM users WHERE id = $9), FALSE))
+    `, [id, title, mediaType, filePath, thumbnailPath, previewPath, Number(uploadedAt.slice(0, 4)), uploadedAt, uploadedBy, sharedWith, uploadBatchId, contentHash, processingStatus, now, durationSeconds]);
 
     await replaceMediaTags(client, id, tags);
     const createdMedia = await fetchMediaById(client, id);
