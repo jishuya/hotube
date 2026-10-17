@@ -90,13 +90,32 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
 
   useEffect(() => {
     if (!isFullscreen) return undefined;
-    const updateViewportSize = () => setViewportSize({
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
+    let wasLandscape = window.innerWidth > window.innerHeight;
+    const updateViewportSize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const isLandscape = width > height;
+      // The browser rotates the viewport itself. Clear only the manual
+      // rotation so the video stays upright in the new screen direction.
+      if (isLandscape !== wasLandscape) setRotation(0);
+      wasLandscape = isLandscape;
+      setViewportSize({ width, height });
+    };
+    const handleOrientationChange = () => {
+      setRotation(0);
+      updateViewportSize();
+    };
+    const orientation = window.screen?.orientation;
     updateViewportSize();
     window.addEventListener('resize', updateViewportSize);
-    return () => window.removeEventListener('resize', updateViewportSize);
+    orientation?.addEventListener?.('change', handleOrientationChange);
+    // Support browsers that still expose only the legacy orientation event.
+    window.addEventListener('orientationchange', handleOrientationChange);
+    return () => {
+      window.removeEventListener('resize', updateViewportSize);
+      orientation?.removeEventListener?.('change', handleOrientationChange);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+    };
   }, [isFullscreen]);
 
   useEffect(() => {
