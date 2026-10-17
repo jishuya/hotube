@@ -1,3 +1,4 @@
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import Cropper from 'react-easy-crop';
@@ -281,9 +282,7 @@ const ChildInfoModal = ({ isOpen, onClose, children: childProfiles, onSave }) =>
   const profiles = hasDraft ? [...childProfiles, newChildDraft.profile] : childProfiles;
   useEffect(() => {
     if (!isOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
+    return lockBodyScroll();
   }, [isOpen]);
 
   if (!isOpen) return null;

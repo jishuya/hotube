@@ -562,7 +562,7 @@ const Header = ({ isAdmin = false, showSearch = !isAdmin, showChildBanner = fals
               ))}
             </div>
             <div className="ml-2 min-w-0 flex-1 text-xs font-semibold tracking-tight text-text-secondary max-[359px]:text-[11px] sm:text-[13px]">
-              <div className="flex flex-nowrap items-center gap-x-1 overflow-x-auto whitespace-nowrap sm:gap-x-2">
+              <div className="flex flex-nowrap items-center gap-x-1 whitespace-nowrap sm:gap-x-2">
                 {children.map((child) => {
                   const age = getAgeSinceBirth(child.birthday);
                   return (

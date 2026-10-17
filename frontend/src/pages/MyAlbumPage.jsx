@@ -1,3 +1,4 @@
+import { lockBodyScroll } from '../utils/bodyScrollLock';
 import MediaThumbnail from '../components/common/MediaThumbnail';
 import MediaPreviewAction from '../components/common/MediaPreviewAction';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
@@ -106,10 +107,10 @@ const MyAlbumPage = () => {
       if (editingAlbum && !editBusy) setEditingAlbum(null);
       if (deletingAlbum && !deleteBusy) setDeletingAlbum(null);
     };
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
     window.addEventListener('keydown', handleEscape);
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
       window.removeEventListener('keydown', handleEscape);
     };
   }, [createBusy, createOpen, deleteBusy, deletingAlbum, editBusy, editingAlbum]);

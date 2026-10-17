@@ -1,3 +1,4 @@
+import { lockBodyScroll } from '../utils/bodyScrollLock';
 import OrientedImage from '../components/common/OrientedImage';
 import { fitRotatedMedia } from '../utils/mediaRotation';
 import MediaDescription from '../components/common/MediaDescription';
@@ -82,6 +83,7 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [manualRotation, setManualRotation] = useState(0);
   const [videoSize, setVideoSize] = useState({ width: 16, height: 9 });
   const [renderedVideoWidth, setRenderedVideoWidth] = useState(0);
   const [playerWidth, setPlayerWidth] = useState(window.innerWidth);
@@ -138,15 +140,22 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
   };
 
   const toggleFullscreen = () => {
+    setManualRotation(0);
     onFullscreenChange?.(!isFullscreen);
   };
 
+  const rotateVideo = () => {
+    if (!isFullscreen) onFullscreenChange?.(true);
+    setManualRotation((value) => (value + 90) % 360);
+  };
+
+  const displayRotation = (rotation + manualRotation) % 360;
   const videoLayout = useMemo(() => fitRotatedMedia(
     videoSize.width, videoSize.height,
     isFullscreen ? viewportSize.width : playerWidth,
     isFullscreen ? viewportSize.height : preview ? 164 : window.innerHeight * 0.7,
-    rotation,
-  ), [videoSize, viewportSize, isFullscreen, playerWidth, rotation, preview]);
+    displayRotation,
+  ), [videoSize, viewportSize, isFullscreen, playerWidth, displayRotation, preview]);
 
   return (
     <div
@@ -214,10 +223,11 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
               setPlaying(false);
               setCurrentTime(0);
               setDuration(event.currentTarget.duration || 0);
+              setManualRotation(0);
               setControlsVisible(true);
             }}
             className="absolute left-1/2 top-1/2 object-contain"
-            style={{ width: videoLayout.width, height: videoLayout.height, maxWidth: 'none', transform: `translate(-50%, -50%) rotate(${rotation}deg)` }}
+            style={{ width: videoLayout.width, height: videoLayout.height, maxWidth: 'none', transform: `translate(-50%, -50%) rotate(${displayRotation}deg)` }}
           />
           {!playing && currentTime === 0 && (
             <button
@@ -246,6 +256,7 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
           </span>
           <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
           <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
+          {!preview && <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>}
           {!preview && <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>}
         </div>
       </div>
@@ -353,8 +364,6 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
   }, []);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') onClose();
       if (event.key === '+' || event.key === '=') applyScale(scale + 0.5);
@@ -364,7 +373,6 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [applyScale, onClose, scale, slideTo]);
@@ -600,9 +608,7 @@ const MediaViewerPage = () => {
 
   useEffect(() => {
     if (!viewerOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
+    return lockBodyScroll();
   }, [viewerOpen]);
 
   const loadDetails = useCallback((force = false) => {
@@ -1212,7 +1218,6 @@ const MediaViewerPage = () => {
                   <button type="button" onClick={() => setEditRotation(0)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold">원래 방향</button>
                   <button type="button" onClick={() => setEditRotation((value) => (value + 90) % 360)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold" aria-label="오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="mr-1 inline text-lg" />오른쪽</button>
                 </div>
-                <p className="mt-2 text-xs text-text-secondary" aria-live="polite">{editRotation}° · 저장하면 모든 가족에게 같은 방향으로 표시돼요.</p>
               </fieldset>
             )}
             <fieldset className="mt-4">
