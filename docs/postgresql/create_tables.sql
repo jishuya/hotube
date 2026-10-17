@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS media (
     thumbnail_url TEXT,
     thumbnail_path TEXT,
     preview_path TEXT,
+    rotation SMALLINT NOT NULL DEFAULT 0 CHECK (rotation IN (0, 90, 180, 270)),
     year INTEGER,
     uploaded_at DATE,
     duration_seconds INTEGER,

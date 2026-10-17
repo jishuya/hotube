@@ -1,3 +1,5 @@
+import OrientedImage from '../components/common/OrientedImage';
+import { fitRotatedMedia } from '../utils/mediaRotation';
 import MediaDescription from '../components/common/MediaDescription';
 import { parseTags } from '../utils/tags';
 import { getMediaCaption, parseCaption, removeCaptionTag } from '../utils/caption';
@@ -71,7 +73,7 @@ const formatPlaybackTime = (seconds) => {
 
 const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
 
-const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFullscreenChange }) => {
+const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevious, onNext, isFullscreen, onFullscreenChange }) => {
   const playerRef = useRef(null);
   const videoRef = useRef(null);
   const swipeRef = useRef(null);
@@ -80,9 +82,9 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [rotation, setRotation] = useState(0);
   const [videoSize, setVideoSize] = useState({ width: 16, height: 9 });
   const [renderedVideoWidth, setRenderedVideoWidth] = useState(0);
+  const [playerWidth, setPlayerWidth] = useState(window.innerWidth);
   const [viewportSize, setViewportSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -90,31 +92,21 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
 
   useEffect(() => {
     if (!isFullscreen) return undefined;
-    let wasLandscape = window.innerWidth > window.innerHeight;
     const updateViewportSize = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const isLandscape = width > height;
-      // The browser rotates the viewport itself. Clear only the manual
-      // rotation so the video stays upright in the new screen direction.
-      if (isLandscape !== wasLandscape) setRotation(0);
-      wasLandscape = isLandscape;
       setViewportSize({ width, height });
-    };
-    const handleOrientationChange = () => {
-      setRotation(0);
-      updateViewportSize();
     };
     const orientation = window.screen?.orientation;
     updateViewportSize();
     window.addEventListener('resize', updateViewportSize);
-    orientation?.addEventListener?.('change', handleOrientationChange);
+    orientation?.addEventListener?.('change', updateViewportSize);
     // Support browsers that still expose only the legacy orientation event.
-    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('orientationchange', updateViewportSize);
     return () => {
       window.removeEventListener('resize', updateViewportSize);
-      orientation?.removeEventListener?.('change', handleOrientationChange);
-      window.removeEventListener('orientationchange', handleOrientationChange);
+      orientation?.removeEventListener?.('change', updateViewportSize);
+      window.removeEventListener('orientationchange', updateViewportSize);
     };
   }, [isFullscreen]);
 
@@ -123,9 +115,11 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
     if (!video) return undefined;
     const updateRenderedVideoWidth = () => {
       setRenderedVideoWidth(video.getBoundingClientRect().width);
+      setPlayerWidth(playerRef.current?.clientWidth || window.innerWidth);
     };
     const resizeObserver = new ResizeObserver(updateRenderedVideoWidth);
     resizeObserver.observe(video);
+    resizeObserver.observe(playerRef.current);
     updateRenderedVideoWidth();
     return () => resizeObserver.disconnect();
   }, []);
@@ -144,33 +138,15 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
   };
 
   const toggleFullscreen = () => {
-    setRotation(0);
     onFullscreenChange?.(!isFullscreen);
   };
 
-  const rotateVideo = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (!isFullscreen) onFullscreenChange?.(true);
-    setRotation((value) => (value + 90) % 360);
-  };
-
-  const isSideways = rotation % 180 !== 0;
-  const fullscreenLayout = useMemo(() => {
-    const sourceRatio = videoSize.width / videoSize.height;
-    const availableWidth = Math.max(1, isSideways
-      ? viewportSize.height
-      : viewportSize.width);
-    const availableHeight = Math.max(1, isSideways
-      ? viewportSize.width
-      : viewportSize.height);
-    const width = Math.min(availableWidth, availableHeight * sourceRatio);
-
-    return {
-      videoWidth: width,
-      videoHeight: width / sourceRatio,
-    };
-  }, [isSideways, videoSize, viewportSize]);
+  const videoLayout = useMemo(() => fitRotatedMedia(
+    videoSize.width, videoSize.height,
+    isFullscreen ? viewportSize.width : playerWidth,
+    isFullscreen ? viewportSize.height : preview ? 164 : window.innerHeight * 0.7,
+    rotation,
+  ), [videoSize, viewportSize, isFullscreen, playerWidth, rotation, preview]);
 
   return (
     <div
@@ -206,13 +182,15 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
       <div
         className={isFullscreen ? 'absolute left-1/2 top-1/2' : 'contents'}
         style={isFullscreen ? {
-          width: fullscreenLayout.videoWidth,
-          height: fullscreenLayout.videoHeight,
-          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+          width: videoLayout.displayWidth,
+          height: videoLayout.displayHeight,
+          transform: 'translate(-50%, -50%)',
           transition: 'transform 200ms ease',
         } : undefined}
       >
-        <div className={`relative flex items-center justify-center ${isFullscreen ? 'h-full w-full bg-black' : 'w-full bg-transparent'}`}>
+        <div className={`relative flex items-center justify-center ${isFullscreen ? 'h-full w-full bg-black' : 'bg-transparent'}`}
+          style={isFullscreen ? undefined : { width: videoLayout.displayWidth, height: videoLayout.displayHeight }}>
+
           <video
             ref={videoRef}
             src={src}
@@ -236,10 +214,10 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
               setPlaying(false);
               setCurrentTime(0);
               setDuration(event.currentTarget.duration || 0);
-              setRotation(0);
               setControlsVisible(true);
             }}
-            className={`${isFullscreen ? 'h-full w-full' : 'max-h-[70vh] max-w-full'} object-contain`}
+            className="absolute left-1/2 top-1/2 object-contain"
+            style={{ width: videoLayout.width, height: videoLayout.height, maxWidth: 'none', transform: `translate(-50%, -50%) rotate(${rotation}deg)` }}
           />
           {!playing && currentTime === 0 && (
             <button
@@ -260,7 +238,7 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
           } ${
             controlsVisible || !playing ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
-          style={isFullscreen ? undefined : { width: renderedVideoWidth || 'calc(100% - 1rem)' }}
+          style={isFullscreen ? undefined : { width: videoLayout.displayWidth || renderedVideoWidth }}
         >
           <button type="button" onClick={togglePlayback} className={playerControlButtonClass} aria-label={playing ? '일시정지' : '재생'}><Icon icon={playing ? 'mdi:pause' : 'mdi:play'} className="text-xl" /></button>
           <span className={`hidden whitespace-nowrap text-xs font-medium tabular-nums sm:inline ${isFullscreen ? 'text-white/80' : 'text-zinc-600'}`}>
@@ -268,8 +246,7 @@ const MediaVideoPlayer = ({ src, poster, onPrevious, onNext, isFullscreen, onFul
           </span>
           <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
           <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
-          <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>
-          <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>
+          {!preview && <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>}
         </div>
       </div>
       {isFullscreen && onPrevious && (
@@ -294,11 +271,11 @@ const FullscreenPhoto = ({ media, alt, loadOriginal, style }) => {
   const [requested, setRequested] = useState(loadOriginal);
   if (loadOriginal && !requested) setRequested(true);
   return (
-    <div className="relative flex max-h-full max-w-full items-center justify-center" style={style}>
-      <img src={preview} alt={alt} draggable="false"
-        className="block max-h-[100dvh] max-w-full select-none object-contain" />
+    <div className="relative flex h-full w-full items-center justify-center" style={style}>
+      <OrientedImage src={preview} alt={alt} rotation={media.rotation || 0} />
       {requested && media.src !== preview && (
-        <img ref={originalRef} src={media.src} alt="" aria-hidden="true" draggable="false" decoding="async"
+        <div className="absolute inset-0" style={{ opacity: decodedSrc === media.src ? 1 : 0 }}>
+        <OrientedImage imageRef={originalRef} src={media.src} alt="" aria-hidden="true" rotation={media.rotation || 0}
           onLoad={async (event) => {
             const image = event.currentTarget;
             try {
@@ -306,8 +283,8 @@ const FullscreenPhoto = ({ media, alt, loadOriginal, style }) => {
               if (originalRef.current === image) setDecodedSrc(media.src);
             } catch { /* Keep the preview if the original cannot be decoded. */ }
           }}
-          className="absolute inset-0 h-full w-full select-none object-contain"
-          style={{ opacity: decodedSrc === media.src ? 1 : 0 }} />
+          />
+        </div>
       )}
     </div>
   );
@@ -567,6 +544,7 @@ const MediaViewerPage = () => {
   const [busyAction, setBusyAction] = useState('');
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState('');
+  const [editRotation, setEditRotation] = useState(0);
   const [sharedWith, setSharedWith] = useState(['dad', 'mom']);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -703,6 +681,7 @@ const MediaViewerPage = () => {
   useEffect(() => {
     if (!current) return;
     setEditDate(current.date || '');
+    setEditRotation(current.rotation || 0);
     resetDescriptionDraft(current);
     setEditingDescription(false);
   }, [current, resetDescriptionDraft]);
@@ -934,7 +913,7 @@ const MediaViewerPage = () => {
     }
     setBusyAction('save');
     try {
-      const saved = toMemoryMedia(await updateVideo(mediaId, { uploadedAt: editDate, sharedWith }));
+      const saved = toMemoryMedia(await updateVideo(mediaId, { uploadedAt: editDate, sharedWith, ...(current.source === 'file' ? { rotation: editRotation } : {}) }));
       setMediaItems((value) => value.map((item) => item.id === mediaId ? saved : item));
       setDetails((value) => ({ ...value, sharedWith }));
       setEditing(false);
@@ -1002,7 +981,7 @@ const MediaViewerPage = () => {
             <p className="text-xs text-text-secondary">{currentIndex + 1} / {items.length}</p>
           </div>
           {details?.canModify ? (
-            <button type="button" onClick={() => setEditing((value) => !value)} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="미디어 정보 수정">
+            <button type="button" onClick={() => { setEditDate(current.date || ''); setEditRotation(current.rotation || 0); setSharedWith(current.sharedWith || []); setEditing((value) => !value); }} className="flex size-10 items-center justify-center rounded-full hover:bg-primary/10" aria-label="미디어 정보 수정">
               <Icon icon="mdi:dots-horizontal" className="text-2xl" />
             </button>
           ) : <span className="size-10" />}
@@ -1062,6 +1041,7 @@ const MediaViewerPage = () => {
                 <MediaVideoPlayer
                   src={current.src}
                   poster={current.thumbnail}
+                  rotation={current.rotation || 0}
                   isFullscreen={viewerOpen}
                   onFullscreenChange={setViewerOpen}
                   onPrevious={previous ? () => moveTo(previous) : undefined}
@@ -1069,12 +1049,9 @@ const MediaViewerPage = () => {
                 />
               ) : (
                 <button type="button" onClick={() => setViewerOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
-                  <img
-                    src={current.preview || current.thumbnail || current.src}
-                    alt={current.title}
-                    decoding="async"
-                    className="block max-h-[75vh] w-full object-contain"
-                  />
+                  <div className="h-[75vh] w-full">
+                    <OrientedImage src={current.preview || current.thumbnail || current.src} alt={current.title} rotation={current.rotation || 0} />
+                  </div>
                   <span className="absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/55 text-xl text-white opacity-90 shadow-lg backdrop-blur transition group-hover:scale-105" aria-hidden="true"><Icon icon="mdi:magnify-plus-outline" /></span>
                 </button>
               )}
@@ -1209,7 +1186,7 @@ const MediaViewerPage = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 id="media-edit-title" className="text-lg font-bold">미디어 수정</h2>
-                <p className="mt-0.5 text-xs text-text-secondary">날짜와 공유 가족을 변경할 수 있어요.</p>
+                <p className="mt-0.5 text-xs text-text-secondary">날짜, 공유 가족과 사진·영상 방향을 변경할 수 있어요.</p>
               </div>
               <button type="button" onClick={() => setEditing(false)} className="flex size-9 items-center justify-center rounded-full hover:bg-primary/10" aria-label="닫기"><Icon icon="mdi:close" className="text-xl" /></button>
             </div>
@@ -1221,6 +1198,24 @@ const MediaViewerPage = () => {
                 placeholder="날짜를 선택하세요"
               />
             </div>
+            {current.source === 'file' && current.processingStatus !== 'processing' && current.processingStatus !== 'failed' && (
+              <fieldset className="mt-4" disabled={busyAction === 'save'}>
+                <legend className="text-sm font-semibold">방향 보정</legend>
+                <div className="mt-2 h-52 overflow-hidden rounded-xl bg-black">
+                  {current.type === 'video' ? (
+                    <MediaVideoPlayer key={current.id} src={current.src} poster={current.thumbnail} rotation={editRotation} preview isFullscreen={false} />
+                  ) : (
+                    <OrientedImage src={current.preview || current.thumbnail || current.src} alt="방향 보정 미리보기" rotation={editRotation} />
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <button type="button" onClick={() => setEditRotation((value) => (value + 270) % 360)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold" aria-label="왼쪽으로 90도 회전"><Icon icon="mdi:rotate-left" className="mr-1 inline text-lg" />왼쪽</button>
+                  <button type="button" onClick={() => setEditRotation(0)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold">원래 방향</button>
+                  <button type="button" onClick={() => setEditRotation((value) => (value + 90) % 360)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold" aria-label="오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="mr-1 inline text-lg" />오른쪽</button>
+                </div>
+                <p className="mt-2 text-xs text-text-secondary" aria-live="polite">{editRotation}° · 저장하면 모든 가족에게 같은 방향으로 표시돼요.</p>
+              </fieldset>
+            )}
             <fieldset className="mt-4">
               <legend className="text-sm font-semibold">공유 가족</legend>
               <div className={`mt-2 grid gap-1.5 ${['admin', 'sub-admin'].includes(user?.role) ? 'grid-cols-3' : 'grid-cols-2'}`}>

@@ -49,6 +49,7 @@ const mapMediaRowToVideo = (row) => ({
   description: row.description,
   youtubeUrl: row.youtube_url,
   mediaType: row.media_type,
+  rotation: row.rotation ?? 0,
   fileUrl: row.file_path && (row.processing_status || 'ready') === 'ready'
     ? versionedMediaPath(`/mediaFile/${encodeURIComponent(row.id)}`, row.updated_at)
     : null,

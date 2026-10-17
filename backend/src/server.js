@@ -12,6 +12,8 @@ const start = async () => {
     throw new Error("AUTH_TOKEN_SECRET 환경변수가 필요합니다");
   }
   await ensurePushSubscriptionSchema();
+  await pool.query(`ALTER TABLE media ADD COLUMN IF NOT EXISTS rotation SMALLINT NOT NULL DEFAULT 0
+    CHECK (rotation IN (0, 90, 180, 270))`);
   await resumeMediaProcessing();
   server = app.listen(port, () => {
     console.log(`Hotube API server listening on http://localhost:${port}`);

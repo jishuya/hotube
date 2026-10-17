@@ -507,18 +507,25 @@ const updateMedia = async (id, {
   likeCount,
   channelTitle,
   sharedWith,
+  rotation,
 }) => {
+  if (rotation !== undefined && ![0, 90, 180, 270].includes(rotation)) {
+    throw new HttpError(400, "방향은 0, 90, 180, 270도 중 하나여야 합니다");
+  }
   let client;
 
   try {
     client = await pgDb.getClient();
     await client.query("BEGIN");
 
-    const existing = await client.query("SELECT id FROM media WHERE id = $1 FOR UPDATE", [id]);
+    const existing = await client.query("SELECT id, media_type FROM media WHERE id = $1 FOR UPDATE", [id]);
     if (existing.rows.length === 0) {
       throw new HttpError(404, "비디오를 찾을 수 없습니다");
     }
 
+    if (rotation !== undefined && existing.rows[0].media_type === 'youtube') {
+      throw new HttpError(400, "YouTube 영상은 방향을 보정할 수 없습니다");
+    }
     await client.query(`
       UPDATE media
       SET
@@ -534,7 +541,8 @@ const updateMedia = async (id, {
         like_count = COALESCE($11, like_count),
         channel_title = COALESCE($12, channel_title),
         shared_with = COALESCE($13, shared_with),
-        updated_at = $14
+        updated_at = $14,
+        rotation = COALESCE($15, rotation)
       WHERE id = $1
     `, [
       id,
@@ -551,6 +559,7 @@ const updateMedia = async (id, {
       channelTitle ?? null,
       Array.isArray(sharedWith) ? sharedWith : null,
       new Date().toISOString(),
+      rotation ?? null,
     ]);
 
     if (Array.isArray(tags)) {

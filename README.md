@@ -63,6 +63,8 @@ npm run dev:backend
 
 ## 검증 및 배포
 
+미디어 수정에서 업로드한 사진·영상의 방향을 90도씩 보정할 수 있습니다. 보정값은 일반 보기와 전체보기에 적용되며 원본 파일은 변경하지 않습니다. YouTube 영상은 방향 보정 대상에서 제외됩니다. 서버 시작 시 `media.rotation` 열이 자동으로 추가됩니다. 수동 적용이 필요하면 [방향 보정 마이그레이션](docs/postgresql/add_media_rotation.sql)을 사용하세요.
+
 ```bash
 npm run build
 npm test --prefix backend
