@@ -142,7 +142,7 @@ const MyPage = () => {
                 <h1 id="profile-title" className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-2xl font-bold">{displayName}</span>
                 </h1>
-                <p className="mt-1 text-sm text-text-secondary">사랑스런 '수호♡수윤' {user?.title || '가족'}</p>
+                <p className="mt-1 text-sm text-text-secondary">수호, 수윤이 {user?.title || '가족'}</p>
               </div>
             </div>
           </section>

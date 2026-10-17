@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
-import { deleteVideo, getFavoriteMedia, toggleFavorite, updateVideo } from '../services/videoApi';
-import { toggleLike } from '../services/authApi';
+import { deleteVideo, updateVideo } from '../services/videoApi';
 import { addMediaToMyAlbum, createMyAlbum, deleteMyAlbum } from '../services/myAlbumApi';
 import { useAuth } from '../contexts/AuthContext';
 import ToastContainer from '../components/common/Toast';
@@ -61,14 +60,15 @@ const SelectionActionScroller = ({ children }) => {
   );
 };
 
-const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
-  const { user, isLiked, updateUser } = useAuth();
+const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged, allowDelete = true, extraActions = [], actionsBusy = false }) => {
+  const { user } = useAuth();
   const longPressTimerRef = useRef(null);
   const pointerStartRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
   const [selectionActive, setSelectionActive] = useState(false);
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
-  const [selectionBusy, setSelectionBusy] = useState('');
+  const [activeAction, setSelectionBusy] = useState('');
+  const selectionBusy = activeAction || (actionsBusy ? 'external' : '');
   const [selectionError, setSelectionError] = useState('');
   const [albumCreateOpen, setAlbumCreateOpen] = useState(false);
   const [albumTitleDraft, setAlbumTitleDraft] = useState('');
@@ -231,38 +231,6 @@ const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
     if (result.successIds.length) window.dispatchEvent(new Event('hotube:media-updated'));
   };
 
-  const addSelectedFavorites = async () => {
-    setSelectionBusy('favorite');
-    try {
-      const favoriteIds = new Set((await getFavoriteMedia(user.id)).map((item) => item.id));
-      const targets = selectedMediaIds.filter((id) => !favoriteIds.has(id));
-      const results = await Promise.allSettled(targets.map((id) => toggleFavorite(user.id, id)));
-      const count = results.filter((result) => result.status === 'fulfilled').length;
-      showToast('success', targets.length ? `${count}개를 즐겨찾기에 추가했습니다.` : '선택한 항목은 이미 즐겨찾기에 있어요.');
-      setSelectionError(count !== targets.length ? `${targets.length - count}개는 처리하지 못했습니다.` : '');
-    } catch (error) {
-      setSelectionError(error.message);
-    } finally {
-      setSelectionBusy('');
-    }
-  };
-
-  const addSelectedLikes = async () => {
-    const targets = selectedMediaIds.filter((id) => !isLiked(id));
-    if (!targets.length) {
-      showToast('info', '선택한 항목은 이미 좋아요가 추가되어 있어요.');
-      return;
-    }
-    setSelectionBusy('like');
-    const results = await Promise.allSettled(targets.map((id) => toggleLike(user.id, id)));
-    const addedIds = targets.filter((_, index) => results[index].status === 'fulfilled');
-    updateUser({ likedVideos: [...new Set([...(user.likedVideos || []), ...addedIds])] });
-    setSelectionBusy('');
-    if (addedIds.length) showToast('success', `${addedIds.length}개에 좋아요를 추가했습니다.`);
-    const failedCount = targets.length - addedIds.length;
-    setSelectionError(failedCount ? `${failedCount}개는 처리하지 못했습니다.` : '');
-  };
-
   const saveSelectedTags = async (event) => {
     event.preventDefault();
     const tags = [...new Set(selectionTagDraft.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean))];
@@ -338,9 +306,8 @@ const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
             </div>
             <SelectionActionScroller>
             {[
+              ...extraActions,
               ['album', 'mdi:folder-plus-outline', '앨범 만들기', openAlbumCreateModal],
-              ['favorite', 'mdi:bookmark-plus-outline', '즐겨찾기', addSelectedFavorites],
-              ['like', 'mdi:heart-plus-outline', '좋아요', addSelectedLikes],
               ['date', 'mdi:calendar-edit-outline', '날짜 변경', openSelectedDateDialog],
               ['family', 'mdi:account-group-outline', '공유가족', () => setSelectionDialog('family')],
               ['download', 'mdi:download-outline', '다운로드', downloadSelectedMedia],
@@ -351,7 +318,7 @@ const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
                 {label}
               </button>
             ))}
-            <button
+            {allowDelete && <button
               type="button"
               onClick={() => setSelectionDeleteOpen(true)}
               disabled={Boolean(selectionBusy) || !selectedMediaIds.length}
@@ -359,7 +326,7 @@ const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
             >
               <Icon icon={selectionBusy === 'delete' ? 'mdi:loading' : 'mdi:trash-can-outline'} className={`text-xl ${selectionBusy === 'delete' ? 'animate-spin' : ''}`} />
               삭제
-            </button>
+            </button>}
             </SelectionActionScroller>
           </section>
         )}
@@ -500,7 +467,7 @@ const useMediaSelection = ({ mediaItems, setMediaItems, onMediaChanged }) => {
         onClose={() => { if (!selectionBusy) setSelectionDeleteOpen(false); }}
         onConfirm={deleteSelectedMedia}
         title="선택 항목 삭제"
-        message={`선택한 사진과 영상 ${selectedMediaIds.length}개를 삭제할까요? 삭제한 파일은 복구할 수 없습니다.`}
+        message="삭제한 파일은 복구 할 수 없습니다"
         type="confirm"
         confirmText={selectionBusy === 'delete' ? '삭제 중' : '삭제'}
         cancelText="취소"

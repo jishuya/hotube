@@ -175,12 +175,7 @@ const DayAlbumContent = ({ date }) => {
                     ) : (
                       <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     )}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`truncate text-sm font-semibold ${item.type === 'video' ? 'pb-5' : ''}`}>{item.title}</p>
-                        {item.type === 'video' && <VideoDurationBadge media={item} />}
-                      </div>
-                    </div>
+                    {item.type === 'video' && <VideoDurationBadge media={item} />}
                   </Link>
                 ))}
               </section>

@@ -206,7 +206,10 @@ const MyAlbumPage = () => {
 
         <section className="mt-10" aria-labelledby="my-albums-title">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <div>
+            <div className="flex items-center gap-1">
+              <span className="flex h-9 w-5 shrink-0 items-center justify-center text-primary" aria-hidden="true">
+                <Icon icon="mdi:image-multiple" className="text-xl" />
+              </span>
               <h2 id="my-albums-title" className="text-xl font-bold">마이 앨범</h2>
             </div>
             <button type="button" onClick={openCreateAlbum} className="flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90">
@@ -421,7 +424,7 @@ const MyAlbumPage = () => {
           <p className="mt-2 text-sm leading-6 text-gray-600">
             ‘{deletingAlbum.title}’ 앨범을 삭제할까요?
             <br />
-            앨범에 담긴 원본 사진과 영상은 삭제되지 않습니다.
+            앨범에 담긴 원본은 삭제되지 않습니다
           </p>
           {deleteError && <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{deleteError}</p>}
           <div className="mt-5 flex gap-2">

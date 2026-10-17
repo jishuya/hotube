@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/common/Header';
+import useMediaSelection from '../hooks/useMediaSelection';
 import { useAuth } from '../contexts/AuthContext';
 import { getFavoriteMediaPage, getLikedMediaPage, getMediaPage, toMemoryMedia } from '../services/videoApi';
 import {
@@ -11,16 +12,12 @@ import {
   getMyAlbum,
   getMyAlbumMedia,
   removeMediaFromMyAlbum,
-  updateMyAlbum,
 } from '../services/myAlbumApi';
 
 const MyAlbumDetailPage = () => {
   const { albumId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const longPressTimerRef = useRef(null);
-  const pointerStartRef = useRef(null);
-  const longPressTriggeredRef = useRef(false);
   const isFavorites = albumId === 'favorites';
   const isLikes = albumId === 'likes';
   const isSystemAlbum = isFavorites || isLikes;
@@ -33,10 +30,6 @@ const MyAlbumDetailPage = () => {
   const [loadedRequestKey, setLoadedRequestKey] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const [renameBusy, setRenameBusy] = useState(false);
-  const [renameError, setRenameError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMedia, setPickerMedia] = useState([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState([]);
@@ -47,13 +40,31 @@ const MyAlbumDetailPage = () => {
   const pickerLoadingMoreRef = useRef(false);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerError, setPickerError] = useState('');
-  const [selectedMediaIds, setSelectedMediaIds] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllRunRef = useRef(0);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState('');
   const requestKey = user?.id ? `${user.id}:${albumId}` : null;
   const loading = Boolean(requestKey) && loadedRequestKey !== requestKey;
-  const selectionMode = selectedMediaIds.length > 0;
+  const {
+    selectionMode, selectedMediaIds, selectionBusy, selectionError, selectionUI, clearSelection,
+    toggleDateMediaSelection,
+    beginLongPress, trackLongPress, endLongPress, handleMediaClick,
+  } = useMediaSelection({
+    mediaItems: media,
+    setMediaItems: setMedia,
+    onMediaChanged: () => setReloadKey((current) => current + 1),
+    allowDelete: false,
+    actionsBusy: removeBusy || selectingAll,
+    extraActions: isSystemAlbum ? [] : [[
+      'remove', 'mdi:folder-remove-outline', '앨범에서 빼기', () => {
+        setRemoveError('');
+        setRemoveConfirmOpen(true);
+      },
+    ]],
+  });
   const existingMediaIds = useMemo(() => new Set(media.map((item) => item.id)), [media]);
   const availablePickerMedia = useMemo(
     () => pickerMedia.filter((item) => !existingMediaIds.has(item.id)),
@@ -63,6 +74,8 @@ const MyAlbumDetailPage = () => {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
+    selectAllRunRef.current += 1;
+    setSelectingAll(false);
     const request = isSystemAlbum
       ? (isFavorites ? getFavoriteMediaPage(user.id) : getLikedMediaPage(user.id)).then((page) => {
         if (active) {
@@ -93,11 +106,12 @@ const MyAlbumDetailPage = () => {
       });
     return () => {
       active = false;
+      selectAllRunRef.current += 1;
     };
-  }, [albumId, isFavorites, isSystemAlbum, requestKey, user?.id]);
+  }, [albumId, isFavorites, isSystemAlbum, reloadKey, requestKey, user?.id]);
 
   const loadMoreSystemMedia = useCallback(async () => {
-    if (!isSystemAlbum || !systemHasMore || systemLoadingMoreRef.current || !user?.id) return;
+    if (!isSystemAlbum || !systemHasMore || systemLoadingMoreRef.current || selectingAll || !user?.id) return;
     systemLoadingMoreRef.current = true;
     setSystemLoadingMore(true);
     try {
@@ -115,7 +129,7 @@ const MyAlbumDetailPage = () => {
       systemLoadingMoreRef.current = false;
       setSystemLoadingMore(false);
     }
-  }, [isFavorites, isSystemAlbum, media.length, systemHasMore, user?.id]);
+  }, [isFavorites, isSystemAlbum, media.length, selectingAll, systemHasMore, user?.id]);
 
   useEffect(() => {
     const target = systemSentinelRef.current;
@@ -132,7 +146,7 @@ const MyAlbumDetailPage = () => {
     pickerLoadingMoreRef.current = true;
     setPickerLoadingMore(true);
     try {
-      const page = await getMediaPage({ limit: 40 }, pickerNextCursor);
+      const page = await getMediaPage({ limit: 40, sort: 'date' }, pickerNextCursor);
       setPickerMedia((current) => {
         const existingIds = new Set(current.map((item) => item.id));
         return [...current, ...page.items.map(toMemoryMedia).filter((item) => !existingIds.has(item.id))];
@@ -179,67 +193,40 @@ const MyAlbumDetailPage = () => {
 
   const title = isFavorites ? '즐겨찾기' : isLikes ? '좋아요' : album.title;
 
-  const openRenameAlbum = () => {
-    setTitleDraft(title);
-    setRenameError('');
-    setRenameOpen(true);
-  };
+  const allSelected = media.length > 0 && !systemHasMore
+    && media.every((item) => selectedMediaIds.includes(item.id));
 
-  const renameAlbum = async (event) => {
-    event.preventDefault();
-    const nextTitle = titleDraft.trim();
-    if (!nextTitle || renameBusy) {
-      if (!nextTitle) setRenameError('앨범 제목을 입력해 주세요.');
+  const selectAllMedia = async () => {
+    if (selectionBusy || systemLoadingMoreRef.current) return;
+    if (allSelected) {
+      clearSelection();
       return;
     }
-    if (nextTitle === title) {
-      setRenameOpen(false);
-      return;
-    }
-    setRenameBusy(true);
+    const run = ++selectAllRunRef.current;
+    setSelectingAll(true);
     try {
-      const updated = await updateMyAlbum(user.id, albumId, { title: nextTitle });
-      setAlbum(updated);
-      setError('');
-      setRenameOpen(false);
-    } catch (actionError) {
-      setRenameError(actionError.message);
+      const allMedia = [...media];
+      let hasMore = isSystemAlbum && systemHasMore;
+      let offset = media.length;
+      while (hasMore) {
+        const page = await (isFavorites
+          ? getFavoriteMediaPage(user.id, 30, offset)
+          : getLikedMediaPage(user.id, 30, offset));
+        if (run !== selectAllRunRef.current) return;
+        const ids = new Set(allMedia.map((item) => item.id));
+        allMedia.push(...page.items.map(toMemoryMedia).filter((item) => !ids.has(item.id)));
+        offset += page.items.length;
+        hasMore = page.hasMore && page.items.length > 0;
+      }
+      setMedia(allMedia);
+      setSystemHasMore(false);
+      // Replace a partial selection with all items using the shared selection toggle.
+      toggleDateMediaSelection(allMedia);
+    } catch (loadError) {
+      if (run === selectAllRunRef.current) setError(loadError.message);
     } finally {
-      setRenameBusy(false);
+      if (run === selectAllRunRef.current) setSelectingAll(false);
     }
-  };
-
-  const toggleMediaSelection = (mediaId) => {
-    setSelectedMediaIds((current) => current.includes(mediaId)
-      ? current.filter((id) => id !== mediaId)
-      : [...current, mediaId]);
-    setRemoveError('');
-  };
-
-  const beginLongPress = (event, mediaId) => {
-    if (isSystemAlbum || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-    longPressTriggeredRef.current = false;
-    window.clearTimeout(longPressTimerRef.current);
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      toggleMediaSelection(mediaId);
-      if (navigator.vibrate) navigator.vibrate(30);
-    }, 550);
-  };
-
-  const trackLongPress = (event) => {
-    const start = pointerStartRef.current;
-    if (!start) return;
-    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
-      window.clearTimeout(longPressTimerRef.current);
-      pointerStartRef.current = null;
-    }
-  };
-
-  const endLongPress = () => {
-    window.clearTimeout(longPressTimerRef.current);
-    pointerStartRef.current = null;
   };
 
   const removeSelectedMedia = async () => {
@@ -253,7 +240,7 @@ const MyAlbumDetailPage = () => {
         ...current,
         mediaCount: Math.max(0, current.mediaCount - removedIds.size),
       }));
-      setSelectedMediaIds([]);
+      clearSelection();
       setRemoveConfirmOpen(false);
       setRemoveError('');
       setError('');
@@ -270,7 +257,7 @@ const MyAlbumDetailPage = () => {
     setPickerError('');
     setPickerLoading(true);
     try {
-      const page = await getMediaPage({ limit: 40 });
+      const page = await getMediaPage({ limit: 40, sort: 'date' });
       setPickerMedia(page.items.map(toMemoryMedia));
       setPickerNextCursor(page.nextCursor);
     } catch (loadError) {
@@ -310,9 +297,9 @@ const MyAlbumDetailPage = () => {
       <Header showSearch={false} />
       <main className={`min-h-screen bg-background px-4 text-text-primary ${selectionMode ? 'pb-36' : 'pb-16'}`}>
         <div className="mx-auto max-w-container">
-          <header className="mb-6">
+          <header className="mb-2">
             <div className="flex items-center justify-between gap-4">
-              <div className={`flex min-w-0 items-center ${isSystemAlbum ? 'gap-0.5' : 'gap-1'}`}>
+              <div className="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={() => navigate('/my-album', { replace: true })}
@@ -321,25 +308,26 @@ const MyAlbumDetailPage = () => {
                 >
                   <Icon icon="mdi:arrow-left" className="text-xl" />
                 </button>
-                {isSystemAlbum && (
-                  <Icon icon={isFavorites ? 'mdi:bookmark' : 'mdi:heart'} className={`shrink-0 text-2xl ${isFavorites ? 'text-yellow-400' : 'text-rose-400'}`} aria-hidden="true" />
-                )}
-                <h1 className="truncate text-2xl font-bold sm:text-3xl">{title}</h1>
-                {!isSystemAlbum && (
-                  <button
-                    type="button"
-                    onClick={openRenameAlbum}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-primary/10 hover:text-primary"
-                    aria-label="앨범 제목 수정"
-                  >
-                    <Icon icon="mdi:pencil-outline" className="text-xl" />
-                  </button>
-                )}
+                <h1 className="truncate text-lg font-bold text-[#795548] sm:text-xl">{title}</h1>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-text-secondary">{media.length}</span>
+              <button
+                type="button"
+                onClick={selectAllMedia}
+                disabled={!media.length || Boolean(selectionBusy) || systemLoadingMore}
+                className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg px-2 text-sm font-bold text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
+                aria-label={`${title} 미디어 전체 선택`}
+                aria-pressed={allSelected}
+                aria-busy={selectingAll}
+                title="이 앨범 전체 선택"
+              >
+                <span className="text-xs">전체 선택</span>
+                <Icon
+                  icon={selectingAll ? 'mdi:loading' : allSelected ? 'mdi:checkbox-marked-circle' : 'mdi:checkbox-blank-circle-outline'}
+                  className={`text-xl ${allSelected ? 'text-primary' : 'text-text-secondary'} ${selectingAll ? 'animate-spin' : ''}`}
+                />
+              </button>
             </div>
-            {isFavorites && <p className="mt-2 text-sm text-text-secondary">즐겨찾기한 순간을 한곳에 모았어요.</p>}
-            {isLikes && <p className="mt-2 text-sm text-text-secondary">좋아요한 순간을 한곳에 모았어요.</p>}
+            {selectionError && <p className="mt-3 text-sm font-semibold text-error">{selectionError}</p>}
             {error && <p className="mt-3 rounded-xl bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
           </header>
 
@@ -363,20 +351,13 @@ const MyAlbumDetailPage = () => {
                     onPointerUp={endLongPress}
                     onPointerCancel={endLongPress}
                     onPointerLeave={endLongPress}
-                    onContextMenu={(event) => {
-                      if (!isSystemAlbum) event.preventDefault();
-                    }}
-                    onClick={(event) => {
-                      if (isSystemAlbum || (!selectionMode && !longPressTriggeredRef.current)) return;
-                      event.preventDefault();
-                      if (!longPressTriggeredRef.current) toggleMediaSelection(item.id);
-                      longPressTriggeredRef.current = false;
-                    }}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={(event) => handleMediaClick(event, item.id)}
                   >
                     <img src={item.thumbnail || item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   </Link>
-                  <MediaPreviewAction mediaId={item.id} kind={isFavorites ? 'favorite' : 'like'} initiallyActive={isSystemAlbum} />
-                  {selectionMode && !isSystemAlbum && (
+                  {!selectionMode && <MediaPreviewAction mediaId={item.id} kind={isFavorites ? 'favorite' : 'like'} initiallyActive={isSystemAlbum} />}
+                  {selectionMode && (
                     <span className={`pointer-events-none absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border-2 shadow-sm ${
                       selectedMediaIds.includes(item.id)
                         ? 'border-primary bg-primary text-white'
@@ -385,12 +366,7 @@ const MyAlbumDetailPage = () => {
                       <Icon icon="mdi:check" className="text-lg" />
                     </span>
                   )}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-white">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={`truncate text-sm font-semibold ${item.type === 'video' ? 'pb-5' : ''}`}>{item.title}</p>
-                      {item.type === 'video' && <VideoDurationBadge media={item} />}
-                    </div>
-                  </div>
+                  {item.type === 'video' && <VideoDurationBadge media={item} />}
                 </article>
               ))}
             </section>
@@ -419,97 +395,9 @@ const MyAlbumDetailPage = () => {
             </div>
           )}
         </div>
-        {selectionMode && !isSystemAlbum && (
-          <section className="fixed inset-x-3 bottom-24 z-40 mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-surface/95 p-2.5 shadow-2xl backdrop-blur-md" aria-label="선택한 앨범 미디어 작업">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedMediaIds([]);
-                setRemoveError('');
-              }}
-              className="flex size-10 items-center justify-center rounded-xl text-text-secondary hover:bg-primary/10"
-              aria-label="선택 취소"
-            >
-              <Icon icon="mdi:close" className="text-2xl" />
-            </button>
-            <span className="min-w-14 text-center text-sm font-black text-primary">{selectedMediaIds.length}개</span>
-            <button
-              type="button"
-              onClick={() => {
-                setRemoveError('');
-                setRemoveConfirmOpen(true);
-              }}
-              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-error px-4 text-sm font-bold text-white"
-            >
-              <Icon icon="mdi:folder-remove-outline" className="text-lg" />
-              앨범에서 빼기
-            </button>
-          </section>
-        )}
+
       </main>
-      {renameOpen && (
-        <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => {
-              if (!renameBusy) setRenameOpen(false);
-            }}
-            aria-label="앨범 제목 수정 닫기"
-          />
-          <form
-            onSubmit={renameAlbum}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !renameBusy) setRenameOpen(false);
-            }}
-            className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
-            aria-labelledby="detail-rename-album-title"
-          >
-            <div className="flex flex-col items-center text-center">
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Icon icon="mdi:pencil-outline" className="text-2xl" />
-              </span>
-              <h2 id="detail-rename-album-title" className="mt-3 text-lg font-bold text-gray-900">앨범 제목 수정</h2>
-              <p className="mt-1 text-sm text-gray-600">변경할 앨범 제목을 입력해 주세요.</p>
-            </div>
-            <label className="mt-5 block">
-              <span className="sr-only">앨범 제목</span>
-              <input
-                autoFocus
-                value={titleDraft}
-                onChange={(event) => {
-                  setTitleDraft(event.target.value);
-                  setRenameError('');
-                }}
-                maxLength={80}
-                className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-            <div className="mt-1 flex min-h-5 items-start justify-between gap-2 text-xs">
-              <span className="font-semibold text-error">{renameError}</span>
-              <span className="shrink-0 text-text-secondary">{titleDraft.length}/80</span>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setRenameOpen(false)}
-                disabled={renameBusy}
-                className="h-11 flex-1 rounded-xl border border-border font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                disabled={renameBusy || !titleDraft.trim()}
-                className="flex h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-primary font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
-              >
-                {renameBusy && <Icon icon="mdi:loading" className="animate-spin text-lg" />}
-                {renameBusy ? '저장 중' : '저장'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {selectionUI}
       {pickerOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
           <button
@@ -619,7 +507,7 @@ const MyAlbumDetailPage = () => {
             <p className="mt-2 text-sm leading-6 text-gray-600">
               선택한 {selectedMediaIds.length}개의 사진·영상을 이 앨범에서 뺄까요?
               <br />
-              원본 사진과 영상은 삭제되지 않습니다.
+              원본은 삭제되지 않습니다.
             </p>
             {removeError && <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-semibold text-error">{removeError}</p>}
             <div className="mt-5 flex gap-2">
