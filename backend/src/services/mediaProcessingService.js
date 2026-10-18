@@ -2,7 +2,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const pgDb = require('../db');
-const { resolveMediaPath, toStoredMediaPath } = require('../mediaStorage');
+const { getDerivedMediaDirectory, resolveMediaPath, toStoredMediaPath } = require('../mediaStorage');
 const {
   createBrowserCompatibleVideo,
   createVideoThumbnail,
@@ -56,12 +56,14 @@ const processVideoJob = async (job) => {
   const inputAbsolutePath = resolveMediaPath(job.input_path);
   const relativeDirectory = path.posix.dirname(job.input_path);
   const absoluteDirectory = path.dirname(inputAbsolutePath);
-  const thumbnailPath = toStoredMediaPath(relativeDirectory, `${randomUUID()}.jpg`);
+  const thumbnailDirectory = getDerivedMediaDirectory(relativeDirectory, 'thumbnail');
+  const thumbnailPath = toStoredMediaPath(thumbnailDirectory, `${randomUUID()}.jpg`);
   const thumbnailAbsolutePath = resolveMediaPath(thumbnailPath);
   let outputPath = job.input_path;
   let outputAbsolutePath = inputAbsolutePath;
 
   try {
+    await fs.mkdir(path.dirname(thumbnailAbsolutePath), { recursive: true });
     await createVideoThumbnail(inputAbsolutePath, thumbnailAbsolutePath);
     const optimized = await isPlaybackOptimizedVideo(inputAbsolutePath);
     if (!optimized) {

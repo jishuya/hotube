@@ -21,8 +21,17 @@ const getDateDirectory = (uploadedAt) => {
   return path.join(match[1], match[2], match[3]);
 };
 
-const ensureMediaDateDirectory = (uploadedAt) => {
-  const relativeDirectory = getDateDirectory(uploadedAt);
+const getDerivedMediaDirectory = (relativeDirectory, kind) => {
+  const suffix = { thumbnail: 'thumbnails', preview: 'previews' }[kind];
+  if (!suffix) throw new Error('잘못된 미디어 이미지 종류입니다');
+  const [year, ...parts] = relativeDirectory.split(/[\\/]/);
+  if (!/^\d{4}$/.test(year)) throw new Error('잘못된 미디어 연도입니다');
+  return path.join(`${year}-${suffix}`, ...parts);
+};
+
+const ensureMediaDateDirectory = (uploadedAt, kind) => {
+  const dateDirectory = getDateDirectory(uploadedAt);
+  const relativeDirectory = kind ? getDerivedMediaDirectory(dateDirectory, kind) : dateDirectory;
   const absoluteDirectory = path.join(mediaDirectory, relativeDirectory);
   fs.mkdirSync(absoluteDirectory, { recursive: true });
   return { absoluteDirectory, relativeDirectory };
@@ -70,6 +79,7 @@ const removeEmptyMediaDirectories = async (storedPaths) => {
 module.exports = {
   ensureMediaDateDirectory,
   ensureMediaDirectory,
+  getDerivedMediaDirectory,
   mediaDirectory,
   removeEmptyMediaDirectories,
   resolveMediaPath,

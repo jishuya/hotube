@@ -48,7 +48,7 @@ const FilePreview = ({ file }) => {
   return <span ref={containerRef} className="absolute inset-0" aria-hidden="true" />;
 };
 
-const UploadFilePicker = ({ files, limit, existingCount, onCancel, onConfirm }) => {
+const UploadFilePicker = ({ files, limit, existingCount, duplicateCount = 0, onCancel, onConfirm }) => {
   const dialogRef = useRef(null);
   const [selected, setSelected] = useState([]);
   useEffect(() => {
@@ -64,18 +64,27 @@ const UploadFilePicker = ({ files, limit, existingCount, onCancel, onConfirm }) 
       aria-labelledby="upload-picker-title" aria-describedby="upload-picker-description"
       className="m-auto h-[100dvh] max-h-[100dvh] w-screen max-w-2xl border-0 bg-surface p-0 text-text-primary backdrop:bg-black/60 sm:h-[90dvh] sm:rounded-2xl">
       <div className="flex h-full min-h-0 flex-col">
-        <header className="shrink-0 border-b border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="upload-picker-title" className="text-lg font-extrabold">이번에 올릴 사진·영상 선택</h2>
-            <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-sm font-bold">취소</button>
+        <header className="relative shrink-0 border-b border-border p-4">
+          <div className="flex min-h-8 items-center justify-between gap-3 pr-9">
+            <h2 id="upload-picker-title" className="text-lg font-extrabold">사진·영상 선택</h2>
+            <button type="button" onClick={onCancel} aria-label="선택 화면 닫기" className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-lg text-text-secondary hover:bg-gray-100">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-6" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
           </div>
           <p id="upload-picker-description" className="mt-2 text-sm text-text-secondary">
             가져온 {files.length}개 중 최대 {limit}개를 골라주세요.
             {existingCount > 0 && ` 이미 첨부한 파일은 ${existingCount}개예요.`}
           </p>
-          <p className="mt-2 font-extrabold text-primary" role="status">
-            {selected.length}/{limit}개 선택{full ? ' · 다른 파일을 고르려면 선택을 해제해 주세요' : ''}
+          <p className={full ? 'mt-0 text-sm text-text-secondary' : 'mt-2 font-extrabold text-primary'} role="status">
+            {full ? '다른 파일을 고르려면 선택을 해제해 주세요.' : `${selected.length}/${limit}개 선택`}
           </p>
+          {duplicateCount > 0 && (
+            <p className="mt-2 rounded-lg bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-800">
+              이미 첨부했거나 중복 선택한 파일 {duplicateCount}개를 제외했어요.
+            </p>
+          )}
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
           <div className="grid grid-cols-3 gap-2 sm:gap-3">

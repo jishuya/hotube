@@ -24,8 +24,8 @@ const backfill = async () => {
     let thumbnailPath;
     let previewPath;
     try {
-      const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(media.uploaded_at);
       if (!media.thumbnail_path) {
+        const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(media.uploaded_at, 'thumbnail');
         const thumbnailFilename = `${randomUUID()}.webp`;
         thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
         await createImageThumbnail(
@@ -34,6 +34,7 @@ const backfill = async () => {
         );
       }
       if (!media.preview_path) {
+        const { absoluteDirectory, relativeDirectory } = ensureMediaDateDirectory(media.uploaded_at, 'preview');
         const previewFilename = `${randomUUID()}.webp`;
         previewPath = toStoredMediaPath(relativeDirectory, previewFilename);
         await createImagePreview(

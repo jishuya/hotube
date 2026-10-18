@@ -45,13 +45,15 @@ const finalizeMediaFile = async ({
     } else {
       const originalExtension = path.extname(originalName).toLowerCase().replace(/[^.a-z0-9]/g, '');
       const originalFilename = `${randomUUID()}${originalExtension || '.image'}`;
+      const thumbnailDirectory = ensureMediaDateDirectory(uploadedAt, 'thumbnail');
+      const previewDirectory = ensureMediaDateDirectory(uploadedAt, 'preview');
       const thumbnailFilename = `${randomUUID()}.webp`;
       const previewFilename = `${randomUUID()}.webp`;
       storedFilePath = toStoredMediaPath(relativeDirectory, originalFilename);
-      thumbnailPath = toStoredMediaPath(relativeDirectory, thumbnailFilename);
-      previewPath = toStoredMediaPath(relativeDirectory, previewFilename);
-      await createImageThumbnail(tempPath, path.join(absoluteDirectory, thumbnailFilename));
-      await createImagePreview(tempPath, path.join(absoluteDirectory, previewFilename));
+      thumbnailPath = toStoredMediaPath(thumbnailDirectory.relativeDirectory, thumbnailFilename);
+      previewPath = toStoredMediaPath(previewDirectory.relativeDirectory, previewFilename);
+      await createImageThumbnail(tempPath, path.join(thumbnailDirectory.absoluteDirectory, thumbnailFilename));
+      await createImagePreview(tempPath, path.join(previewDirectory.absoluteDirectory, previewFilename));
       await fs.rename(tempPath, path.join(absoluteDirectory, originalFilename));
     }
     createdMedia = await createFileMedia({

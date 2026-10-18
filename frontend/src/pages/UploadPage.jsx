@@ -2,6 +2,7 @@ import MediaThumbnail from '../components/common/MediaThumbnail';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
+import { excludeSelectedDuplicates, getUploadSelectionCapacity } from '../utils/uploadSelection';
 import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
 import { getDefaultSharedWith } from '../utils/familySharing';
@@ -146,6 +147,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [pickerFiles, setPickerFiles] = useState(null);
+  const [pickerDuplicateCount, setPickerDuplicateCount] = useState(0);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeInfo, setYoutubeInfo] = useState(null);
   const [fetchingYoutube, setFetchingYoutube] = useState(false);
@@ -178,6 +180,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const preparingRef = useRef(false);
   const manuallyPausedRef = useRef(false);
   const previewUrlsRef = useRef(new Set());
+  const selectionHashCacheRef = useRef(new WeakMap());
   const [, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [uploadError, setUploadError] = useState('');
   const [uploadFailureMessage, setUploadFailureMessage] = useState('');
@@ -395,13 +398,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
   const addFiles = async (files) => {
     if (preparingRef.current || uploadInProgressRef.current) return;
-    const incomingFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
-    const remainingSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
-    if (remainingSlots > 0 && incomingFiles.length > remainingSlots) {
-      setFileSelectionNotice('');
-      setPickerFiles(incomingFiles);
-      return;
-    }
+    let incomingFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     preparingRef.current = true;
     setPreparing(true);
     setPreparationProgress(0);
@@ -410,29 +407,56 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     const newPreviewUrls = [];
     let selectionCommitted = false;
     try {
-      const availableSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
-      const selectedMediaFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+      const { remaining: availableSlots } = getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES);
       if (availableSlots === 0) {
-        setFileSelectionNotice(`최대 ${MAX_UPLOAD_FILES}개까지 첨부할 수 있어요. 추가 파일은 제외했어요.`);
+        setFileSelectionNotice(`이미 ${MAX_UPLOAD_FILES}개를 첨부했어요. 다른 파일을 추가하려면 기존 파일을 먼저 삭제해 주세요.`);
         return;
       }
+      let excludedDuplicateCount = 0;
+      if (selectedFiles.length > 0) {
+        const result = await excludeSelectedDuplicates(
+          incomingFiles,
+          selectedFiles.map((item) => item.contentHash).filter(Boolean),
+          async (file) => {
+            controller.signal.throwIfAborted();
+            let hash = selectionHashCacheRef.current.get(file);
+            if (!hash) {
+              hash = await hashFile(file, undefined, controller.signal);
+              selectionHashCacheRef.current.set(file, hash);
+            }
+            return hash;
+          },
+        );
+        controller.signal.throwIfAborted();
+        incomingFiles = result.files;
+        excludedDuplicateCount = result.duplicateCount;
+      }
+      if (getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES).needsPicker) {
+        setFileSelectionNotice('');
+        setPickerDuplicateCount(excludedDuplicateCount);
+        setPickerFiles(incomingFiles);
+        return;
+      }
+      const selectedMediaFiles = incomingFiles;
       const selectionNotices = [];
+      if (!incomingFiles.length) {
+        if (excludedDuplicateCount) setFileSelectionNotice(`중복 파일 ${excludedDuplicateCount}개를 제외했어요.`);
+        return;
+      }
       const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
       const oversizedVideos = selectedMediaFiles.filter((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
       const sizeEligibleFiles = selectedMediaFiles.filter((file) => (
         !(file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE)
         && !(file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE)
       ));
-      const countExcludedFiles = sizeEligibleFiles.slice(availableSlots);
-      const countEligibleFiles = sizeEligibleFiles.slice(0, availableSlots);
       const mediaFiles = [];
       let totalSize = selectedUploadSize;
       let longVideoCount = 0;
       let totalSizeExceededCount = 0;
 
       // 전체 준비 진행률: 기본 검사 10%, 파일 읽기 80%, 중복 조회 5%, 미리보기 5%.
-      for (const [index, file] of countEligibleFiles.entries()) {
-        setPreparationProgress(Math.floor(index / countEligibleFiles.length * 10));
+      for (const [index, file] of sizeEligibleFiles.entries()) {
+        setPreparationProgress(Math.floor(index / sizeEligibleFiles.length * 10));
         if (file.type.startsWith('video/')) {
           controller.signal.throwIfAborted();
           const duration = await readVideoDuration(file, controller.signal);
@@ -452,9 +476,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
       if (longVideoCount) selectionNotices.push(`영상 길이 초과 ${longVideoCount}개 (최대 2분)`);
       if (totalSizeExceededCount) selectionNotices.push(`전체 용량 초과 ${totalSizeExceededCount}개 (최대 500MB)`);
-      if (countExcludedFiles.length) {
-        selectionNotices.push(`개수 초과 ${countExcludedFiles.length}개 (최대 ${MAX_UPLOAD_FILES}개)`);
-      }
       if (oversizedImages.length) {
         selectionNotices.push(`사진 용량 초과 ${oversizedImages.length}개 (개당 최대 20MB)`);
       }
@@ -463,6 +484,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       }
 
       if (!mediaFiles.length) {
+        if (excludedDuplicateCount) selectionNotices.push(`중복 파일 ${excludedDuplicateCount}개를 제외했어요.`);
         if (selectionNotices.length) {
           setFileSelectionNotice(selectionNotices.join('\n'));
         }
@@ -475,9 +497,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         const totalBytes = mediaFiles.reduce((sum, file) => sum + file.size, 0);
         let checkedBytes = 0;
         for (const file of mediaFiles) {
-          const contentHash = await hashFile(file, (loaded) => {
+          const contentHash = selectionHashCacheRef.current.get(file) || await hashFile(file, (loaded) => {
             setPreparationProgress(10 + Math.floor(Math.min(1, (checkedBytes + loaded) / (totalBytes || 1)) * 80));
           }, controller.signal);
+          selectionHashCacheRef.current.set(file, contentHash);
           checkedBytes += file.size;
           hashedFiles.push({ file, contentHash });
         }
@@ -495,8 +518,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           return !duplicate;
         });
         setUploadError('');
-        if (duplicateNames.length) {
-          selectionNotices.push(`중복 ${duplicateNames.length}개`);
+        const totalDuplicateCount = excludedDuplicateCount + duplicateNames.length;
+        if (totalDuplicateCount) {
+          selectionNotices.push(`중복 파일 ${totalDuplicateCount}개를 제외했어요.`);
         }
         if (selectionNotices.length) {
           setFileSelectionNotice(selectionNotices.join('\n'));
@@ -807,7 +831,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
                         <span className="mt-3 flex flex-col items-center gap-2 text-orange-700 dark:text-orange-300">
                           <span className="upload-selection-reminder inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-100 px-4 py-2 text-sm font-extrabold text-orange-800">
-                            <span>한 번에 최대 {MAX_UPLOAD_FILES}개씩 선택해 주세요</span>
+                            <span>한번에 최대 {MAX_UPLOAD_FILES}개 첨부</span>
                           </span>
                           <span className="text-xs font-semibold">영상은 개당 2분 이하</span>
                         </span>
@@ -1209,6 +1233,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         files={pickerFiles}
         limit={Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length)}
         existingCount={selectedFiles.length}
+        duplicateCount={pickerDuplicateCount}
         onCancel={() => setPickerFiles(null)}
         onConfirm={(files) => { setPickerFiles(null); void addFiles(files); }}
       />}
