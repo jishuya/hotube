@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
+import ScrollToTopButton from '../components/common/ScrollToTopButton';
 import { getMediaDateRange, getMediaPage, toMemoryMedia } from '../services/videoApi';
 import { deleteMemoryDateNote, getMemoryDateNotes, saveMemoryDateNote } from '../services/memoryDateApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -698,6 +699,7 @@ const AlbumPage = () => {
           )}
         </div>
       </main>
+      <ScrollToTopButton selectionMode={selectionMode} />
       {selectionUI}
       <Modal
         isOpen={Boolean(deletingNoteDate)}

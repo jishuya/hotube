@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Icon } from '@iconify/react';
 import { DayPicker } from '@daypicker/react';
 import { ko } from '@daypicker/react/locale/ko';
 import '@daypicker/react/style.css';
 import Header from '../components/common/Header';
+import ScrollToTopButton from '../components/common/ScrollToTopButton';
 import { getCalendarMedia, toMemoryMedia } from '../services/videoApi';
 import RecentMediaFeed from '../components/common/RecentMediaFeed';
 import { DayPickerDropdown } from '../components/common/CustomSelect';
@@ -49,28 +49,6 @@ const CalendarDayButton = ({ day, modifiers, className, ...buttonProps }) => {
 const CalendarPage = () => {
   const navigate = useNavigate();
   const calendarRef = useRef(null);
-  const [showScrollToTop, setShowScrollToTop] = useState(false);
-
-  useEffect(() => {
-    const updateVisibility = () => {
-      const calendarBottom = calendarRef.current?.getBoundingClientRect().bottom;
-      setShowScrollToTop(window.scrollY >= 600 || (window.scrollY > 160 && calendarBottom <= 96));
-    };
-    updateVisibility();
-    window.addEventListener('scroll', updateVisibility, { passive: true });
-    window.addEventListener('resize', updateVisibility);
-    return () => {
-      window.removeEventListener('scroll', updateVisibility);
-      window.removeEventListener('resize', updateVisibility);
-    };
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-    });
-  };
   const [searchParams, setSearchParams] = useSearchParams();
   const monthParam = searchParams.get('month');
   const month = useMemo(() => parseMonthKey(monthParam) || new Date(), [monthParam]);
@@ -133,18 +111,7 @@ const CalendarPage = () => {
           <RecentMediaFeed returnTo={`/calendar?month=${selectedMonth}`} />
       </div>
     </main>
-      {showScrollToTop && (
-        <button
-          type="button"
-          onClick={scrollToTop}
-          aria-label="맨 위로 이동"
-          title="맨 위로"
-          className="fixed right-4 z-20 flex size-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:right-6"
-          style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <Icon icon="mdi:arrow-up" className="text-2xl" aria-hidden="true" />
-        </button>
-      )}
+      <ScrollToTopButton boundaryRef={calendarRef} />
     </>
   );
 };

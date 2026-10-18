@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
+import ScrollToTopButton from '../components/common/ScrollToTopButton';
 import { useAuth } from '../contexts/AuthContext';
 import { createMyAlbum, deleteMyAlbum, getMyAlbums, updateMyAlbum } from '../services/myAlbumApi';
 import { getFavoriteMediaPage, getLikedMediaPage, toMemoryMedia } from '../services/videoApi';
@@ -285,6 +286,7 @@ const MyAlbumPage = () => {
         </section>
       </div>
     </main>
+    <ScrollToTopButton />
     {createOpen && (
       <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
         <button
