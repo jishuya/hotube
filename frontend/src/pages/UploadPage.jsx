@@ -2,7 +2,7 @@ import MediaThumbnail from '../components/common/MediaThumbnail';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
-import { excludeSelectedDuplicates, getUploadSelectionCapacity } from '../utils/uploadSelection';
+import { excludeSelectedDuplicates, getDuplicateSelectionNotices, getUploadSelectionCapacity } from '../utils/uploadSelection';
 import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
 import { getDefaultSharedWith } from '../utils/familySharing';
@@ -147,7 +147,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [pickerFiles, setPickerFiles] = useState(null);
-  const [pickerDuplicateCount, setPickerDuplicateCount] = useState(0);
+  const [pickerDuplicateNotices, setPickerDuplicateNotices] = useState([]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeInfo, setYoutubeInfo] = useState(null);
   const [fetchingYoutube, setFetchingYoutube] = useState(false);
@@ -412,8 +412,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         setFileSelectionNotice(`이미 ${MAX_UPLOAD_FILES}개를 첨부했어요. 다른 파일을 추가하려면 기존 파일을 먼저 삭제해 주세요.`);
         return;
       }
-      let excludedDuplicateCount = 0;
-      if (selectedFiles.length > 0) {
+      const duplicateCounts = { attached: 0, uploaded: 0, repeated: 0 };
+      {
+        const totalIncomingBytes = incomingFiles.reduce((sum, file) => sum + file.size, 0);
+        let checkedIncomingBytes = 0;
         const result = await excludeSelectedDuplicates(
           incomingFiles,
           selectedFiles.map((item) => item.contentHash).filter(Boolean),
@@ -421,26 +423,45 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             controller.signal.throwIfAborted();
             let hash = selectionHashCacheRef.current.get(file);
             if (!hash) {
-              hash = await hashFile(file, undefined, controller.signal);
+              hash = await hashFile(file, (loaded) => {
+                setPreparationProgress(Math.floor((checkedIncomingBytes + loaded) / (totalIncomingBytes || 1) * 10));
+              }, controller.signal);
               selectionHashCacheRef.current.set(file, hash);
             }
+            checkedIncomingBytes += file.size;
             return hash;
           },
         );
         controller.signal.throwIfAborted();
         incomingFiles = result.files;
-        excludedDuplicateCount = result.duplicateCount;
+        duplicateCounts.attached = result.attachedDuplicateCount;
+        duplicateCounts.repeated = result.repeatedDuplicateCount;
       }
+      // The server accepts at most ten hashes per request; check every file in batches.
+      const uploadedHashes = new Set();
+      for (let offset = 0; offset < incomingFiles.length; offset += MAX_UPLOAD_FILES) {
+        controller.signal.throwIfAborted();
+        const hashes = incomingFiles.slice(offset, offset + MAX_UPLOAD_FILES)
+          .map((file) => selectionHashCacheRef.current.get(file));
+        const matches = await checkMediaDuplicates(hashes, controller.signal);
+        controller.signal.throwIfAborted();
+        matches.forEach((hash) => uploadedHashes.add(hash));
+      }
+      incomingFiles = incomingFiles.filter((file) => {
+        if (!uploadedHashes.has(selectionHashCacheRef.current.get(file))) return true;
+        duplicateCounts.uploaded += 1;
+        return false;
+      });
       if (getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES).needsPicker) {
         setFileSelectionNotice('');
-        setPickerDuplicateCount(excludedDuplicateCount);
+        setPickerDuplicateNotices(getDuplicateSelectionNotices(duplicateCounts));
         setPickerFiles(incomingFiles);
         return;
       }
       const selectedMediaFiles = incomingFiles;
       const selectionNotices = [];
       if (!incomingFiles.length) {
-        if (excludedDuplicateCount) setFileSelectionNotice(`중복 파일 ${excludedDuplicateCount}개를 제외했어요.`);
+        setFileSelectionNotice(getDuplicateSelectionNotices(duplicateCounts).join('\n'));
         return;
       }
       const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
@@ -484,7 +505,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       }
 
       if (!mediaFiles.length) {
-        if (excludedDuplicateCount) selectionNotices.push(`중복 파일 ${excludedDuplicateCount}개를 제외했어요.`);
+        selectionNotices.push(...getDuplicateSelectionNotices(duplicateCounts));
         if (selectionNotices.length) {
           setFileSelectionNotice(selectionNotices.join('\n'));
         }
@@ -508,20 +529,15 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         const duplicateHashes = new Set(await checkMediaDuplicates(hashedFiles.map(({ contentHash }) => contentHash), controller.signal));
         const selectedHashes = new Set(selectedFiles.map((item) => item.contentHash).filter(Boolean));
         const acceptedHashes = new Set();
-        const duplicateNames = [];
-        hashedFiles = hashedFiles.filter(({ file, contentHash }) => {
-          const duplicate = duplicateHashes.has(contentHash)
-            || selectedHashes.has(contentHash)
-            || acceptedHashes.has(contentHash);
-          if (duplicate) duplicateNames.push(file.name);
-          else acceptedHashes.add(contentHash);
-          return !duplicate;
+        hashedFiles = hashedFiles.filter(({ contentHash }) => {
+          if (selectedHashes.has(contentHash)) duplicateCounts.attached += 1;
+          else if (duplicateHashes.has(contentHash)) duplicateCounts.uploaded += 1;
+          else if (acceptedHashes.has(contentHash)) duplicateCounts.repeated += 1;
+          else { acceptedHashes.add(contentHash); return true; }
+          return false;
         });
         setUploadError('');
-        const totalDuplicateCount = excludedDuplicateCount + duplicateNames.length;
-        if (totalDuplicateCount) {
-          selectionNotices.push(`중복 파일 ${totalDuplicateCount}개를 제외했어요.`);
-        }
+        selectionNotices.push(...getDuplicateSelectionNotices(duplicateCounts));
         if (selectionNotices.length) {
           setFileSelectionNotice(selectionNotices.join('\n'));
         }
@@ -1233,7 +1249,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         files={pickerFiles}
         limit={Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length)}
         existingCount={selectedFiles.length}
-        duplicateCount={pickerDuplicateCount}
+        duplicateNotices={pickerDuplicateNotices}
         onCancel={() => setPickerFiles(null)}
         onConfirm={(files) => { setPickerFiles(null); void addFiles(files); }}
       />}
@@ -1282,7 +1298,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       <Modal
         isOpen={!progressOpen && Boolean(fileSelectionNotice)}
         onClose={() => setFileSelectionNotice('')}
-        title="일부 파일을 제외했어요"
+        title={/동일한 파일|중복 선택한 파일/.test(fileSelectionNotice) ? '중복 파일 제외' : undefined}
         message={fileSelectionNotice}
         confirmText="확인"
       />

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 
 const durationCache = new Map();
 
-export default function VideoDurationBadge({ media }) {
+export default function VideoDurationBadge({ media, fallbackText }) {
   const badgeRef = useRef(null);
   const src = media.source === 'youtube' || media.mediaType === 'youtube' ? null : media.src || media.fileUrl || media.preview;
   const [loaded, setLoaded] = useState(null);
   const saved = Number(media.durationSeconds);
-  const seconds = saved > 0 ? saved : loaded?.src === src ? loaded.seconds : durationCache.get(src);
+  const seconds = saved > 0 ? saved : loaded && loaded.src === src ? loaded.seconds : durationCache.get(src);
 
   useEffect(() => {
     if (saved > 0 || !src || durationCache.has(src)) return;
@@ -46,8 +46,8 @@ export default function VideoDurationBadge({ media }) {
     : '…';
 
   return (
-    <span ref={badgeRef} className="pointer-events-none absolute bottom-2 left-2 z-10 whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-tight text-white" aria-label={`재생 시간 ${time}`}>
-      <span aria-hidden="true">▶</span> {time}
+    <span ref={badgeRef} className="pointer-events-none absolute bottom-2 left-2 z-10 whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-tight text-white" aria-label={seconds > 0 || !fallbackText ? `재생 시간 ${time}` : fallbackText}>
+      {seconds > 0 || !fallbackText ? <><span aria-hidden="true">▶</span> {time}</> : fallbackText}
     </span>
   );
 }

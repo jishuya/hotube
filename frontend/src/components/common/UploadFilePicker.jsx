@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import VideoDurationBadge from './VideoDurationBadge';
+import Modal from './Modal';
 
 // Only load visible previews; large selections must not decode every original at once.
 const FilePreview = ({ file }) => {
   const containerRef = useRef(null);
+  const [duration, setDuration] = useState(null);
   useEffect(() => {
     const container = containerRef.current;
     let url;
@@ -12,6 +15,7 @@ const FilePreview = ({ file }) => {
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) {
         if (media) {
+          media.onloadedmetadata = null;
           media.removeAttribute('src');
           if (file.type.startsWith('video/')) media.load();
           media.remove();
@@ -28,6 +32,11 @@ const FilePreview = ({ file }) => {
         media.muted = true;
         media.playsInline = true;
         media.preload = 'metadata';
+        media.onloadedmetadata = () => {
+          if (Number.isFinite(media.duration) && media.duration > 0) {
+            setDuration({ file, seconds: media.duration });
+          }
+        };
       } else {
         media.alt = '';
       }
@@ -38,6 +47,7 @@ const FilePreview = ({ file }) => {
     return () => {
       observer.disconnect();
       if (media) {
+        media.onloadedmetadata = null;
         media.removeAttribute('src');
         if (file.type.startsWith('video/')) media.load();
         media.remove();
@@ -45,28 +55,33 @@ const FilePreview = ({ file }) => {
       }
     };
   }, [file]);
-  return <span ref={containerRef} className="absolute inset-0" aria-hidden="true" />;
+  return <>
+    <span ref={containerRef} className="absolute inset-0" aria-hidden="true" />
+    {file.type.startsWith('video/') && <VideoDurationBadge media={{ durationSeconds: duration && duration.file === file ? duration.seconds : null }} fallbackText="영상" />}
+  </>;
 };
 
-const UploadFilePicker = ({ files, limit, existingCount, duplicateCount = 0, onCancel, onConfirm }) => {
-  const dialogRef = useRef(null);
+const UploadFilePicker = ({ files, limit, existingCount, duplicateNotices = [], onCancel, onConfirm }) => {
+  const [dialogNode, setDialogNode] = useState(null);
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
   const [selected, setSelected] = useState([]);
   useEffect(() => {
-    const dialog = dialogRef.current;
+    if (!dialogNode) return;
+    const dialog = dialogNode;
     const unlock = lockBodyScroll();
     dialog.showModal();
     return () => { dialog.close(); unlock(); };
-  }, []);
+  }, [dialogNode]);
 
   const full = selected.length >= limit;
   return createPortal(
-    <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); onCancel(); }}
+    <dialog ref={setDialogNode} onCancel={(event) => { event.preventDefault(); if (duplicateNotices.length && !noticeDismissed) setNoticeDismissed(true); else onCancel(); }}
       aria-labelledby="upload-picker-title" aria-describedby="upload-picker-description"
       className="m-auto h-[100dvh] max-h-[100dvh] w-screen max-w-2xl border-0 bg-surface p-0 text-text-primary backdrop:bg-black/60 sm:h-[90dvh] sm:rounded-2xl">
       <div className="flex h-full min-h-0 flex-col">
         <header className="relative shrink-0 border-b border-border p-4">
           <div className="flex min-h-8 items-center justify-between gap-3 pr-9">
-            <h2 id="upload-picker-title" className="text-lg font-extrabold">사진·영상 선택</h2>
+            <h2 id="upload-picker-title" className="text-lg font-extrabold">첨부파일 선택</h2>
             <button type="button" onClick={onCancel} aria-label="선택 화면 닫기" className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-lg text-text-secondary hover:bg-gray-100">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-6" aria-hidden="true">
                 <path d="m6 6 12 12M18 6 6 18" />
@@ -74,15 +89,12 @@ const UploadFilePicker = ({ files, limit, existingCount, duplicateCount = 0, onC
             </button>
           </div>
           <p id="upload-picker-description" className="mt-2 text-sm text-text-secondary">
-            가져온 {files.length}개 중 최대 {limit}개를 골라주세요.
-            {existingCount > 0 && ` 이미 첨부한 파일은 ${existingCount}개예요.`}
+            가져온 <strong className="font-bold">{files.length}</strong>개 중 최대 <strong className="font-bold">{limit}</strong>개를 골라주세요.
+            {existingCount > 0 && <><br />이미 첨부된 파일은 {existingCount}개 예요</>}
           </p>
-          <p className={full ? 'mt-0 text-sm text-text-secondary' : 'mt-2 font-extrabold text-primary'} role="status">
-            {full ? '다른 파일을 고르려면 선택을 해제해 주세요.' : `${selected.length}/${limit}개 선택`}
-          </p>
-          {duplicateCount > 0 && (
-            <p className="mt-2 rounded-lg bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-800">
-              이미 첨부했거나 중복 선택한 파일 {duplicateCount}개를 제외했어요.
+          {full && (
+            <p className="mt-0 text-sm text-text-secondary" role="status">
+              다른 파일을 고르려면 선택을 해제해 주세요.
             </p>
           )}
         </header>
@@ -104,9 +116,7 @@ const UploadFilePicker = ({ files, limit, existingCount, duplicateCount = 0, onC
                     <span className={`absolute right-1 top-1 flex size-7 items-center justify-center rounded-full border-2 text-sm font-extrabold shadow ${chosen ? 'border-primary bg-primary text-white' : 'border-white bg-black/30'}`}>
                       {chosen ? order + 1 : ''}
                     </span>
-                    {file.type.startsWith('video/') && <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">영상</span>}
                   </span>
-                  <span className="block truncate px-1 py-1.5 text-xs">{file.name}</span>
                 </button>
               );
             })}
@@ -119,6 +129,14 @@ const UploadFilePicker = ({ files, limit, existingCount, duplicateCount = 0, onC
           </button>
         </footer>
       </div>
+      {dialogNode && <Modal
+        isOpen={duplicateNotices.length > 0 && !noticeDismissed}
+        onClose={() => setNoticeDismissed(true)}
+        title="중복 파일 제외"
+        message={duplicateNotices.join('\n')}
+        confirmText="확인"
+        portalTarget={dialogNode}
+      />}
     </dialog>, document.body,
   );
 };

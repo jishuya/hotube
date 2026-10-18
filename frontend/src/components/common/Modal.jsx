@@ -13,7 +13,8 @@ const Modal = ({
   tone,
   type = 'alert', // 'alert' | 'confirm'
   confirmText = '확인',
-  cancelText = '취소'
+  cancelText = '취소',
+  portalTarget = document.body
 }) => {
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -105,7 +106,7 @@ const Modal = ({
         </div>
       </div>
     </div>,
-    document.body,
+    portalTarget,
   );
 };
 
