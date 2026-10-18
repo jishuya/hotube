@@ -1059,9 +1059,7 @@ const MediaViewerPage = () => {
                 />
               ) : (
                 <button type="button" onClick={() => setViewerOpen(true)} className="group relative flex w-full cursor-zoom-in items-center justify-center" aria-label={`${current.title} 크게 보기`}>
-                  <div className="h-[75vh] w-full">
-                    <OrientedImage src={current.preview || current.thumbnail || current.src} alt={current.title} rotation={current.rotation || 0} />
-                  </div>
+                  <OrientedImage key={current.id} src={current.preview || current.thumbnail || current.src} alt={current.title} rotation={current.rotation || 0} naturalAspect />
                   <span className="absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/55 text-xl text-white opacity-90 shadow-lg backdrop-blur transition group-hover:scale-105" aria-hidden="true"><Icon icon="mdi:magnify-plus-outline" /></span>
                 </button>
               )}

@@ -223,9 +223,9 @@ const MyAlbumPage = () => {
           {error && <p className="mb-4 rounded-xl bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
 
           {!loading && albums.length === 0 ? (
-            <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl bg-surface text-center shadow-sm">
-              <Icon icon="mdi:image-multiple-outline" className="mb-3 text-5xl text-primary/35" />
-              <h3 className="font-bold">아직 만든 앨범이 없어요</h3>
+            <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl bg-surface px-4 py-8 text-center text-text-secondary">
+              <Icon icon="mdi:image-multiple-outline" className="mb-2 text-3xl text-primary/40" />
+              <p className="text-sm font-semibold">아직 만든 앨범이 없어요</p>
               <button type="button" onClick={openCreateAlbum} className="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-bold text-white">첫 앨범 만들기</button>
             </div>
           ) : (
