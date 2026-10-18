@@ -13,7 +13,7 @@ export default function MediaDescription({ text, label = '영상 설명', onEdit
     const measure = () => {
       if (!active) return;
       const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight);
-      setOverflows(element.scrollHeight > lineHeight * 2 + 1);
+      setOverflows(element.scrollHeight > lineHeight * 3 + 1);
     };
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -42,12 +42,12 @@ export default function MediaDescription({ text, label = '영상 설명', onEdit
             onEdit();
           }
         } : undefined}
-        className={`whitespace-pre-wrap break-words font-caption text-left text-base font-normal leading-5 text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${onEdit ? 'cursor-pointer' : ''} ${expanded ? 'block' : 'line-clamp-2'}`}
+        className={`whitespace-pre-wrap break-words font-caption text-left text-base font-normal leading-5 text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${onEdit ? 'cursor-pointer' : ''} ${expanded ? 'block' : 'line-clamp-3'}`}
       >{text}</div>
       {overflows && (
         <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}
           aria-label={`${label} ${expanded ? '접기' : '펼치기'}`} title={expanded ? '접기' : '펼치기'}
-          className="absolute right-0 top-5 flex size-5 items-center justify-center rounded-full text-text-secondary hover:bg-primary/10 hover:text-primary">
+          className="absolute right-0 top-10 flex size-5 items-center justify-center rounded-full text-text-secondary hover:bg-primary/10 hover:text-primary">
           <Icon icon={expanded ? 'mdi:chevron-up' : 'mdi:chevron-down'} className="text-xl" />
         </button>
       )}

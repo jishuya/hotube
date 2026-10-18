@@ -863,7 +863,11 @@ const MediaViewerPage = () => {
       return;
     }
     const nextDescription = descriptionDraft.trim();
-    const nextTags = [...new Set([...descriptionTags, ...parseTags(tagDraft)])];
+    const nextTags = [...new Set([
+      ...descriptionTags,
+      ...parseCaption(nextDescription).tags,
+      ...parseTags(tagDraft),
+    ])];
     if (nextDescription === visibleDescription && nextTags.length === visibleTags.length && nextTags.every((tag) => visibleTags.includes(tag))) {
       setEditingDescription(false);
       return;
