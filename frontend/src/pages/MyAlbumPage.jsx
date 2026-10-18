@@ -203,7 +203,7 @@ const MyAlbumPage = () => {
       <div className="mx-auto max-w-container">
         <SavedMediaSection id="favorites" title="즐겨찾기" media={favoriteMedia} loading={loading} icon="mdi:bookmark" emptyIcon="mdi:bookmark-outline" description="아직 즐겨찾기가 없어요" />
         <div className="mt-10">
-          <SavedMediaSection id="likes" title="좋아요" media={likedMedia} loading={loading} icon="mdi:heart" emptyIcon="mdi:heart-outline" description="아직 좋아요한 미디어가 없어요" />
+          <SavedMediaSection id="likes" title="좋아요" media={likedMedia} loading={loading} icon="mdi:heart" emptyIcon="mdi:heart-outline" description="아직 좋아요가 없어요" />
         </div>
 
         <section className="mt-10" aria-labelledby="my-albums-title">

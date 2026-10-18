@@ -15,6 +15,7 @@ import { getVideoDate } from '../utils/videoDate';
 import Header from '../components/common/Header';
 import Modal from '../components/common/Modal';
 import UploadProgressDialog from '../components/common/UploadProgressDialog';
+import UploadFilePicker from '../components/common/UploadFilePicker';
 import ToastContainer from '../components/common/Toast';
 import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 import CustomSelect from '../components/common/CustomSelect';
@@ -144,6 +145,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [uploads, setUploads] = useState([]);
   const [uploadSource, setUploadSource] = useState('device');
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [pickerFiles, setPickerFiles] = useState(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeInfo, setYoutubeInfo] = useState(null);
   const [fetchingYoutube, setFetchingYoutube] = useState(false);
@@ -393,6 +395,13 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
   const addFiles = async (files) => {
     if (preparingRef.current || uploadInProgressRef.current) return;
+    const incomingFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    const remainingSlots = Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length);
+    if (remainingSlots > 0 && incomingFiles.length > remainingSlots) {
+      setFileSelectionNotice('');
+      setPickerFiles(incomingFiles);
+      return;
+    }
     preparingRef.current = true;
     setPreparing(true);
     setPreparationProgress(0);
@@ -796,8 +805,11 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                         }}
                       >
                         <Icon icon="mdi:image-plus-outline" className="mb-3 text-5xl text-primary" />
-                        <span className="mt-3 text-sm font-extrabold text-orange-700 dark:text-orange-300">
-                          <span>한 번에 최대 10개 첨부<br /><span className="text-xs font-semibold">영상은 개당 2분 이하</span></span>
+                        <span className="mt-3 flex flex-col items-center gap-2 text-orange-700 dark:text-orange-300">
+                          <span className="upload-selection-reminder inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-100 px-4 py-2 text-sm font-extrabold text-orange-800">
+                            <span>한 번에 최대 {MAX_UPLOAD_FILES}개씩 선택해 주세요</span>
+                          </span>
+                          <span className="text-xs font-semibold">영상은 개당 2분 이하</span>
                         </span>
                         {selectedFiles.length > 0 && (
                           <span className="mt-3 flex w-full max-w-xs flex-col gap-2 text-sm font-bold text-primary" aria-live="polite">
@@ -1191,6 +1203,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         percent={preparing ? preparationProgress : uploadPercent}
         onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
         stopLabel="취소"
+      />}
+
+      {pickerFiles && <UploadFilePicker
+        files={pickerFiles}
+        limit={Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length)}
+        existingCount={selectedFiles.length}
+        onCancel={() => setPickerFiles(null)}
+        onConfirm={(files) => { setPickerFiles(null); void addFiles(files); }}
       />}
 
       {editingUpload && createPortal((

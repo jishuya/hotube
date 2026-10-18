@@ -493,6 +493,31 @@ body {
   font-synthesis: none;
 }
 
+/* Keep the upload limit readable while gently drawing attention to it. */
+.upload-selection-reminder {
+  animation: upload-selection-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes upload-selection-glow {
+  0%, 100% {
+    color: #9a3412;
+    text-shadow: 0 0 0 rgb(249 115 22 / 0);
+    box-shadow: 0 0 0 0 rgb(251 146 60 / 0);
+  }
+  50% {
+    color: #c2410c;
+    text-shadow: 0 0 8px rgb(249 115 22 / 0.65), 0 0 16px rgb(251 146 60 / 0.45);
+    background-color: #ffedd5;
+    box-shadow: 0 0 0 4px rgb(251 146 60 / 0.18), 0 0 18px rgb(251 146 60 / 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-selection-reminder {
+    animation: none;
+  }
+}
+
 @font-face {
   font-family: 'Hotube Gaegu';
   src: url('/fonts/gaegu/Gaegu-Bold.ttf') format('truetype');
