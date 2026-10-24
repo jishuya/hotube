@@ -260,16 +260,6 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
           {!preview && <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>}
         </div>
       </div>
-      {isFullscreen && onPrevious && (
-        <button type="button" onClick={onPrevious} className="absolute left-3 top-1/2 z-30 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
-          <Icon icon="mdi:chevron-left" />
-        </button>
-      )}
-      {isFullscreen && onNext && (
-        <button type="button" onClick={onNext} className="absolute right-3 top-1/2 z-30 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
-          <Icon icon="mdi:chevron-right" />
-        </button>
-      )}
     </div>
   );
 };
@@ -460,16 +450,6 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
         <button type="button" onClick={() => applyScale(scale + 0.5)} disabled={scale >= 5} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-35" aria-label="확대"><Icon icon="mdi:plus" /></button>
         <button type="button" onClick={() => applyScale(1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" aria-label="원래 크기"><Icon icon="mdi:restore" /></button>
       </div>
-      {onPrevious && scale === 1 && (
-        <button type="button" onClick={() => slideTo(1)} className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="이전 미디어">
-          <Icon icon="mdi:chevron-left" />
-        </button>
-      )}
-      {onNext && scale === 1 && (
-        <button type="button" onClick={() => slideTo(-1)} className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-3xl text-white shadow-lg backdrop-blur-sm hover:bg-black/65" aria-label="다음 미디어">
-          <Icon icon="mdi:chevron-right" />
-        </button>
-      )}
       <div
         ref={viewportRef}
         className={`relative flex h-full w-full items-center justify-center overflow-hidden touch-none ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
@@ -1063,8 +1043,12 @@ const MediaViewerPage = () => {
                   <span className="absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/55 text-xl text-white opacity-90 shadow-lg backdrop-blur transition group-hover:scale-105" aria-hidden="true"><Icon icon="mdi:magnify-plus-outline" /></span>
                 </button>
               )}
-              <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className="absolute left-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
-              <button type="button" onClick={() => moveTo(next)} disabled={!next} className="absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
+              {!viewerOpen && (
+                <>
+                  <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className="absolute left-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
+                  <button type="button" onClick={() => moveTo(next)} disabled={!next} className="absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/90 text-2xl shadow-md disabled:hidden" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
+                </>
+              )}
             </div>
 
             {details?.canModify && (
