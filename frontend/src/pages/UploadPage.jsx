@@ -453,9 +453,18 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         return false;
       });
       if (getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES).needsPicker) {
+        const datedFiles = [];
+        for (const file of incomingFiles) {
+          controller.signal.throwIfAborted();
+          const { date } = await getMediaDate(file);
+          datedFiles.push({ file, date });
+        }
+        controller.signal.throwIfAborted();
+        // Stable sorting keeps the user's original order for files on the same date.
+        datedFiles.sort((a, b) => a.date.localeCompare(b.date));
         setFileSelectionNotice('');
         setPickerDuplicateNotices(getDuplicateSelectionNotices(duplicateCounts));
-        setPickerFiles(incomingFiles);
+        setPickerFiles(datedFiles.map(({ file }) => file));
         return;
       }
       const selectedMediaFiles = incomingFiles;
@@ -1248,7 +1257,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
       {pickerFiles && <UploadFilePicker
         files={pickerFiles}
         limit={Math.max(0, MAX_UPLOAD_FILES - selectedFiles.length)}
-        existingCount={selectedFiles.length}
         duplicateNotices={pickerDuplicateNotices}
         onCancel={() => setPickerFiles(null)}
         onConfirm={(files) => { setPickerFiles(null); void addFiles(files); }}

@@ -61,10 +61,10 @@ const FilePreview = ({ file }) => {
   </>;
 };
 
-const UploadFilePicker = ({ files, limit, existingCount, duplicateNotices = [], onCancel, onConfirm }) => {
+const UploadFilePicker = ({ files, limit, duplicateNotices = [], onCancel, onConfirm }) => {
   const [dialogNode, setDialogNode] = useState(null);
   const [noticeDismissed, setNoticeDismissed] = useState(false);
-  const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState(() => files.slice(0, limit).map((_, index) => index));
   useEffect(() => {
     if (!dialogNode) return;
     const dialog = dialogNode;
@@ -89,14 +89,8 @@ const UploadFilePicker = ({ files, limit, existingCount, duplicateNotices = [], 
             </button>
           </div>
           <p id="upload-picker-description" className="mt-2 text-sm text-text-secondary">
-            가져온 <strong className="font-bold">{files.length}</strong>개 중 최대 <strong className="font-bold">{limit}</strong>개를 골라주세요.
-            {existingCount > 0 && <><br />이미 첨부된 파일은 {existingCount}개 예요</>}
+            가져온 {files.length}개중 {limit}개를 골라주세요. 다른 파일을 고르려면 선택을 해제해 주세요.
           </p>
-          {full && (
-            <p className="mt-0 text-sm text-text-secondary" role="status">
-              다른 파일을 고르려면 선택을 해제해 주세요.
-            </p>
-          )}
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
