@@ -89,7 +89,7 @@ const UploadFilePicker = ({ files, limit, duplicateNotices = [], onCancel, onCon
             </button>
           </div>
           <p id="upload-picker-description" className="mt-2 text-sm text-text-secondary">
-            가져온 {files.length}개중 {limit}개를 골라주세요. 다른 파일을 고르려면 선택을 해제해 주세요.
+            가져온 {files.length}개중 {limit}개를 골라주세요. 날짜가 오래된 순으로 표시됩니다. 다른 파일을 고르려면 선택을 해제해 주세요.
           </p>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
