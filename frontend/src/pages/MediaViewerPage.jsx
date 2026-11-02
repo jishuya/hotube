@@ -991,8 +991,15 @@ const MediaViewerPage = () => {
                 <span className="truncate">{details?.uploader?.title || details?.uploader?.name || '가족'} 올림</span>
               </div>
             </div>
+            {current.source === 'youtube' && (
+              <nav aria-label="미디어 이동" className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 border-t border-border px-2 py-2 sm:hidden">
+                <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className="flex size-8 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:invisible" aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
+                <p className="line-clamp-2 text-center text-sm font-semibold" title={current.title}>{current.title}</p>
+                <button type="button" onClick={() => moveTo(next)} disabled={!next} className="flex size-8 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:invisible" aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
+              </nav>
+            )}
             <div
-              className={`relative flex touch-pan-y items-center justify-center border-b border-border bg-white ${current.source === 'youtube' ? 'pb-11' : ''}`}
+              className={`relative flex touch-pan-y items-center justify-center border-b border-border bg-white ${current.source === 'youtube' ? 'sm:px-12' : ''}`}
               onPointerDown={handleDetailPointerDown}
               onPointerUp={handleDetailPointerUp}
               onPointerCancel={() => { detailSwipeRef.current = null; }}
@@ -1045,8 +1052,8 @@ const MediaViewerPage = () => {
               )}
               {!viewerOpen && (
                 <>
-                  <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className={`absolute left-2 flex size-8 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:hidden ${current.source === 'youtube' ? 'bottom-1.5' : 'top-1/2 -translate-y-1/2'}`} aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
-                  <button type="button" onClick={() => moveTo(next)} disabled={!next} className={`absolute right-2 flex size-8 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:hidden ${current.source === 'youtube' ? 'bottom-1.5' : 'top-1/2 -translate-y-1/2'}`} aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
+                  <button type="button" onClick={() => moveTo(previous)} disabled={!previous} className={`absolute left-2 top-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:hidden ${current.source === 'youtube' ? 'hidden size-8 sm:flex' : 'flex size-8'}`} aria-label="이전 미디어"><Icon icon="mdi:chevron-left" /></button>
+                  <button type="button" onClick={() => moveTo(next)} disabled={!next} className={`absolute right-2 top-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-xl shadow-md disabled:hidden ${current.source === 'youtube' ? 'hidden size-8 sm:flex' : 'flex size-8'}`} aria-label="다음 미디어"><Icon icon="mdi:chevron-right" /></button>
                 </>
               )}
             </div>
@@ -1146,10 +1153,6 @@ const MediaViewerPage = () => {
                   <button type="button" onClick={saveDescription} className="ml-2 font-semibold text-primary underline">다시 시도</button>
                 </>}
               </div>
-            )}
-
-            {current.source === 'youtube' && (
-              <h1 className="mx-4 mt-1 truncate text-sm font-semibold">{current.title}</h1>
             )}
 
             <div className="grid grid-cols-4 items-start px-2 pb-2 pt-1">
