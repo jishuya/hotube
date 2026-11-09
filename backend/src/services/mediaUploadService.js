@@ -8,11 +8,12 @@ const {
   resolveMediaPath,
   toStoredMediaPath,
 } = require('../mediaStorage');
-const { createImagePreview, createImageThumbnail, validateVideoDuration } = require('../videoThumbnail');
+const { createImageDerivatives, validateVideoDuration } = require('../videoThumbnail');
 const { createFileMedia, deleteMedia } = require('./mediaService');
 const { enqueueVideoProcessing } = require('./mediaProcessingService');
 
 const finalizeMediaFile = async ({
+  mediaId = randomUUID(),
   tempPath,
   originalName,
   mimeType,
@@ -52,12 +53,13 @@ const finalizeMediaFile = async ({
       storedFilePath = toStoredMediaPath(relativeDirectory, originalFilename);
       thumbnailPath = toStoredMediaPath(thumbnailDirectory.relativeDirectory, thumbnailFilename);
       previewPath = toStoredMediaPath(previewDirectory.relativeDirectory, previewFilename);
-      await createImageThumbnail(tempPath, path.join(thumbnailDirectory.absoluteDirectory, thumbnailFilename));
-      await createImagePreview(tempPath, path.join(previewDirectory.absoluteDirectory, previewFilename));
+      await createImageDerivatives(tempPath,
+        path.join(thumbnailDirectory.absoluteDirectory, thumbnailFilename),
+        path.join(previewDirectory.absoluteDirectory, previewFilename));
       await fs.rename(tempPath, path.join(absoluteDirectory, originalFilename));
     }
     createdMedia = await createFileMedia({
-      id: randomUUID(),
+      id: mediaId,
       title: String(title || '').trim() || originalName,
       filePath: storedFilePath,
       thumbnailPath,

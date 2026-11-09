@@ -2,11 +2,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const test = require('node:test');
 const {
   validateVideoDuration,
   createBrowserCompatibleVideo,
+  createImageDerivatives,
   createImagePreview,
   createImageThumbnail,
   createVideoThumbnail,
@@ -128,4 +130,28 @@ test('읽을 수 없는 영상은 길이 검증에서 거절한다', async (t) =
   const videoPath = path.join(directory, 'invalid.mp4');
   await fs.writeFile(videoPath, 'invalid video');
   await assert.rejects(validateVideoDuration(videoPath), { status: 400, code: 'INVALID_VIDEO_DURATION' });
+});
+
+test('한 번의 사진 처리로 두 WebP를 만들고 각 해상도를 유지한다', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'hotube-derivatives-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const input = path.join(directory, 'input.jpg');
+  const thumbnail = path.join(directory, 'thumbnail.webp');
+  const preview = path.join(directory, 'preview.webp');
+  await run(process.env.FFMPEG_PATH || 'ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=orange:s=2400x1600', '-frames:v', '1', input,
+  ]);
+  await createImageDerivatives(input, thumbnail, preview);
+  for (const [file, width] of [[thumbnail, 640], [preview, 1920]]) {
+    const bytes = await fs.readFile(file);
+    assert.equal(bytes.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(bytes.subarray(8, 12).toString(), 'WEBP');
+    const { stdout } = await promisify(execFile)(process.env.FFPROBE_PATH || 'ffprobe', [
+      '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', file,
+    ]);
+    const [dimensions] = JSON.parse(stdout).streams;
+    assert.equal(dimensions.width, width);
+    assert.equal(dimensions.height, width === 640 ? 426 : 1280);
+  }
 });

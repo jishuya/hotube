@@ -137,6 +137,21 @@ const createImageThumbnail = (inputPath, outputPath) => new Promise((resolve, re
   });
 });
 
+/** Decode the original once and produce both photo derivatives. */
+const createImageDerivatives = (inputPath, thumbnailPath, previewPath) => new Promise((resolve, reject) => {
+  const child = spawn(ffmpegExecutable, [
+    '-hide_banner', '-loglevel', 'error', '-y', '-i', inputPath,
+    '-filter_complex', "[0:v]split=2[thumb][preview];[thumb]scale='min(640,iw)':-2[t];[preview]scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2[p]",
+    '-map', '[t]', '-frames:v', '1', '-c:v', 'libwebp', '-quality', '78', '-compression_level', '4', thumbnailPath,
+    '-map', '[p]', '-frames:v', '1', '-c:v', 'libwebp', '-quality', '84', '-compression_level', '4', previewPath,
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let errorOutput = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => { errorOutput = `${errorOutput}${chunk}`.slice(-8192); });
+  child.on('error', (error) => reject(new Error(`FFmpeg를 실행할 수 없습니다: ${error.message}`)));
+  child.on('close', (code) => code === 0 ? resolve() : reject(new Error(`사진 이미지 생성 실패 (FFmpeg ${code}): ${errorOutput.trim()}`)));
+});
+
 /** 사진 상세 화면용 1920px WebP 이미지를 생성한다. */
 const createImagePreview = (inputPath, outputPath) => new Promise((resolve, reject) => {
   const ffmpeg = spawn(ffmpegExecutable, [
@@ -204,6 +219,7 @@ module.exports = {
   validateVideoDuration,
   createBrowserCompatibleVideo,
   createImagePreview,
+  createImageDerivatives,
   createImageThumbnail,
   createVideoThumbnail,
   isBrowserCompatibleVideo,

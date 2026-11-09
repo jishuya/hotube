@@ -1,3 +1,4 @@
+import { measureUploadStep } from '../utils/uploadTiming.js';
 import { uploadRequest, retryUploadChunk } from './uploadTransport.js';
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
@@ -152,31 +153,62 @@ export const uploadMediaFile = async (file, {
   title, uploadedAt, tags, uploadedBy, sharedWith = ['dad', 'mom'], uploadBatchId, contentHash,
 }, { signal, onProgress = () => {} } = {}) => {
   onProgress({ phase: 'connecting', loaded: 0, total: file.size });
-  const session = await uploadRequest(FUNCTIONS_URL.initMediaUpload, {
+  const session = await retryUploadChunk(() => measureUploadStep('init', file.size, () => uploadRequest(FUNCTIONS_URL.initMediaUpload, {
     signal,
     body: { userId: uploadedBy, contentHash, originalName: file.name, mimeType: file.type,
       fileSize: file.size, metadata: { title: title || file.name, uploadedAt, tags: tags || [], sharedWith, uploadBatchId } },
-  });
+  })), signal);
   const uploaded = new Set(session.uploadedChunks || []);
   let loaded = [...uploaded].reduce((sum, index) => sum + Math.min(session.chunkSize, file.size - index * session.chunkSize), 0);
   onProgress({ phase: 'uploading', loaded, total: file.size });
-  // One chunk at a time bounds memory and leaves the connection available for the app.
-  for (let index = 0; index < session.totalChunks; index += 1) {
-    if (uploaded.has(index)) continue;
-    signal?.throwIfAborted();
-    const chunk = file.slice(index * session.chunkSize, Math.min(file.size, (index + 1) * session.chunkSize));
-    await retryUploadChunk(() => uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/chunks/${index}`, {
-      method: 'PUT', body: chunk, signal,
-      onProgress: (bytes) => onProgress({ phase: 'uploading', loaded: loaded + Math.min(bytes, chunk.size), total: file.size }),
-    }), signal, () => onProgress({ phase: 'retrying', loaded, total: file.size }));
-    loaded += chunk.size;
-    onProgress({ phase: 'uploading', loaded, total: file.size });
+  // Two requests overlap server acknowledgements without multiplying per-file workers.
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  let nextIndex = 0;
+  let degraded = false;
+  let failure;
+  const inFlight = new Map();
+  const report = () => onProgress({ phase: 'uploading', loaded: loaded + [...inFlight.values()].reduce((sum, bytes) => sum + bytes, 0), total: file.size });
+  const worker = async (secondary) => {
+    try {
+      while (nextIndex < session.totalChunks && !(secondary && degraded)) {
+        controller.signal.throwIfAborted();
+        const index = nextIndex++;
+        if (uploaded.has(index)) continue;
+        const chunk = file.slice(index * session.chunkSize, Math.min(file.size, (index + 1) * session.chunkSize));
+        inFlight.set(index, 0);
+        await retryUploadChunk(() => {
+          inFlight.set(index, 0);
+          return measureUploadStep('chunk', chunk.size, () => uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/chunks/${index}`, {
+            method: 'PUT', body: chunk, signal: controller.signal,
+            onProgress: (bytes) => { inFlight.set(index, Math.min(bytes, chunk.size)); report(); },
+          }));
+        }, controller.signal, () => {
+          degraded = true;
+          onProgress({ phase: 'retrying', loaded, total: file.size });
+        });
+        inFlight.delete(index);
+        loaded += chunk.size;
+        report();
+      }
+    } catch (error) {
+      if (!failure) failure = error;
+      controller.abort();
+    }
+  };
+  try {
+    await Promise.all([worker(false), worker(true)]);
+    if (failure) throw failure;
+  } finally {
+    signal?.removeEventListener('abort', abort);
   }
   signal?.throwIfAborted();
   onProgress({ phase: 'processing', loaded: file.size, total: file.size });
-  const media = await uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/complete`, {
+  const media = await retryUploadChunk(() => measureUploadStep('complete', file.size, () => uploadRequest(`${FUNCTIONS_URL.uploadMedia}/${encodeURIComponent(session.sessionId)}/complete`, {
     signal, timeout: 120000,
-  });
+  })), signal);
   return resolveMediaUrls(media);
 };
 

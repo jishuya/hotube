@@ -12,7 +12,8 @@ const performanceMetrics = (req, res, next) => {
   res.writeHead = function writeHeadWithTiming(...args) {
     if (!res.headersSent) {
       const duration = performance.now() - startedAt;
-      res.setHeader('Server-Timing', `app;dur=${duration.toFixed(1)}`);
+      const phases = Object.entries(res.locals.uploadTimings || {}).map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`);
+      res.setHeader('Server-Timing', [`app;dur=${duration.toFixed(1)}`, ...phases].join(', '));
       res.setHeader('Timing-Allow-Origin', '*');
     }
     return originalWriteHead.apply(this, args);
@@ -31,6 +32,7 @@ const performanceMetrics = (req, res, next) => {
       durationMs: Math.round(duration),
       contentLength: Number(res.getHeader('Content-Length')) || null,
       range: Boolean(req.headers.range),
+      ...(res.locals.uploadTimings ? { uploadTimings: res.locals.uploadTimings } : {}),
     }));
   });
 

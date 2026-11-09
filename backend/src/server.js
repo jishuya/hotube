@@ -5,6 +5,8 @@ const { resumeMediaProcessing } = require('./services/mediaProcessingService');
 
 const port = Number(process.env.PORT || 5001);
 
+const { startUploadCleanup } = require('./services/uploadSessionLifecycle');
+let cleanupTimer;
 let server;
 
 const start = async () => {
@@ -16,6 +18,7 @@ const start = async () => {
     CHECK (rotation IN (0, 90, 180, 270))`);
   await resumeMediaProcessing();
   server = app.listen(port, () => {
+    cleanupTimer = startUploadCleanup();
     console.log(`Hotube API server listening on http://localhost:${port}`);
   });
 };
@@ -27,6 +30,7 @@ start().catch(async (error) => {
 });
 
 const shutdown = async () => {
+  clearInterval(cleanupTimer);
   if (!server) {
     await pool.end();
     process.exit(0);

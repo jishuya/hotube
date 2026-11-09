@@ -1,8 +1,10 @@
+import { mapWithConcurrency } from '../utils/mapWithConcurrency';
 import MediaThumbnail from '../components/common/MediaThumbnail';
 import VideoDurationBadge from '../components/common/VideoDurationBadge';
 import { getUploadFailureMessage, getInterruptedUploadFeedback } from '../utils/uploadFeedback';
 import { createUploadPreview } from '../utils/imagePreview';
-import { excludeSelectedDuplicates, getDuplicateSelectionNotices, getUploadSelectionCapacity } from '../utils/uploadSelection';
+import { getDuplicateSelectionNotices, getUploadSelectionCapacity } from '../utils/uploadSelection';
+import { measureUploadStep } from '../utils/uploadTiming';
 import { hashFile } from '../utils/fileHash';
 import { parseTags } from '../utils/tags';
 import { getDefaultSharedWith } from '../utils/familySharing';
@@ -23,7 +25,7 @@ import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
 import { addVideo, checkMediaDuplicates, deleteVideo, getMediaPage, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
-import { listPendingUploadIds, getPendingUpload, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
+import { listPendingUploadIds, listPendingUploadSummaries, getPendingUpload, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
 
 const ITEMS_PER_PAGE = 30;
 const MAX_UPLOAD_FILES = 10;
@@ -204,7 +206,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const selectedUploadSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size ?? 0), 0);
   const transferredBytes = Math.min(batchBytes.total, batchBytes.completed + (transfer?.loaded || 0));
   const uploadPercent = batchBytes.total > 0 ? Math.floor(transferredBytes / batchBytes.total * 100) : null;
-  const progressOpen = preparing || uploading;
+  const progressOpen = uploading;
 
   useEffect(() => {
     // Fetch the next screen while the user selects and uploads files.
@@ -245,7 +247,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     let active = true;
     let ownsUpload = false;
     let resumeController;
-    listPendingUploadIds(user.id)
+    listPendingUploadSummaries(user.id)
       .then(async (records) => {
         if (!active || !records.length || uploadInProgressRef.current || preparingRef.current) return;
         setResumeAvailable(true);
@@ -258,16 +260,10 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         resumeController = controller;
         operationControllerRef.current = controller;
         setUploadProgress({ completed: 0, total: records.length });
-        let totalBytes = 0;
-        for (const id of records) {
-          controller.signal.throwIfAborted();
-          const record = await getPendingUpload(id);
-          totalBytes += record?.file?.size || 0;
-        }
         if (!active) return;
-        setBatchBytes({ total: totalBytes, completed: 0 });
+        setBatchBytes({ total: records.reduce((sum, record) => sum + record.size, 0), completed: 0 });
         let completed = 0;
-        for (const id of records) {
+        for (const { id } of records) {
           if (controller.signal.aborted) break;
           const record = await getPendingUpload(id);
           if (!record) continue;
@@ -406,6 +402,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     operationControllerRef.current = controller;
     const newPreviewUrls = [];
     let selectionCommitted = false;
+    const preparationId = crypto.randomUUID();
     try {
       const { remaining: availableSlots } = getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES);
       if (availableSlots === 0) {
@@ -413,105 +410,41 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         return;
       }
       const duplicateCounts = { attached: 0, uploaded: 0, repeated: 0 };
-      {
-        const totalIncomingBytes = incomingFiles.reduce((sum, file) => sum + file.size, 0);
-        let checkedIncomingBytes = 0;
-        const result = await excludeSelectedDuplicates(
-          incomingFiles,
-          selectedFiles.map((item) => item.contentHash).filter(Boolean),
-          async (file) => {
-            controller.signal.throwIfAborted();
-            let hash = selectionHashCacheRef.current.get(file);
-            if (!hash) {
-              hash = await hashFile(file, (loaded) => {
-                setPreparationProgress(Math.floor((checkedIncomingBytes + loaded) / (totalIncomingBytes || 1) * 10));
-              }, controller.signal);
-              selectionHashCacheRef.current.set(file, hash);
-            }
-            checkedIncomingBytes += file.size;
-            return hash;
-          },
-        );
-        controller.signal.throwIfAborted();
-        incomingFiles = result.files;
-        duplicateCounts.attached = result.attachedDuplicateCount;
-        duplicateCounts.repeated = result.repeatedDuplicateCount;
-      }
-      // The server accepts at most ten hashes per request; check every file in batches.
-      const uploadedHashes = new Set();
-      for (let offset = 0; offset < incomingFiles.length; offset += MAX_UPLOAD_FILES) {
-        controller.signal.throwIfAborted();
-        const hashes = incomingFiles.slice(offset, offset + MAX_UPLOAD_FILES)
-          .map((file) => selectionHashCacheRef.current.get(file));
-        const matches = await checkMediaDuplicates(hashes, controller.signal);
-        controller.signal.throwIfAborted();
-        matches.forEach((hash) => uploadedHashes.add(hash));
-      }
-      incomingFiles = incomingFiles.filter((file) => {
-        if (!uploadedHashes.has(selectionHashCacheRef.current.get(file))) return true;
-        duplicateCounts.uploaded += 1;
-        return false;
-      });
+      // Reject oversized files before reading their contents or opening the picker.
+      const oversized = incomingFiles.filter((file) => file.size > (file.type.startsWith('video/') ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE));
+      incomingFiles = incomingFiles.filter((file) => file.size <= (file.type.startsWith('video/') ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE));
+      const selectionNotices = oversized.length ? [`용량을 초과한 파일 ${oversized.length}개를 제외했어요. 사진은 20MB, 영상은 300MB까지 첨부할 수 있어요.`] : [];
       if (getUploadSelectionCapacity(selectedFiles.length, incomingFiles.length, MAX_UPLOAD_FILES).needsPicker) {
-        const datedFiles = [];
-        for (const file of incomingFiles) {
-          controller.signal.throwIfAborted();
-          const { date } = await getMediaDate(file);
-          datedFiles.push({ file, date });
-        }
-        controller.signal.throwIfAborted();
-        // Stable sorting keeps the user's original order for files on the same date.
-        datedFiles.sort((a, b) => a.date.localeCompare(b.date));
+        // Let the user choose first; do not read every unselected video for hashing/date sorting.
         setFileSelectionNotice('');
-        setPickerDuplicateNotices(getDuplicateSelectionNotices(duplicateCounts));
-        setPickerFiles(datedFiles.map(({ file }) => file));
+        setPickerDuplicateNotices(selectionNotices);
+        setPickerFiles(incomingFiles);
         return;
       }
       const selectedMediaFiles = incomingFiles;
-      const selectionNotices = [];
       if (!incomingFiles.length) {
-        setFileSelectionNotice(getDuplicateSelectionNotices(duplicateCounts).join('\n'));
+        setFileSelectionNotice([...selectionNotices, ...getDuplicateSelectionNotices(duplicateCounts)].join('\n'));
         return;
       }
-      const oversizedImages = selectedMediaFiles.filter((file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE);
-      const oversizedVideos = selectedMediaFiles.filter((file) => file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE);
-      const sizeEligibleFiles = selectedMediaFiles.filter((file) => (
-        !(file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE)
-        && !(file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE)
-      ));
-      const mediaFiles = [];
-      let totalSize = selectedUploadSize;
+      // Show a lightweight row immediately; only decode images after validation.
+      setSelectedFiles((current) => [...current, ...selectedMediaFiles.map((file) => ({
+        file, name: file.name, type: file.type.startsWith('video/') ? 'video' : 'photo',
+        preparationId,
+      }))]);
       let longVideoCount = 0;
       let totalSizeExceededCount = 0;
-
-      // 전체 준비 진행률: 기본 검사 10%, 파일 읽기 80%, 중복 조회 5%, 미리보기 5%.
-      for (const [index, file] of sizeEligibleFiles.entries()) {
-        setPreparationProgress(Math.floor(index / sizeEligibleFiles.length * 10));
-        if (file.type.startsWith('video/')) {
-          controller.signal.throwIfAborted();
-          const duration = await readVideoDuration(file, controller.signal);
-          controller.signal.throwIfAborted();
-          if (duration !== null && duration > 120) {
-            longVideoCount += 1;
-            continue;
-          }
-        }
-        if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) {
-          totalSizeExceededCount += 1;
-          continue;
-        }
-        mediaFiles.push(file);
-        totalSize += file.size;
-      }
+      let checked = 0;
+      const eligible = await mapWithConcurrency(selectedMediaFiles, 2, async (file) => {
+        const duration = file.type.startsWith('video/')
+          ? await measureUploadStep('duration', file.size, () => readVideoDuration(file, controller.signal)) : null;
+        controller.signal.throwIfAborted();
+        setPreparationProgress(Math.floor(++checked / selectedMediaFiles.length * 10));
+        if (duration !== null && duration > 120) { longVideoCount++; return null; }
+        return file;
+      }, controller.signal);
+      const mediaFiles = eligible.filter(Boolean);
 
       if (longVideoCount) selectionNotices.push(`영상 길이 초과 ${longVideoCount}개 (최대 2분)`);
-      if (totalSizeExceededCount) selectionNotices.push(`전체 용량 초과 ${totalSizeExceededCount}개 (최대 500MB)`);
-      if (oversizedImages.length) {
-        selectionNotices.push(`사진 용량 초과 ${oversizedImages.length}개 (개당 최대 20MB)`);
-      }
-      if (oversizedVideos.length) {
-        selectionNotices.push(`영상 용량 초과 ${oversizedVideos.length}개 (개당 최대 300MB)`);
-      }
 
       if (!mediaFiles.length) {
         selectionNotices.push(...getDuplicateSelectionNotices(duplicateCounts));
@@ -527,9 +460,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         const totalBytes = mediaFiles.reduce((sum, file) => sum + file.size, 0);
         let checkedBytes = 0;
         for (const file of mediaFiles) {
-          const contentHash = selectionHashCacheRef.current.get(file) || await hashFile(file, (loaded) => {
+          const contentHash = selectionHashCacheRef.current.get(file) || await measureUploadStep('hash', file.size, () => hashFile(file, (loaded) => {
             setPreparationProgress(10 + Math.floor(Math.min(1, (checkedBytes + loaded) / (totalBytes || 1)) * 80));
-          }, controller.signal);
+          }, controller.signal));
           selectionHashCacheRef.current.set(file, contentHash);
           checkedBytes += file.size;
           hashedFiles.push({ file, contentHash });
@@ -545,6 +478,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           else { acceptedHashes.add(contentHash); return true; }
           return false;
         });
+        // Count only accepted unique files against the batch limit.
+        let totalSize = selectedUploadSize;
+        hashedFiles = hashedFiles.filter(({ file }) => {
+          if (totalSize + file.size > MAX_TOTAL_UPLOAD_SIZE) { totalSizeExceededCount += 1; return false; }
+          totalSize += file.size;
+          return true;
+        });
+        if (totalSizeExceededCount) selectionNotices.push(`전체 용량 초과 ${totalSizeExceededCount}개 (최대 500MB)`);
         setUploadError('');
         selectionNotices.push(...getDuplicateSelectionNotices(duplicateCounts));
         if (selectionNotices.length) {
@@ -555,12 +496,14 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         return;
       }
       setPreparationProgress(95);
+      const acceptedFiles = new Set(hashedFiles.map(({ file }) => file));
+      setSelectedFiles((current) => current.filter((item) => item.preparationId !== preparationId || acceptedFiles.has(item.file)));
       const nextFiles = [];
       for (const { file, contentHash } of hashedFiles) {
         controller.signal.throwIfAborted();
-        const mediaDate = await getMediaDate(file);
+        const mediaDate = await measureUploadStep('date', file.size, () => getMediaDate(file));
         controller.signal.throwIfAborted();
-        const preview = file.type.startsWith('image/') ? await createUploadPreview(file) : URL.createObjectURL(file);
+        const preview = file.type.startsWith('image/') ? await measureUploadStep('preview', file.size, () => createUploadPreview(file)) : URL.createObjectURL(file);
         if (preview) { previewUrlsRef.current.add(preview); newPreviewUrls.push(preview); }
         controller.signal.throwIfAborted();
         nextFiles.push({
@@ -569,15 +512,19 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
           date: targetDate || mediaDate.date,
           tags: '',
         });
+        const prepared = nextFiles[nextFiles.length - 1];
+        setSelectedFiles((current) => current.map((item) => item.preparationId === preparationId && item.file === file
+          ? { ...prepared, preparationId } : item));
         setPreparationProgress(95 + Math.floor(nextFiles.length / hashedFiles.length * 5));
       }
       setPreparationProgress(100);
       selectionCommitted = true;
-      setSelectedFiles((current) => [...current, ...nextFiles]);
+      setSelectedFiles((current) => [...current.filter((item) => item.preparationId !== preparationId), ...nextFiles]);
     } catch (error) {
       if (error.name !== 'AbortError') setUploadError(error.message || '파일을 확인하지 못했습니다.');
     } finally {
       if (!selectionCommitted) for (const url of newPreviewUrls) { URL.revokeObjectURL(url); previewUrlsRef.current.delete(url); }
+      if (!selectionCommitted) setSelectedFiles((current) => current.filter((item) => item.preparationId !== preparationId));
       preparingRef.current = false;
       operationControllerRef.current = null;
       setPreparing(false);
@@ -585,6 +532,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   };
 
   const removeSelectedFile = (index) => {
+    if (preparingRef.current || uploadInProgressRef.current) return;
     setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   };
 
@@ -679,43 +627,63 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         };
         let completed = 0;
         const failures = [];
-        for (const item of selectedFiles) {
-          if (controller.signal.aborted) break;
-          const pendingId = `${user.id}:${item.contentHash}`;
-          setTransfer({ phase: 'saving', loaded: 0, total: item.file.size, name: item.name });
-          try {
-            // Persist only the file about to be sent, rather than copying the whole batch first.
-            await savePendingUpload({ id: pendingId, userId: user.id, file: item.file, options: optionsFor(item) }, controller.signal);
-          } catch (error) {
-            if (error.name !== 'AbortError') setQueueNotice('이 기기에 임시 저장할 수 없어 앱을 닫으면 파일을 다시 선택해야 해요.');
+        const preparationController = new AbortController();
+        const stopPreparation = () => preparationController.abort();
+        controller.signal.addEventListener('abort', stopPreparation, { once: true });
+        const prepared = new Map();
+        const prepare = (item) => {
+          if (!prepared.has(item)) {
+            const task = measureUploadStep('save', item.file.size, () => savePendingUpload({
+              id: `${user.id}:${item.contentHash}`, userId: user.id,
+              file: item.file, options: optionsFor(item),
+            }, preparationController.signal)).then(() => null, (error) => error);
+            prepared.set(item, task);
           }
-          try {
-            controller.signal.throwIfAborted();
-            const saved = await uploadMediaFile(item.file, optionsFor(item), {
-              signal: controller.signal,
-              onProgress: (progress) => setTransfer({ ...progress, name: item.name }),
-            });
-            created.push(toMemoryMedia(saved));
-            await removePendingUpload(pendingId).catch(() => {});
-          } catch (error) {
-            if (error.code === 'DUPLICATE_MEDIA') {
-              duplicateFiles.push(item.name);
-              await removePendingUpload(pendingId).catch(() => {});
-            } else {
-              console.warn('파일 업로드 중단:', { name: item.name, code: error.code, status: error.status, requestUrl: error.requestUrl }, error);
-              failures.push(getUploadFailureMessage(error));
-              if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
-                await removePendingUpload(pendingId).catch(() => {});
-              }
-              // Keep this file and all remaining files selected for retry. No background workers remain.
-              break;
+          return prepared.get(item);
+        };
+        try {
+          for (const [index, item] of selectedFiles.entries()) {
+            if (controller.signal.aborted) break;
+            const pendingId = `${user.id}:${item.contentHash}`;
+            setTransfer({ phase: 'saving', loaded: 0, total: item.file.size, name: item.name });
+            const preparationError = await prepare(item);
+            if (preparationError && preparationError.name !== 'AbortError') {
+              setQueueNotice('이 기기에 임시 저장할 수 없어 앱을 닫으면 파일을 다시 선택해야 해요.');
             }
+            // Prepare at most one upcoming file while this file is transferred.
+            if (!controller.signal.aborted && selectedFiles[index + 1]) void prepare(selectedFiles[index + 1]);
+            try {
+              controller.signal.throwIfAborted();
+              const saved = await uploadMediaFile(item.file, optionsFor(item), {
+                signal: controller.signal,
+                onProgress: (progress) => setTransfer({ ...progress, name: item.name }),
+              });
+              created.push(toMemoryMedia(saved));
+              await removePendingUpload(pendingId).catch(() => {});
+            } catch (error) {
+              if (error.code === 'DUPLICATE_MEDIA') {
+                duplicateFiles.push(item.name);
+                await removePendingUpload(pendingId).catch(() => {});
+              } else {
+                console.warn('파일 업로드 중단:', { name: item.name, code: error.code, status: error.status, requestUrl: error.requestUrl }, error);
+                failures.push(getUploadFailureMessage(error));
+                if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
+                  await removePendingUpload(pendingId).catch(() => {});
+                }
+                // Keep this file and all remaining files selected for retry. No background workers remain.
+                break;
+              }
+            }
+            setBatchBytes((current) => ({ ...current, completed: current.completed + item.file.size }));
+            setTransfer(null);
+            completed += 1;
+            setUploadProgress((current) => ({ ...current, completed }));
+            setSelectedFiles((current) => current.filter((entry) => entry.contentHash !== item.contentHash));
           }
-          setBatchBytes((current) => ({ ...current, completed: current.completed + item.file.size }));
-          setTransfer(null);
-          completed += 1;
-          setUploadProgress((current) => ({ ...current, completed }));
-          setSelectedFiles((current) => current.filter((entry) => entry.contentHash !== item.contentHash));
+        } finally {
+          preparationController.abort();
+          controller.signal.removeEventListener('abort', stopPreparation);
+          await Promise.all(prepared.values());
         }
         if (failures.length || controller.signal.aborted) {
           if (created.length) {
@@ -899,7 +867,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                             {selectedFiles.map((item, index) => (
                               <div key={`${item.name}-${index}`} className="relative min-w-0 overflow-hidden rounded-lg bg-gray-100 p-0.5 text-left" title={item.name}>
                                   <span className="relative block aspect-square overflow-hidden rounded-md bg-black/5">
-                                    {item.type === 'video' ? (
+                                    {item.preparationId && !item.preview ? (
+                                      <span className="flex h-full items-center justify-center text-xs text-text-secondary">확인 중…</span>
+                                    ) : item.type === 'video' ? (
                                       <>
                                         <VideoFramePreview src={item.preview} className="h-full w-full object-cover" />
                                         <VideoDurationBadge media={item} />
@@ -1055,6 +1025,12 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 }}>중단된 업로드 다시 시도</button>
               )}
               {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
+              {preparing && (
+                <div role="status" className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-primary/5 p-3 text-sm">
+                  <span>첨부파일 확인 중 · {preparationProgress}%</span>
+                  <button type="button" onClick={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }} className="min-h-11 px-3 font-bold text-primary">취소</button>
+                </div>
+              )}
               <button type="submit" disabled={uploading || preparing || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
                 {!uploading && !preparing && <Icon icon="mdi:cloud-upload" className="text-xl" />}
                 {uploading

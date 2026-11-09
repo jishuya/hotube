@@ -89,7 +89,7 @@ const UploadFilePicker = ({ files, limit, duplicateNotices = [], onCancel, onCon
             </button>
           </div>
           <p id="upload-picker-description" className="mt-2 text-sm text-text-secondary">
-            가져온 {files.length}개중 {limit}개를 골라주세요. 날짜가 오래된 순으로 표시됩니다. 다른 파일을 고르려면 선택을 해제해 주세요.
+            가져온 {files.length}개중 {limit}개를 골라주세요. 선택한 순서로 표시되며, 중복 파일은 첨부할 때 확인합니다. 다른 파일을 고르려면 선택을 해제해 주세요.
           </p>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
@@ -126,7 +126,7 @@ const UploadFilePicker = ({ files, limit, duplicateNotices = [], onCancel, onCon
       {dialogNode && <Modal
         isOpen={duplicateNotices.length > 0 && !noticeDismissed}
         onClose={() => setNoticeDismissed(true)}
-        title="중복 파일 제외"
+        title="첨부파일 안내"
         message={duplicateNotices.join('\n')}
         confirmText="확인"
         portalTarget={dialogNode}
