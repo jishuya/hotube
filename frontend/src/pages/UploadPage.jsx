@@ -206,7 +206,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const selectedUploadSize = selectedFiles.reduce((sum, item) => sum + (item.file?.size ?? item.size ?? 0), 0);
   const transferredBytes = Math.min(batchBytes.total, batchBytes.completed + (transfer?.loaded || 0));
   const uploadPercent = batchBytes.total > 0 ? Math.floor(transferredBytes / batchBytes.total * 100) : null;
-  const progressOpen = uploading;
+  const progressOpen = uploading || preparing;
 
   useEffect(() => {
     // Fetch the next screen while the user selects and uploads files.
@@ -868,7 +868,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                               <div key={`${item.name}-${index}`} className="relative min-w-0 overflow-hidden rounded-lg bg-gray-100 p-0.5 text-left" title={item.name}>
                                   <span className="relative block aspect-square overflow-hidden rounded-md bg-black/5">
                                     {item.preparationId && !item.preview ? (
-                                      <span className="flex h-full items-center justify-center text-xs text-text-secondary">확인 중…</span>
+                                      <span role="status" aria-label="사진 준비 중" className="flex h-full items-center justify-center">
+                                        <span aria-hidden="true" className="size-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+                                      </span>
                                     ) : item.type === 'video' ? (
                                       <>
                                         <VideoFramePreview src={item.preview} className="h-full w-full object-cover" />
@@ -1025,12 +1027,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
                 }}>중단된 업로드 다시 시도</button>
               )}
               {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
-              {preparing && (
-                <div role="status" className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-primary/5 p-3 text-sm">
-                  <span>첨부파일 확인 중 · {preparationProgress}%</span>
-                  <button type="button" onClick={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }} className="min-h-11 px-3 font-bold text-primary">취소</button>
-                </div>
-              )}
               <button type="submit" disabled={uploading || preparing || (selectedFiles.length === 0 && !youtubeInfo)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-bold text-white shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
                 {!uploading && !preparing && <Icon icon="mdi:cloud-upload" className="text-xl" />}
                 {uploading
