@@ -5,7 +5,7 @@ const getDefaultSharedWith = (user) => {
   return ['dad', 'mom'];
 };
 const getDefaultCommentSharedWith = (user) => {
-  if (['admin', 'sub-admin'].includes(user?.role)) return [];
+  if (['admin', 'sub-admin'].includes(user?.role)) return ['dad', 'mom'];
   if (['dad', 'mom'].includes(user?.category)) return [user.category];
   return ['etc'];
 };

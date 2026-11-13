@@ -8,18 +8,18 @@ import { AVATAR_POSITIONS } from '../../constants/profileAvatars';
 
 const getCommentAudience = (sharedWith) => {
   if (Array.isArray(sharedWith) && sharedWith.length === 0) {
-    return { label: '부부만 공개', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' };
+    return { label: '부부만 공개', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200', background: 'bg-yellow-50 dark:bg-yellow-950/30' };
   }
   if (sharedWith?.length === 1 && sharedWith[0] === 'mom') {
-    return { label: '엄마가족 공개', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' };
+    return { label: '엄마가족 공개', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200', background: 'bg-rose-50 dark:bg-rose-950/30' };
   }
   if (sharedWith?.length === 1 && sharedWith[0] === 'dad') {
-    return { label: '아빠가족 공개', color: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' };
+    return { label: '아빠가족 공개', color: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200', background: 'bg-sky-50 dark:bg-sky-950/30' };
   }
   if (sharedWith?.length === 1 && sharedWith[0] === 'etc') {
-    return { label: '기타 가족', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' };
+    return { label: '기타 가족', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200', background: '' };
   }
-  return { label: '양쪽 가족 공개', color: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200' };
+  return { label: '양쪽 가족 공개', color: 'text-zinc-500 dark:text-zinc-400', background: '' };
 };
 
 const CommentAvatar = ({ comment }) => {
@@ -222,7 +222,7 @@ const CommentSection = ({ videoId, onCountChange }) => {
       ) : comments.length > 0 ? (
         <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
           {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-2">
+            <div key={comment.id} className={`flex gap-2 rounded-xl p-2 ${getCommentAudience(comment.sharedWith).background}`}>
               <div className="shrink-0">
                 <CommentAvatar comment={comment} />
               </div>

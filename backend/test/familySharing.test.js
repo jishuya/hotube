@@ -22,12 +22,12 @@ test('explicit comment audience is preserved and invalid audiences are rejected'
   }
 });
 
-test('upload UI defaults parents to couple-only and relatives to their family', async () => {
+test('upload UI defaults parents to both families and relatives to their family', async () => {
   const frontend = await import('../../frontend/src/utils/familySharing.js');
   for (const role of ['admin', 'sub-admin', 'user']) {
     for (const category of ['mom', 'dad', 'etc']) {
       const user = { role, category };
-      assert.deepEqual(frontend.getDefaultSharedWith(user), role === 'user' ? getDefaultSharedWith(user) : []);
+      assert.deepEqual(frontend.getDefaultSharedWith(user), getDefaultSharedWith(user));
     }
   }
 });
@@ -58,17 +58,17 @@ test('ordinary relatives cannot expose comments to the other family even with a 
 });
 
 
-test('parent comments default to couple-only while allowing either or both families', async () => {
+test('parent comments default to both families while preserving explicit audiences', async () => {
   const frontend = await import('../../frontend/src/utils/familySharing.js');
   for (const role of ['admin', 'sub-admin']) {
     for (const category of ['mom', 'dad', 'etc']) {
       const user = { role, category };
-      assert.deepEqual(frontend.getDefaultCommentSharedWith(user), []);
-      assert.deepEqual(resolveCommentSharing(undefined, user), []);
+      assert.deepEqual(frontend.getDefaultCommentSharedWith(user), ['dad', 'mom']);
+      assert.deepEqual(resolveCommentSharing(undefined, user), ['dad', 'mom']);
       for (const audience of [[], ['mom'], ['dad'], ['mom', 'dad']]) {
         assert.deepEqual(resolveCommentSharing(audience, user), audience);
       }
-      assert.deepEqual(frontend.getDefaultSharedWith(user), []);
+      assert.deepEqual(frontend.getDefaultSharedWith(user), ['dad', 'mom']);
     }
   }
 });
