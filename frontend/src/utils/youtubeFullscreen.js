@@ -1,5 +1,7 @@
 // Fullscreen permission alone does not request a landscape screen orientation.
 export const bindYoutubeFullscreenOrientation = (iframe) => {
+  // The thumbnail view has no iframe until playback opens, and closing removes it.
+  if (!iframe) return undefined;
   const doc = iframe.ownerDocument;
   const orientation = doc.defaultView?.screen?.orientation;
   let active = false;

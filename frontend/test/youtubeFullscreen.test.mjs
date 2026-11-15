@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bindYoutubeFullscreenOrientation } from '../src/utils/youtubeFullscreen.js';
 
+test('thumbnail and closed player views can bind without an iframe', () => {
+  assert.equal(bindYoutubeFullscreenOrientation(null), undefined);
+  assert.equal(bindYoutubeFullscreenOrientation(undefined), undefined);
+});
+
 const setup = (lock = async () => {}) => {
   const calls = [];
   const doc = new EventTarget();

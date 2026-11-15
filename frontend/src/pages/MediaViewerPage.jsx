@@ -78,20 +78,23 @@ const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-cent
 const YoutubeMediaPlayer = ({ src, title, thumbnail, isShort, isFullscreen, onFullscreenChange }) => {
   const iframeRef = useRef(null);
   const [manualRotation, setRotation] = useState(0);
-  const [portrait, setPortrait] = useState(() => window.matchMedia('(orientation: portrait)').matches);
+  const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth);
   const rotation = ((portrait ? 90 : 0) + manualRotation) % 360;
   const sideways = rotation % 180 !== 0;
 
   useEffect(() => {
-    const orientation = window.matchMedia('(orientation: portrait)');
-    const updateOrientation = () => setPortrait(orientation.matches);
+    const updateOrientation = () => setPortrait(window.innerHeight > window.innerWidth);
     updateOrientation();
-    orientation.addEventListener('change', updateOrientation);
-    return () => orientation.removeEventListener('change', updateOrientation);
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+    };
   }, []);
 
   useEffect(() => {
-    if (isShort) return undefined;
+    if (isShort || !isFullscreen || !iframeRef.current) return undefined;
     return bindYoutubeFullscreenOrientation(iframeRef.current);
   }, [src, isShort, isFullscreen]);
 
@@ -245,6 +248,12 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
       onPointerCancel={() => { swipeRef.current = null; }}
       style={isFullscreen ? { touchAction: 'none' } : undefined}
     >
+      {isFullscreen && (
+        <div className="absolute right-4 top-4 z-30 flex gap-2">
+          <button type="button" onClick={rotateVideo} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="영상 시계 방향으로 90도 회전" title="90도 회전"><Icon icon="mdi:rotate-right" /></button>
+          <button type="button" onClick={toggleFullscreen} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="영상 크게 보기 닫기"><Icon icon="mdi:close" /></button>
+        </div>
+      )}
       <div
         className={isFullscreen ? 'absolute left-1/2 top-1/2' : 'contents'}
         style={isFullscreen ? {
@@ -313,8 +322,8 @@ const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevio
           </span>
           <input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={(event) => { if (videoRef.current) videoRef.current.currentTime = Number(event.target.value); }} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary" aria-label="재생 위치" />
           <button type="button" onClick={() => setMuted((value) => !value)} className={playerControlButtonClass} aria-label={muted ? '소리 켜기' : '음소거'}><Icon icon={muted ? 'mdi:volume-off' : 'mdi:volume-high'} className="text-xl" /></button>
-          {!preview && <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>}
-          {!preview && <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label={isFullscreen ? '전체 화면 종료' : '전체 화면'}><Icon icon={isFullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'} className="text-xl" /></button>}
+          {!preview && !isFullscreen && <button type="button" onClick={rotateVideo} className={playerControlButtonClass} aria-label="화면을 오른쪽으로 90도 회전"><Icon icon="mdi:rotate-right" className="text-xl" /></button>}
+          {!preview && !isFullscreen && <button type="button" onClick={toggleFullscreen} className={playerControlButtonClass} aria-label="전체 화면"><Icon icon="mdi:fullscreen" className="text-xl" /></button>}
         </div>
       </div>
     </div>
@@ -352,6 +361,7 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   const allowPrefetch = !connection?.saveData && !/(^|-)2g$/.test(connection?.effectiveType || '');
   const [scale, setScale] = useState(1);
+  const [manualRotation, setManualRotation] = useState(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [slideX, setSlideX] = useState(0);
   const [settling, setSettling] = useState(false);
@@ -390,6 +400,7 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
   const [activeId, setActiveId] = useState(media.id);
   if (activeId !== media.id) {
     setActiveId(media.id);
+    setManualRotation(0);
     setSettling(false);
     setSlideX(0);
     setScale(1);
@@ -498,9 +509,10 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/95" role="dialog" aria-modal="true" aria-label="사진 크게 보기">
-      <button type="button" onClick={onClose} className="absolute right-4 top-4 z-20 flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="사진 크게 보기 닫기">
-        <Icon icon="mdi:close" />
-      </button>
+      <div className="absolute right-4 top-4 z-20 flex gap-2">
+        <button type="button" onClick={() => { setManualRotation((value) => (value + 90) % 360); applyScale(1); }} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="사진 시계 방향으로 90도 회전" title="90도 회전"><Icon icon="mdi:rotate-right" /></button>
+        <button type="button" onClick={onClose} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="사진 크게 보기 닫기"><Icon icon="mdi:close" /></button>
+      </div>
       <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/55 p-2 text-white backdrop-blur">
         <button type="button" onClick={() => applyScale(scale - 0.5)} disabled={scale <= 1} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-35" aria-label="축소"><Icon icon="mdi:minus" /></button>
         <span className="w-14 text-center text-sm font-bold tabular-nums">{Math.round(scale * 100)}%</span>
@@ -528,7 +540,7 @@ const PhotoLightbox = ({ media, previous, next, onClose, onPrevious, onNext }) =
           {[{ item: previous, position: -1 }, { item: media, position: 0 }, { item: next, position: 1 }].map(({ item, position }) => item && (
             <div key={item.id} className="absolute inset-0 flex items-center justify-center" style={{ left: `${position * 100}%`, width: '100%' }} aria-hidden={position !== 0 || undefined}>
               {item.type === 'photo' ? (
-                <FullscreenPhoto media={item} alt={position === 0 ? media.title : ''}
+                <FullscreenPhoto media={position === 0 ? { ...item, rotation: ((item.rotation || 0) + manualRotation) % 360 } : item} alt={position === 0 ? media.title : ''}
                   loadOriginal={position === 0 || (position === 1 && allowPrefetch)}
                   style={position === 0 ? { transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` } : undefined} />
               ) : (
