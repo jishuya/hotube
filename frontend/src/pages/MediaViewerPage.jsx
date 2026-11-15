@@ -75,25 +75,59 @@ const formatPlaybackTime = (seconds) => {
 
 const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
 
-const YoutubeMediaPlayer = ({ src, title, isShort }) => {
+const YoutubeMediaPlayer = ({ src, title, thumbnail, isShort, isFullscreen, onFullscreenChange }) => {
   const iframeRef = useRef(null);
+  const [manualRotation, setRotation] = useState(0);
+  const [portrait, setPortrait] = useState(() => window.matchMedia('(orientation: portrait)').matches);
+  const rotation = ((portrait ? 90 : 0) + manualRotation) % 360;
+  const sideways = rotation % 180 !== 0;
+
+  useEffect(() => {
+    const orientation = window.matchMedia('(orientation: portrait)');
+    const updateOrientation = () => setPortrait(orientation.matches);
+    updateOrientation();
+    orientation.addEventListener('change', updateOrientation);
+    return () => orientation.removeEventListener('change', updateOrientation);
+  }, []);
 
   useEffect(() => {
     if (isShort) return undefined;
     return bindYoutubeFullscreenOrientation(iframeRef.current);
-  }, [src, isShort]);
+  }, [src, isShort, isFullscreen]);
+
+  if (!isShort && !isFullscreen) {
+    return (
+      <button type="button" onClick={() => { setRotation(0); onFullscreenChange(true); }} className="group relative aspect-video w-full bg-black" aria-label={`${title} 크게 재생`}>
+        <img src={thumbnail || `https://i.ytimg.com/vi/${extractVideoId(src)}/hqdefault.jpg`} alt="" className="h-full w-full object-contain" />
+        <span className="absolute inset-0 flex items-center justify-center"><span className="flex size-16 items-center justify-center rounded-full bg-black/65 text-4xl text-white transition group-hover:scale-110"><Icon icon="mdi:play" /></span></span>
+      </button>
+    );
+  }
 
   return (
+    <div className={!isShort ? 'fixed inset-0 z-[100] flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-black' : 'flex w-full justify-center'} role={!isShort ? 'dialog' : undefined} aria-modal={!isShort ? true : undefined} aria-label={!isShort ? '유튜브 영상 크게 보기' : undefined}>
+      {!isShort && (
+        <div className="absolute right-4 top-4 z-20 flex gap-2">
+          <button type="button" onClick={() => setRotation((value) => (value + 90) % 360)} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="영상 시계 방향으로 90도 회전" title="90도 회전"><Icon icon="mdi:rotate-right" /></button>
+          <button type="button" onClick={() => onFullscreenChange(false)} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white backdrop-blur hover:bg-white/25" aria-label="영상 크게 보기 닫기"><Icon icon="mdi:close" /></button>
+        </div>
+      )}
     <iframe
       ref={iframeRef}
       src={`https://www.youtube.com/embed/${extractVideoId(src)}?autoplay=1&mute=0&playsinline=1`}
       title={title}
       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
       allowFullScreen
+      style={!isShort ? {
+        width: sideways ? '100dvh' : '100vw',
+        height: sideways ? '100vw' : '100dvh',
+        transform: `rotate(${rotation}deg)`,
+      } : undefined}
       className={isShort
         ? 'aspect-[9/16] h-[70vh] max-h-[800px] max-w-full bg-black'
-        : 'aspect-video w-full'}
+        : 'shrink-0 bg-black'}
     />
+    </div>
   );
 };
 
@@ -1048,9 +1082,13 @@ const MediaViewerPage = () => {
               ) : current.source === 'youtube' ? (
                 <div className={`flex w-full justify-center bg-black ${isYoutubeShort ? 'py-2 sm:py-4' : ''}`}>
                   <YoutubeMediaPlayer
+                    key={current.id}
                     src={current.src}
                     title={current.title}
                     isShort={isYoutubeShort}
+                    thumbnail={current.thumbnail}
+                    isFullscreen={viewerOpen}
+                    onFullscreenChange={setViewerOpen}
                   />
                 </div>
               ) : current.type === 'video' ? (
