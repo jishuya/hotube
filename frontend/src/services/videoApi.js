@@ -1,4 +1,5 @@
 import { measureUploadStep } from '../utils/uploadTiming.js';
+import { getMediaThumbnail } from '../utils/youtubeThumbnail.js';
 import { uploadRequest, retryUploadChunk } from './uploadTransport.js';
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
@@ -61,8 +62,8 @@ export const toMemoryMedia = (media) => ({
   videoType: media.type,
   source: media.mediaType === 'youtube' ? 'youtube' : 'file',
   src: media.mediaType === 'youtube' ? media.youtubeUrl : media.fileUrl,
-  thumbnail: media.thumbnailUrl || (media.mediaType === 'photo' ? media.fileUrl : null),
-  preview: media.previewUrl || media.thumbnailUrl || (media.mediaType === 'photo' ? media.fileUrl : null),
+  thumbnail: getMediaThumbnail(media) || (media.mediaType === 'photo' ? media.fileUrl : null),
+  preview: media.previewUrl || getMediaThumbnail(media) || (media.mediaType === 'photo' ? media.fileUrl : null),
 });
 
 // 모든 비디오 조회

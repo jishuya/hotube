@@ -23,6 +23,7 @@ import {
 import { markVideoWatched, toggleLike } from '../services/authApi';
 import { dismissMediaNotifications } from '../services/pushApi';
 import { extractVideoId } from '../services/youtubeService';
+import { bindYoutubeFullscreenOrientation } from '../utils/youtubeFullscreen';
 import { useAuth } from '../contexts/AuthContext';
 import { AVATAR_POSITIONS } from '../constants/profileAvatars';
 
@@ -73,6 +74,28 @@ const formatPlaybackTime = (seconds) => {
 };
 
 const playerControlButtonClass = 'flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white text-zinc-900 shadow-md transition hover:-translate-y-0.5 hover:bg-orange-50 active:translate-y-0 active:scale-95';
+
+const YoutubeMediaPlayer = ({ src, title, isShort }) => {
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    if (isShort) return undefined;
+    return bindYoutubeFullscreenOrientation(iframeRef.current);
+  }, [src, isShort]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      src={`https://www.youtube.com/embed/${extractVideoId(src)}?autoplay=1&mute=0&playsinline=1`}
+      title={title}
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+      allowFullScreen
+      className={isShort
+        ? 'aspect-[9/16] h-[70vh] max-h-[800px] max-w-full bg-black'
+        : 'aspect-video w-full'}
+    />
+  );
+};
 
 const MediaVideoPlayer = ({ src, poster, rotation = 0, preview = false, onPrevious, onNext, isFullscreen, onFullscreenChange }) => {
   const playerRef = useRef(null);
@@ -1024,14 +1047,10 @@ const MediaViewerPage = () => {
                 </div>
               ) : current.source === 'youtube' ? (
                 <div className={`flex w-full justify-center bg-black ${isYoutubeShort ? 'py-2 sm:py-4' : ''}`}>
-                  <iframe
-                    src={`https://www.youtube.com/embed/${extractVideoId(current.src)}?autoplay=1&mute=0&playsinline=1`}
+                  <YoutubeMediaPlayer
+                    src={current.src}
                     title={current.title}
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                    className={isYoutubeShort
-                      ? 'aspect-[9/16] h-[70vh] max-h-[800px] max-w-full bg-black'
-                      : 'aspect-video w-full'}
+                    isShort={isYoutubeShort}
                   />
                 </div>
               ) : current.type === 'video' ? (

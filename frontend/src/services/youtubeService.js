@@ -1,3 +1,5 @@
+import { getYoutubeThumbnail } from '../utils/youtubeThumbnail';
+
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
@@ -78,13 +80,7 @@ export const fetchVideoInfo = async (videoId, isFromShortsUrl = false) => {
   const year = publishedAt.getFullYear();
 
   // 가장 고화질 썸네일 선택
-  const thumbnails = snippet.thumbnails;
-  const thumbnailUrl =
-    thumbnails.maxres?.url ||
-    thumbnails.standard?.url ||
-    thumbnails.high?.url ||
-    thumbnails.medium?.url ||
-    thumbnails.default?.url;
+  const thumbnailUrl = getYoutubeThumbnail(videoId, snippet.thumbnails);
 
   return {
     videoId,

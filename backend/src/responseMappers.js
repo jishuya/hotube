@@ -58,7 +58,7 @@ const mapMediaRowToVideo = (row) => ({
     : row.thumbnail_url,
   previewUrl: row.preview_path
     ? versionedMediaPath(`/mediaPreview/${encodeURIComponent(row.id)}`, row.updated_at)
-    : null,
+    : row.media_type === 'youtube' ? row.thumbnail_url : null,
   type: row.content_type ?? row.type,
   year: row.year,
   tags: normalizeArray(row.tags),
