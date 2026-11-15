@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 
-export default function UploadProgressDialog({ title, percent, onStop, stopLabel, phase = 'uploading' }) {
+export default function UploadProgressDialog({ title, percent, onStop, stopLabel, onContinue, phase = 'uploading' }) {
   const dialogRef = useRef(null);
   const progress = Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.floor(percent))) : null;
 
@@ -37,7 +37,7 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
         </div>
         <h2 id="upload-progress-title" role="status" className="text-base font-semibold text-gray-900">{title}</h2>
         {phase === 'uploading' && (
-          <p id="upload-progress-description" className="mt-2 text-xs leading-5 text-gray-500">업로드에 시간이 걸릴 수 있어요.<br />잠시만 기다려 주세요.</p>
+          <p id="upload-progress-description" className="mt-2 text-xs leading-5 text-gray-500">{onContinue ? '호튜브의 다른 화면을 보면서 업로드할 수 있어요. 다른 앱을 사용하면 전송이 멈출 수 있으며, 돌아오면 이어서 올려요.' : '업로드에 시간이 걸릴 수 있어요. 잠시만 기다려 주세요.'}</p>
         )}
         <div className="mt-3 w-full rounded-xl border border-primary/10 bg-primary/[0.03] px-3 py-2.5">
           {progress !== null && <p className="mb-2 text-center text-sm font-semibold tabular-nums text-primary">{progress}<span className="ml-0.5 text-xs font-medium">%</span></p>}
@@ -49,6 +49,7 @@ export default function UploadProgressDialog({ title, percent, onStop, stopLabel
             <span aria-hidden="true" className="upload-progress-shimmer pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           </div>
         </div>
+        {onContinue && <button type="button" onClick={onContinue} className="mt-3 min-h-11 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">다른 화면 보기</button>}
         <button type="button" onClick={onStop} className="mt-3 min-h-11 w-full rounded-lg border border-[#e2d8cb] bg-[#f2ece3] px-4 py-2.5 text-sm font-medium text-[#715b43] transition-colors hover:border-[#d3c3b0] hover:bg-[#e8ddcf] hover:text-[#59442f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">{stopLabel}</button>
       </div>
     </dialog>,

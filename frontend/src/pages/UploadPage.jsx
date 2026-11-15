@@ -23,9 +23,9 @@ import ToastContainer from '../components/common/Toast';
 import DatePickerField, { DateRangePicker } from '../components/common/DatePickerField';
 import CustomSelect from '../components/common/CustomSelect';
 import { fetchVideoInfoByUrl } from '../services/youtubeService';
-import { addVideo, checkMediaDuplicates, deleteVideo, getMediaPage, toMemoryMedia, updateVideo, uploadMediaFile } from '../services/videoApi';
+import { addVideo, checkMediaDuplicates, deleteVideo, getMediaPage, toMemoryMedia, updateVideo } from '../services/videoApi';
 import { useAuth } from '../contexts/AuthContext';
-import { listPendingUploadIds, listPendingUploadSummaries, getPendingUpload, removePendingUpload, savePendingUpload } from '../services/uploadQueueDb';
+import { uploadManager } from '../services/uploadManager';
 
 const ITEMS_PER_PAGE = 30;
 const MAX_UPLOAD_FILES = 10;
@@ -180,7 +180,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [queueNotice, setQueueNotice] = useState('');
   const operationControllerRef = useRef(null);
   const preparingRef = useRef(false);
-  const manuallyPausedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const activeUserRef = useRef(user?.id);
+  activeUserRef.current = user?.id;
   const previewUrlsRef = useRef(new Set());
   const selectionHashCacheRef = useRef(new WeakMap());
   const [, setUploadProgress] = useState({ completed: 0, total: 0 });
@@ -189,17 +191,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   const [uploadFailureTitle, setUploadFailureTitle] = useState('업로드 중단');
   const [fileSelectionNotice, setFileSelectionNotice] = useState('');
   const [toasts, setToasts] = useState([]);
-  const [resumeVersion, setResumeVersion] = useState(0);
-  const resumeStartedRef = useRef('');
   const uploadInProgressRef = useRef(false);
-  const showToast = useCallback((message, type = 'info') => {
-    setToasts((current) => [...current, {
-      id: `${Date.now()}-${Math.random()}`,
-      message,
-      type,
-      duration: 5000,
-    }]);
-  }, []);
   const removeToast = useCallback((id) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
@@ -226,96 +218,29 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     previewUrlsRef.current = currentUrls;
   }, [selectedFiles]);
 
-  useEffect(() => () => {
-    operationControllerRef.current?.abort();
-    for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
-  }, []);
-
   useEffect(() => {
-    const handleOnline = () => {
-      if (uploadInProgressRef.current || preparingRef.current || manuallyPausedRef.current) return;
-      resumeStartedRef.current = '';
-      setResumeVersion((current) => current + 1);
-    };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, []);
-
-  useEffect(() => {
-    if (listOnly || !user?.id || uploadInProgressRef.current || resumeStartedRef.current === user.id) return;
-    resumeStartedRef.current = user.id;
-    let active = true;
-    let ownsUpload = false;
-    let resumeController;
-    listPendingUploadSummaries(user.id)
-      .then(async (records) => {
-        if (!active || !records.length || uploadInProgressRef.current || preparingRef.current) return;
-        setResumeAvailable(true);
-        uploadInProgressRef.current = true;
-        ownsUpload = true;
-        setUploading(true);
-        setTransfer(null);
-        setBatchBytes({ total: 0, completed: 0 });
-        const controller = new AbortController();
-        resumeController = controller;
-        operationControllerRef.current = controller;
-        setUploadProgress({ completed: 0, total: records.length });
-        if (!active) return;
-        setBatchBytes({ total: records.reduce((sum, record) => sum + record.size, 0), completed: 0 });
-        let completed = 0;
-        for (const { id } of records) {
-          if (controller.signal.aborted) break;
-          const record = await getPendingUpload(id);
-          if (!record) continue;
-          setTransfer(null);
-          try {
-            controller.signal.throwIfAborted();
-            await uploadMediaFile(record.file, record.options, {
-              signal: controller.signal,
-              onProgress: (progress) => { if (active) setTransfer({ ...progress, name: record.file.name }); },
-            });
-            await removePendingUpload(record.id).catch(() => {});
-            setBatchBytes((current) => ({ ...current, completed: current.completed + record.file.size }));
-            setTransfer(null);
-            completed += 1;
-            setUploadProgress((current) => ({ ...current, completed: current.completed + 1 }));
-          } catch (error) {
-            if (error.code === 'DUPLICATE_MEDIA') {
-              await removePendingUpload(record.id);
-              setBatchBytes((current) => ({ ...current, total: Math.max(0, current.total - record.file.size) }));
-              setTransfer(null);
-              continue;
-            }
-            if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
-              await removePendingUpload(record.id).catch(() => {});
-              if (active) setUploadFailureMessage(getUploadFailureMessage(error));
-              setBatchBytes((current) => ({ ...current, total: Math.max(0, current.total - record.file.size) }));
-              setTransfer(null);
-              continue;
-            }
-            if (active) setUploadFailureMessage(getUploadFailureMessage(error));
-            break;
-          }
-        }
-        if (active) setResumeAvailable((await listPendingUploadIds(user.id)).length > 0);
-        if (active && completed) {
-          showToast(`중단된 업로드 ${completed}개를 완료했어요.`, 'success');
-          window.dispatchEvent(new Event('hotube:media-updated'));
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!ownsUpload) return;
-        uploadInProgressRef.current = false;
-        operationControllerRef.current = null;
-        if (active) { setUploading(false); setTransfer(null); }
-      });
+    mountedRef.current = true;
     return () => {
-      active = false;
-      resumeController?.abort();
-      if (!ownsUpload) resumeStartedRef.current = '';
+      mountedRef.current = false;
+      // File transfers belong to the app; only page-local preparation is stopped.
+      operationControllerRef.current?.abort();
+      for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
     };
-  }, [listOnly, resumeVersion, showToast, user?.id]);
+  }, []);
+
+  useEffect(() => {
+    const sync = () => {
+      const state = uploadManager.getSnapshot();
+      if (state.userId !== user?.id) return;
+      setUploading(state.running);
+      setTransfer(state.transfer);
+      setBatchBytes({ total: state.totalBytes, completed: state.completedBytes });
+      setResumeAvailable(state.pending > 0);
+      setQueueNotice(state.notice);
+    };
+    sync();
+    return uploadManager.subscribe(sync);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!listOnly) return;
@@ -393,7 +318,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   }, [listOnly, loadMoreUploads, nextCursor]);
 
   const addFiles = async (files) => {
-    if (preparingRef.current || uploadInProgressRef.current) return;
+    if (preparingRef.current || uploadInProgressRef.current || uploadManager.getSnapshot().running) return;
     let incomingFiles = Array.from(files).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
     preparingRef.current = true;
     setPreparing(true);
@@ -532,7 +457,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
   };
 
   const removeSelectedFile = (index) => {
-    if (preparingRef.current || uploadInProgressRef.current) return;
+    if (preparingRef.current || uploadInProgressRef.current || uploadManager.getSnapshot().running) return;
     setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   };
 
@@ -590,7 +515,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
 
   const handleUpload = async (event) => {
     event.preventDefault();
-    if (uploadInProgressRef.current || preparingRef.current) return;
+    if (uploadInProgressRef.current || preparingRef.current || uploadManager.getSnapshot().running) return;
     if (!user?.id) {
       setUploadError('로그인 사용자 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
       return;
@@ -600,7 +525,6 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     setUploading(true);
     setTransfer(null);
     setBatchBytes({ total: uploadSource === 'device' ? selectedUploadSize : 0, completed: 0 });
-    manuallyPausedRef.current = false;
     const controller = new AbortController();
     operationControllerRef.current = controller;
     setQueueNotice('');
@@ -625,77 +549,23 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
             contentHash: item.contentHash,
           };
         };
-        let completed = 0;
-        const failures = [];
-        const preparationController = new AbortController();
-        const stopPreparation = () => preparationController.abort();
-        controller.signal.addEventListener('abort', stopPreparation, { once: true });
-        const prepared = new Map();
-        const prepare = (item) => {
-          if (!prepared.has(item)) {
-            const task = measureUploadStep('save', item.file.size, () => savePendingUpload({
-              id: `${user.id}:${item.contentHash}`, userId: user.id,
-              file: item.file, options: optionsFor(item),
-            }, preparationController.signal)).then(() => null, (error) => error);
-            prepared.set(item, task);
-          }
-          return prepared.get(item);
-        };
-        try {
-          for (const [index, item] of selectedFiles.entries()) {
-            if (controller.signal.aborted) break;
-            const pendingId = `${user.id}:${item.contentHash}`;
-            setTransfer({ phase: 'saving', loaded: 0, total: item.file.size, name: item.name });
-            const preparationError = await prepare(item);
-            if (preparationError && preparationError.name !== 'AbortError') {
-              setQueueNotice('이 기기에 임시 저장할 수 없어 앱을 닫으면 파일을 다시 선택해야 해요.');
-            }
-            // Prepare at most one upcoming file while this file is transferred.
-            if (!controller.signal.aborted && selectedFiles[index + 1]) void prepare(selectedFiles[index + 1]);
-            try {
-              controller.signal.throwIfAborted();
-              const saved = await uploadMediaFile(item.file, optionsFor(item), {
-                signal: controller.signal,
-                onProgress: (progress) => setTransfer({ ...progress, name: item.name }),
-              });
-              created.push(toMemoryMedia(saved));
-              await removePendingUpload(pendingId).catch(() => {});
-            } catch (error) {
-              if (error.code === 'DUPLICATE_MEDIA') {
-                duplicateFiles.push(item.name);
-                await removePendingUpload(pendingId).catch(() => {});
-              } else {
-                console.warn('파일 업로드 중단:', { name: item.name, code: error.code, status: error.status, requestUrl: error.requestUrl }, error);
-                failures.push(getUploadFailureMessage(error));
-                if (error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) {
-                  await removePendingUpload(pendingId).catch(() => {});
-                }
-                // Keep this file and all remaining files selected for retry. No background workers remain.
-                break;
-              }
-            }
-            setBatchBytes((current) => ({ ...current, completed: current.completed + item.file.size }));
-            setTransfer(null);
-            completed += 1;
-            setUploadProgress((current) => ({ ...current, completed }));
-            setSelectedFiles((current) => current.filter((entry) => entry.contentHash !== item.contentHash));
-          }
-        } finally {
-          preparationController.abort();
-          controller.signal.removeEventListener('abort', stopPreparation);
-          await Promise.all(prepared.values());
-        }
-        if (failures.length || controller.signal.aborted) {
-          if (created.length) {
-            setUploads((current) => [...created, ...current]);
-            window.dispatchEvent(new Event('hotube:media-updated'));
-            showToast(`${created.length}개 업로드 완료. 남은 파일만 다시 올릴 수 있어요.`, 'info');
-          }
+        const result = await uploadManager.start(selectedFiles.map((item) => ({
+          id: `${user.id}:${item.contentHash}`, userId: user.id,
+          file: item.file, options: optionsFor(item),
+        })));
+        if (!mountedRef.current || activeUserRef.current !== user.id || !result) return;
+        created.push(...result.created.map(toMemoryMedia));
+        duplicateFiles.push(...result.duplicates);
+        const remaining = new Set(result.pendingIds);
+        const snapshot = uploadManager.getSnapshot();
+        setSelectedFiles((current) => current.filter((item) => remaining.has(`${user.id}:${item.contentHash}`)));
+        if (snapshot.running) return;
+        if (result.failure || result.pending) {
+          setUploads((current) => [...created, ...current]);
           const feedback = getInterruptedUploadFeedback({
-            total: selectedFiles.length,
-            completed: created.length,
-            reason: failures[0],
-            cancelled: controller.signal.aborted,
+            total: selectedFiles.length, completed: created.length,
+            reason: result.failure ? getUploadFailureMessage(result.failure) : undefined,
+            cancelled: snapshot.paused,
           });
           setUploadFailureTitle(feedback.title);
           setUploadFailureMessage(feedback.message);
@@ -722,6 +592,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         created.push(toMemoryMedia(saved));
         setUploadProgress({ completed: 1, total: 1 });
       }
+      if (!mountedRef.current || activeUserRef.current !== user.id) return;
       if (created.length === 0) {
         if (duplicateFiles.length) {
           setUploadError(`이미 업로드된 파일이라 제외했어요: ${duplicateFiles.join(', ')}`);
@@ -750,8 +621,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
     } finally {
       uploadInProgressRef.current = false;
       operationControllerRef.current = null;
-      setTransfer(null);
-      setUploading(false);
+      const snapshot = uploadManager.getSnapshot();
+      setTransfer(snapshot.running ? snapshot.transfer : null);
+      setUploading(snapshot.running);
     }
   };
 
@@ -1021,9 +893,7 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
               {uploadError && <p className="rounded-lg bg-error/10 p-3 text-sm font-semibold text-error">{uploadError}</p>}
               {!uploading && !preparing && resumeAvailable && selectedFiles.length === 0 && (
                 <button type="button" className="text-sm font-bold text-primary underline" onClick={() => {
-                  manuallyPausedRef.current = false;
-                  resumeStartedRef.current = '';
-                  setResumeVersion((current) => current + 1);
+                  void uploadManager.resume({ manual: true });
                 }}>중단된 업로드 다시 시도</button>
               )}
               {queueNotice && <p className="text-xs text-text-secondary">{queueNotice}</p>}
@@ -1222,8 +1092,9 @@ const UploadPage = ({ embedded = false, initialDate = getTodayDateKey(), targetD
         phase={preparing ? 'preparing' : 'uploading'}
         title={preparing ? '파일 첨부 중...' : '업로드 중...'}
         percent={preparing ? preparationProgress : uploadPercent}
-        onStop={() => { manuallyPausedRef.current = true; operationControllerRef.current?.abort(); }}
-        stopLabel="취소"
+        onStop={() => { uploadManager.pause(); operationControllerRef.current?.abort(); }}
+        stopLabel="중지"
+        onContinue={!preparing && uploadManager.getSnapshot().running ? () => navigate('/calendar') : undefined}
       />}
 
       {pickerFiles && <UploadFilePicker

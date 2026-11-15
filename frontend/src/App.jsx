@@ -6,6 +6,7 @@ import { Icon } from '@iconify/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import BottomNavigationLayout from './components/common/BottomNavigationLayout';
 import PageErrorBoundary from './components/common/PageErrorBoundary';
+import UploadStatus from './components/common/UploadStatus';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const VideoPage = lazy(() => import('./pages/VideoPage'));
@@ -203,6 +204,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <UploadStatus />
         <PageErrorBoundary>
           <Suspense fallback={<PageLoadingFallback />}>
             <AppRoutes />
